@@ -10,13 +10,6 @@ export interface AnthropicEndpoint {
   doc?: string;
 }
 
-export type CodexUnsupportedReason = "no-responses-api" | "not-supported";
-
-    doc: string;
-    denyModels?: RegExp;
-    denyKeyPrefixes?: readonly string[];
-  }
-  | { kind: "unsupported"; reason: CodexUnsupportedReason };
 
 export interface ProviderPreset {
   id: string;
@@ -51,11 +44,3 @@ const BY_ID = new Map(PROVIDER_PRESETS.map((preset) => [preset.id, preset]));
 export function providerPreset(id: string): ProviderPreset | undefined {
   return BY_ID.get(id);
 }
-
- available once the experimental switch is on. */
-  | "experimental-off";
- reason: CodexNoReason };
-
-
-
-
