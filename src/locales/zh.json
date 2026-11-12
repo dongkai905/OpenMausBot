@@ -163,8 +163,6 @@
   "server.runs.state.deferred": "已推迟：目标正忙",
   "server.runs.state.queued": "正在排队",
   "server.runs.state.running": "正在运行",
-  "server.model.orgBlockedAnswered": "{picked} 已被你的组织关闭，因此改由 {answered} 回答。选择其他模型后就不会再看到这条提示。",
-  "server.model.otherAnswered": "你选择的是 {picked}，但实际由 {answered} 回答。",
   "server.incidents.where.room": "在群组聊天「{room}」中",
   "server.problem.failed": "{bot} 遇到问题：{where} 的执行失败了",
   "server.problem.failedWhy": "{bot} 遇到问题：{where} 的执行失败了：「{detail}」",

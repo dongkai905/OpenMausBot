@@ -199,8 +199,6 @@
   "server.runs.state.deferred": "adiada: destino ocupado",
   "server.runs.state.queued": "na fila",
   "server.runs.state.running": "em execução",
-  "server.model.orgBlockedAnswered": "Sua organização desligou {picked}, então {answered} respondeu. Escolha outro modelo para não ver mais este aviso.",
-  "server.model.otherAnswered": "Você escolheu {picked}, mas {answered} respondeu.",
   "server.incidents.where.room": "no grupo \"{room}\"",
   "server.problem.failed": "{bot} encontrou um problema: a execução {where} falhou",
   "server.problem.failedWhy": "{bot} encontrou um problema: a execução {where} falhou: \"{detail}\"",

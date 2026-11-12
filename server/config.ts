@@ -806,6 +806,9 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
   return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }
 
+const configSaveListeners = new Set<(before: JsonObject, after: JsonObject) => void>();
+
+/** Called synchronously after each saveConfig with the file before and after; a listener must not throw. */
 export function onConfigSaved(listener: (before: JsonObject, after: JsonObject) => void): () => void {
   configSaveListeners.add(listener);
   return () => { configSaveListeners.delete(listener); };
