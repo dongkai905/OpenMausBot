@@ -236,8 +236,8 @@ export function startModelManifestRefresh(): void {
   backgroundTimer.unref();
 }
 
-/** The current list for an engine, or the bundled one for an engine a download left out. */
-export function currentEngineCatalog(engine: ManifestEngine, source: ModelManifestStore = modelManifest()): ModelCatalog {
+/** The current list for an engine, or the bundled one for an engine a download left out; null when neither lists it. */
+export function currentEngineCatalog(engine: ManifestEngine, source: ModelManifestStore = modelManifest()): ModelCatalog | null {
   return engineCatalogFrom(source.current(), engine) ?? bundledEngineCatalog(engine);
 }
 

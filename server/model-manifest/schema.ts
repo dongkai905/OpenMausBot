@@ -5,19 +5,15 @@
 // To add a model: edit model-manifest.json, bump `updatedAt`, open a PR. `scripts/check-model-manifest.mjs` runs in CI.
 import { z } from "zod";
 
-// Claude Code's `[1m]` suffix selects a model's 1M-token context.
-export const CLAUDE_MODEL_ID = /^[a-z0-9][a-z0-9._:/-]*(?:\[1m\])?$/i;
+/** A model id reaches the engine's command line, so it must not carry anything a shell would read as syntax. */
+export const SAFE_MODEL_ID = /^[a-z0-9][a-z0-9._:+-]*$/i;
 
 export const MANIFEST_ENGINES = ["customAcp"] as const;
 export type ManifestEngine = (typeof MANIFEST_ENGINES)[number];
 
 /** A model id reaches the engine's command line, so each engine keeps its own rule; a download passes the same one. */
 export const ENGINE_MODEL_ID: Readonly<Record<ManifestEngine, RegExp>> = {
-  claude: CLAUDE_MODEL_ID,
-  cursor: /^[a-z0-9][a-z0-9._:+-]*$/i,
-  grok: /^[a-z0-9][a-z0-9._-]*$/i,
-  kimi: /^[a-z0-9][a-z0-9._:/-]*$/i,
-  antigravity: /^[a-z0-9][a-z0-9._-]*$/i,
+  customAcp: SAFE_MODEL_ID,
 };
 
 const MODEL_ID_MAX = 160;
@@ -86,11 +82,9 @@ function manifestSchema(objectOf: ObjectOf, nowMs: number) {
     version: z.literal(1),
     updatedAt: z.iso.datetime({ offset: true }).refine(hasNoFutureDate(nowMs), "updatedAt is in the future"),
     engines: objectOf({
-      claude: engineSchema("claude", objectOf),
-      cursor: engineSchema("cursor", objectOf).optional(),
-      grok: engineSchema("grok", objectOf).optional(),
-      kimi: engineSchema("kimi", objectOf).optional(),
-      antigravity: engineSchema("antigravity", objectOf).optional(),
+      // The only engine is customAcp, and the models it offers come from the CLI it drives, not from this file.
+      // So an empty engine set is the normal state, not a broken one; a file that lists one still has to be sound.
+      customAcp: engineSchema("customAcp", objectOf).optional(),
     }),
     prices: z.record(z.string().max(MODEL_ID_MAX).regex(PRICE_KEY), priceEntry(objectOf)).optional(),
   });
@@ -108,9 +102,9 @@ function firstIssue(error: z.ZodError): string {
 }
 
 /** Runtime reads leave unknown fields out, so a new field on main never freezes older installs; a real problem still
- * rejects the whole copy. `strict` is for the bundled file and CI, where an unknown field is a typo. Every engine and
- * the price table are required by the CI check, not here: a download that leaves one out only falls back to the bundled
- * copy. */
+ * rejects the whole copy. `strict` is for the bundled file and CI, where an unknown field is a typo. The engine list and
+ * the price table are the file's business, not this schema's: a download that leaves an engine out only falls back to the
+ * bundled copy. */
 export function parseModelManifest(value: unknown, options: { strict?: boolean; nowMs?: number } = {}): ManifestResult {
   const objectOf = options.strict ? (z.strictObject as unknown as ObjectOf) : z.object;
   const parsed = manifestSchema(objectOf, options.nowMs ?? Date.now()).safeParse(value);

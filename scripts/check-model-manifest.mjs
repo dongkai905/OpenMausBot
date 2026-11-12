@@ -27,8 +27,17 @@ export function manifestProblems(text, { previous = null, now = Date.now() } = {
   }
   const parsed = parseModelManifest(doc, { strict: true, nowMs: now });
   if (!parsed.ok) return [parsed.error];
-  const problems = MANIFEST_ENGINES.filter((engine) => !doc.engines[engine]).map((engine) => `engines.${engine} is missing`);
-  if (!parsed.manifest.prices || Object.keys(parsed.manifest.prices).length === 0) problems.push("prices is empty");
+  const problems = [];
+  const listed = Object.keys(doc.engines ?? {});
+  // The only engine is customAcp, and the models it offers come from the CLI it drives, not from this file: a catalog
+  // that lists no engine is the normal state, not a broken one. A file that does list one must be complete, so a half
+  // edit still fails here.
+  if (listed.length > 0) {
+    for (const engine of MANIFEST_ENGINES) {
+      if (!doc.engines[engine]) problems.push(`engines.${engine} is missing`);
+    }
+    if (!parsed.manifest.prices || Object.keys(parsed.manifest.prices).length === 0) problems.push("prices is empty");
+  }
   if (previous !== null && text !== previous) {
     let before;
     try {

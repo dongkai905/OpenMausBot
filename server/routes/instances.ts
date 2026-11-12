@@ -1,6 +1,5 @@
 import { userError, userErrorFields } from "../user-errors.ts";
 import { modelManifest } from "../model-manifest/manifest.ts";
-import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
 import { instanceSettingsSchema } from "../instance-settings.ts";
 import { persistableInstanceConfigs, saveConfig, withInstanceCli, type AppConfig } from "../config.ts";
@@ -45,7 +44,7 @@ export interface InstanceRouteDeps {
 export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   const {
     store, cfg, registry, sessions, providerAuthSessions, hostedModels, providerConfigBusy, providerInstancesChanging,
-    persistProviderInstance, configStatus, broadcast, testCliBinary, cliProbeEnvironment, threadBusy,
+    persistProviderInstance, configStatus, broadcast, testCliBinary, threadBusy,
     botForThread, activeGroupTurnForBot,
   } = deps;
   const describeInstances = async () => hostedModels ? deps.describeInstances()
@@ -138,22 +137,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       } finally { providerConfigBusy.set(false); }
     }
 
-    if (method === "POST" && path === "/api/instances/chatgpt-accounts") {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return json(res, 415, { error: "content-type must be application/json" });
-      const parsed = createClaudeAccountSchema.pick({ displayName: true }).safeParse(await readBody(req, 8192));
-      if (!parsed.success) return json(res, 400, { error: "Enter an account name (up to 80 characters)." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      providerConfigBusy.set(true);
-      try {
-        const instances = persistableInstanceConfigs(cfg);
-        const instanceId = `chatgpt-${randomUUID()}`;
-        // Reuse the selected executable, never another account's environment.
-        const cli = (instances.chatgpt?.config as { cli?: unknown } | undefined)?.cli
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 201, { instanceId, instances: await describeInstances() });
-      } finally { providerConfigBusy.set(false); }
-    }
-
     if (method === "POST" && path === "/api/instances/openai-compat") {
       if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return json(res, 415, { error: "content-type must be application/json" });
       const parsed = addEndpointSchema.safeParse(await readBody(req, 8192));
@@ -169,6 +152,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       } finally { providerConfigBusy.set(false); }
     }
 
+    const authStatus = /^\/api\/instances\/([\w.-]+)\/auth\/status$/.exec(path);
     if (method === "GET" && authStatus) {
       res.setHeader("cache-control", "no-store");
       const state = await providerAuthSessions.status(authStatus[1], auth.kind === "session" ? auth.session.id : "loopback", url.searchParams.get("flowId") ?? "");

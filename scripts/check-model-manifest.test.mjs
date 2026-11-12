@@ -4,26 +4,46 @@ import { describe, expect, it } from "vitest";
 import { MANIFEST_PATH, manifestProblems } from "./check-model-manifest.mjs";
 
 const committed = readFileSync(MANIFEST_PATH, "utf8");
-const doc = () => JSON.parse(committed);
 const problems = (value) => manifestProblems(JSON.stringify(value, null, 2));
 
+/** A manifest that lists the one engine, so every rule about a catalog can be checked without the committed file. */
+function withEngine() {
+  return {
+    version: 1,
+    updatedAt: "2026-11-12T00:00:00Z",
+    engines: {
+      customAcp: {
+        default: "synthetic-model",
+        models: [
+          { id: "synthetic-model", name: "Synthetic", status: "current", contextWindow: 1_000_000, minCliVersion: "2.1.321" },
+          { id: "second-model", name: "Second", status: "legacy" },
+        ],
+      },
+    },
+    prices: {
+      "synthetic-model": { inputPerMillion: 8, cachedInputPerMillion: 0.2, outputPerMillion: 40, asOf: "2026-11-10", source: "https://example.com/x" },
+    },
+  };
+}
+
+/** The same manifest with one more model in it, patched. */
+const withModel = (patch) => {
+  const manifest = withEngine();
+  manifest.engines.customAcp.models.push({ id: "another-model", name: "Another", status: "current", ...patch });
+  return manifest;
+};
+
 describe("the committed model manifest", () => {
-  it("passes the strict check and keeps the required models", () => {
+  it("passes the strict check", () => {
     expect(manifestProblems(committed)).toEqual([]);
-    const fable = doc().engines.claude.models.find((model) => model.id === "claude-fable-5-2");
-    expect(fable).toMatchObject({ contextWindow: 1_000_000, minCliVersion: "2.1.321" });
-    expect(doc().engines.claude.default).toBe("claude-sonnet-5");
-    expect(doc().prices["claude-fable-5-2"]).toMatchObject({ inputPerMillion: 8, cachedInputPerMillion: 0.2, outputPerMillion: 40 });
+  });
+
+  it("lists no engine, because the models come from the CLI the one engine drives", () => {
+    expect(JSON.parse(committed).engines).toEqual({});
   });
 });
 
 describe("what the CI check refuses", () => {
-  const withModel = (patch) => {
-    const manifest = doc();
-    manifest.engines.claude.models.push({ id: "synthetic-model", name: "Synthetic", status: "current", ...patch });
-    return manifest;
-  };
-
   it("malformed JSON", () => {
     expect(manifestProblems("{ not json")).toEqual(["the manifest is not valid JSON"]);
   });
@@ -36,8 +56,8 @@ describe("what the CI check refuses", () => {
   });
 
   it("a missing required field, a bad status or a CLI floor that is not a version", () => {
-    const missing = doc();
-    delete missing.engines.claude.models[0].status;
+    const missing = withEngine();
+    delete missing.engines.customAcp.models[0].status;
     expect(problems(missing)[0]).toMatch(/status/);
     expect(problems(withModel({ status: "preview" }))[0]).toMatch(/status/);
     expect(problems(withModel({ minCliVersion: "latest" }))[0]).toMatch(/minCliVersion/);
@@ -48,44 +68,52 @@ describe("what the CI check refuses", () => {
   });
 
   it("a default that is not a listed current model", () => {
-    const manifest = doc();
-    manifest.engines.claude.default = "not-listed-model";
+    const manifest = withEngine();
+    manifest.engines.customAcp.default = "not-listed-model";
     expect(problems(manifest)[0]).toMatch(/default/);
   });
 
   it("a duplicate id or an alias that repeats one", () => {
-    const manifest = withModel({ id: "claude-sonnet-5" });
+    const manifest = withModel({ id: "synthetic-model" });
     expect(problems(manifest)[0]).toMatch(/listed twice/);
-    expect(problems(withModel({ aliases: ["claude-sonnet-5"] }))[0]).toMatch(/listed twice/);
+    expect(problems(withModel({ aliases: ["synthetic-model"] }))[0]).toMatch(/listed twice/);
   });
 
-  it("a missing engine", () => {
-    const manifest = doc();
-    delete manifest.engines.grok;
-    expect(problems(manifest).length).toBeGreaterThan(0);
+  it("an engine it does not know, and a manifest with no engine at all", () => {
+    const unknown = withEngine();
+    unknown.engines.claude = unknown.engines.customAcp;
+    expect(problems(unknown)[0]).toMatch(/claude/);
+    // The models the one engine offers come from the CLI it drives, so a file that lists no engine is sound.
+    expect(manifestProblems(JSON.stringify({ version: 1, updatedAt: "2026-11-12T00:00:00Z", engines: {}, prices: {} }))).toEqual([]);
+  });
+
+  it("a catalog that lists an engine but no prices", () => {
+    const manifest = withEngine();
+    manifest.prices = {};
+    expect(problems(manifest)).toContain("prices is empty");
   });
 
   it("a future updatedAt, which would pin every install to it", () => {
-    const manifest = doc();
+    const manifest = withEngine();
     manifest.updatedAt = "2099-01-01T00:00:00Z";
     expect(problems(manifest)[0]).toMatch(/future/);
   });
 
   it("a price that is not a number, negative or absurd", () => {
-    const manifest = doc();
-    manifest.prices["claude-sonnet-5"].inputPerMillion = "2";
+    const manifest = withEngine();
+    manifest.prices["synthetic-model"].inputPerMillion = "2";
     expect(problems(manifest)[0]).toMatch(/inputPerMillion/);
-    manifest.prices["claude-sonnet-5"].inputPerMillion = -1;
+    manifest.prices["synthetic-model"].inputPerMillion = -1;
     expect(problems(manifest)[0]).toMatch(/inputPerMillion/);
-    manifest.prices["claude-sonnet-5"].inputPerMillion = 2_000_000;
+    manifest.prices["synthetic-model"].inputPerMillion = 2_000_000;
     expect(problems(manifest)[0]).toMatch(/inputPerMillion/);
   });
 
   it("an edit whose updatedAt did not move forward", () => {
-    const edited = doc();
-    edited.engines.claude.models[1].name = "Edited name";
+    const edited = withEngine();
+    edited.engines.customAcp.models[1].name = "Edited name";
     expect(manifestProblems(JSON.stringify(edited), { previous: committed })[0]).toMatch(/updatedAt/);
-    const bumped = { ...edited, updatedAt: new Date(Date.parse(doc().updatedAt) + 1000).toISOString() };
+    const bumped = { ...edited, updatedAt: new Date(Date.parse(edited.updatedAt) + 1000).toISOString() };
     expect(manifestProblems(JSON.stringify(bumped), { previous: committed })).toEqual([]);
     expect(manifestProblems(committed, { previous: committed })).toEqual([]);
   });

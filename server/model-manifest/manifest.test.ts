@@ -3,17 +3,18 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BUNDLED_MODEL_MANIFEST, engineCatalogFrom } from "./bundled.ts";
+import { BUNDLED_MODEL_MANIFEST, bundledEngineCatalog, engineCatalogFrom } from "./bundled.ts";
 import {
   MANIFEST_DISABLE_ENV,
   MANIFEST_ON_DEMAND_TTL_MS,
   MANIFEST_RETRY_MS,
   MANIFEST_TTL_MS,
   ModelManifestStore,
+  currentEngineCatalog,
   modelManifestCachePath,
   withCliVersionGate,
 } from "./manifest.ts";
-import { CLAUDE_MODEL_ID, parseModelManifest, type ModelManifestData } from "./schema.ts";
+import { SAFE_MODEL_ID, parseModelManifest, type ModelManifestData } from "./schema.ts";
 
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 const scratchDirs: string[] = [];
@@ -34,7 +35,7 @@ function manifest(updatedAt: string, ids = ["synthetic-current"], extra: Partial
     version: 1,
     updatedAt,
     engines: {
-      claude: { default: ids[0]!, models: ids.map((id) => ({ id, name: id, status: "current" as const })) },
+      customAcp: { default: ids[0]!, models: ids.map((id) => ({ id, name: id, status: "current" as const })) },
     },
     ...extra,
   };
@@ -68,22 +69,22 @@ describe("reading the current list", () => {
   it("starts from the bundled copy and never touches the network", () => {
     const fetchMock = vi.fn();
     const { manifest: subject } = store({ fetch: fetchMock });
-    expect(subject.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+    expect(subject.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("loads a newer disk cache", () => {
     const dir = dataDir();
     writeCache(dir, manifest("2026-11-05T00:00:00Z", ["cached-model"]));
-    expect(store({ dir }).manifest.current().engines.claude!.models[0]!.id).toBe("cached-model");
+    expect(store({ dir }).manifest.current().engines.customAcp!.models[0]!.id).toBe("cached-model");
   });
 
   it("an older or corrupt disk cache never overrides the bundled copy", () => {
     const dir = dataDir();
     writeCache(dir, manifest("2026-10-01T00:00:00Z", ["old-cached-model"]));
-    expect(store({ dir }).manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+    expect(store({ dir }).manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     writeFileSync(modelManifestCachePath(dir), "{ corrupt");
-    expect(store({ dir }).manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+    expect(store({ dir }).manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
   });
 });
 
@@ -94,7 +95,7 @@ describe("downloads", () => {
     const changed = vi.fn();
     subject.manifest.onChange(changed);
     await subject.manifest.refresh();
-    expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("remote-model");
+    expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("remote-model");
     expect(changed).toHaveBeenCalledTimes(1);
     const saved = JSON.parse(readFileSync(modelManifestCachePath(subject.dir), "utf8")) as { manifest: ModelManifestData };
     expect(saved.manifest.updatedAt).toBe("2026-11-09T00:00:00Z");
@@ -104,7 +105,7 @@ describe("downloads", () => {
     const fetchMock = vi.fn(async () => json(manifest("2026-10-20T00:00:00Z", ["stale-model"])));
     const subject = store({ fetch: fetchMock as unknown as typeof fetch });
     await subject.manifest.refresh();
-    expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+    expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     expect(existsSync(modelManifestCachePath(subject.dir))).toBe(false);
     expect(subject.log).toHaveBeenCalledWith(expect.stringMatching(/older/));
   });
@@ -113,14 +114,14 @@ describe("downloads", () => {
     const bodies: Array<() => Response> = [
       () => json("{ not json"),
       () => json({ ...manifest("2026-11-09T00:00:00Z"), version: 2 }),
-      () => json({ ...manifest("2026-11-09T00:00:00Z"), engines: { claude: { default: "a", models: [{ id: "a", name: "a", status: "bogus" }] } } }),
+      () => json({ ...manifest("2026-11-09T00:00:00Z"), engines: { customAcp: { default: "a", models: [{ id: "a", name: "a", status: "bogus" }] } } }),
       () => json("", { status: 500 }),
       () => json(manifest("2099-01-01T00:00:00Z", ["future-model"])),
     ];
     for (const body of bodies) {
       const subject = store({ fetch: vi.fn(async () => body()) as unknown as typeof fetch });
       await subject.manifest.refresh({ force: true });
-      expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+      expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
       expect(existsSync(modelManifestCachePath(subject.dir))).toBe(false);
     }
   });
@@ -135,29 +136,29 @@ describe("downloads", () => {
     ]) {
       const subject = store({ fetch: vi.fn(async () => response) as unknown as typeof fetch, maxBytes: limit });
       await subject.manifest.refresh({ force: true });
-      expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+      expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     }
     const fits = store({ fetch: vi.fn(async () => new Response(stream(), { status: 200 })) as unknown as typeof fetch, maxBytes: body.length });
     await fits.manifest.refresh({ force: true });
-    expect(fits.manifest.current().engines.claude!.models[0]!.id).toBe("big-model");
+    expect(fits.manifest.current().engines.customAcp!.models[0]!.id).toBe("big-model");
   });
 
   it("drops a model id that would not reach the CLI safely", async () => {
     for (const id of ["--skip-permissions", "bad id", "`whoami`"]) {
       const payload = manifest("2026-11-09T00:00:00Z", ["ok-model"]);
-      payload.engines.claude!.models.push({ id, name: "x", status: "current" });
+      payload.engines.customAcp!.models.push({ id, name: "x", status: "current" });
       const subject = store({ fetch: vi.fn(async () => json(payload)) as unknown as typeof fetch });
       await subject.manifest.refresh({ force: true });
-      expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+      expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     }
-    expect(CLAUDE_MODEL_ID.test("--skip-permissions")).toBe(false);
+    expect(SAFE_MODEL_ID.test("--skip-permissions")).toBe(false);
   });
 
   it("offline: a failed fetch keeps the current list and backs off", async () => {
     const fetchMock = vi.fn(async () => { throw new TypeError("fetch failed"); });
     const subject = store({ fetch: fetchMock as unknown as typeof fetch });
     await subject.manifest.refresh();
-    expect(subject.manifest.current().engines.claude!.models[0]!.id).toBe("bundled-model");
+    expect(subject.manifest.current().engines.customAcp!.models[0]!.id).toBe("bundled-model");
     await subject.manifest.refresh();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     subject.advance(MANIFEST_RETRY_MS + 1);
@@ -204,9 +205,15 @@ describe("downloads", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the bundled copy for an engine a download left out", async () => {
-    const subject = store();
-    expect(engineCatalogFrom(subject.manifest.current(), "grok")).toBeNull();
+  it("a download that left the engine out leaves the current list without one", async () => {
+    const withoutEngines = manifest("2026-11-09T00:00:00Z");
+    withoutEngines.engines = {};
+    const subject = store({ fetch: vi.fn(async () => json(withoutEngines)) as unknown as typeof fetch });
+    await subject.manifest.refresh();
+    // The download has no engine, so the current list offers none for it.
+    expect(engineCatalogFrom(subject.manifest.current(), "customAcp")).toBeNull();
+    // The fallback is the bundled file, which carries no catalog either.
+    expect(currentEngineCatalog("customAcp", subject.manifest)).toBeNull();
   });
 });
 
@@ -214,13 +221,13 @@ describe("the CLI version gate", () => {
   const payload = (): ModelManifestData => manifest("2026-11-09T00:00:00Z", ["base-model", "new-model"]);
   const gated = () => {
     const data = payload();
-    data.engines.claude!.models[1]!.minCliVersion = "2.1.321";
+    data.engines.customAcp!.models[1]!.minCliVersion = "2.1.321";
     return store({ bundled: data }).manifest;
   };
   const catalog = () => ({ default: "base-model", options: [{ id: "base-model", label: "b" }, { id: "new-model", label: "n" }, { id: "local", label: "l", custom: true as const }] });
 
   it("marks a model the installed CLI is too old for and leaves the rest", () => {
-    const options = withCliVersionGate(catalog(), "claude", [2, 1, 320], gated()).options;
+    const options = withCliVersionGate(catalog(), "customAcp", [2, 1, 320], gated()).options;
     expect(options.find((option) => option.id === "new-model")?.needsCliUpdate).toBe("2.1.321");
     expect(options.find((option) => option.id === "base-model")?.needsCliUpdate).toBeUndefined();
     expect(options.find((option) => option.id === "local")?.needsCliUpdate).toBeUndefined();
@@ -228,33 +235,33 @@ describe("the CLI version gate", () => {
 
   it("clears the mark once the CLI is new enough, and marks nothing for an unknown version", () => {
     const store = gated();
-    const marked = withCliVersionGate(catalog(), "claude", [2, 1, 320], store);
-    expect(withCliVersionGate(marked, "claude", [2, 1, 321], store).options.find((option) => option.id === "new-model")?.needsCliUpdate).toBeUndefined();
-    expect(withCliVersionGate(marked, "claude", null, store).options.find((option) => option.id === "new-model")?.needsCliUpdate).toBeUndefined();
+    const marked = withCliVersionGate(catalog(), "customAcp", [2, 1, 320], store);
+    expect(withCliVersionGate(marked, "customAcp", [2, 1, 321], store).options.find((option) => option.id === "new-model")?.needsCliUpdate).toBeUndefined();
+    expect(withCliVersionGate(marked, "customAcp", null, store).options.find((option) => option.id === "new-model")?.needsCliUpdate).toBeUndefined();
   });
 
   it("moves a gated default to the first usable model", () => {
     const data = payload();
-    data.engines.claude!.models[1]!.minCliVersion = "9.0.0";
+    data.engines.customAcp!.models[1]!.minCliVersion = "9.0.0";
     const subject = store({ bundled: data }).manifest;
-    expect(withCliVersionGate({ ...catalog(), default: "new-model" }, "claude", [2, 1, 320], subject).default).toBe("base-model");
+    expect(withCliVersionGate({ ...catalog(), default: "new-model" }, "customAcp", [2, 1, 320], subject).default).toBe("base-model");
   });
 });
 
 describe("the picker list", () => {
   it("offers only current models and keeps the default", () => {
     const data = manifest("2026-11-01T00:00:00Z", ["keep-model", "retired-model"]);
-    data.engines.claude!.models[1]!.status = "legacy";
-    const catalog = engineCatalogFrom(data, "claude")!;
+    data.engines.customAcp!.models[1]!.status = "legacy";
+    const catalog = engineCatalogFrom(data, "customAcp")!;
     expect(catalog.options.map((option) => option.id)).toEqual(["keep-model"]);
     expect(catalog.default).toBe("keep-model");
   });
 
-  it("the bundled manifest is valid for every engine and keeps Fable 5.2 behind its CLI floor", () => {
+  it("the bundled manifest is valid and lists no catalog of its own", () => {
     expect(parseModelManifest(BUNDLED_MODEL_MANIFEST, { strict: true }).ok).toBe(true);
-    const fable = BUNDLED_MODEL_MANIFEST.engines.claude.models.find((model) => model.id === "claude-fable-5-2");
-    expect(fable?.minCliVersion).toBe("2.1.321");
-    expect(fable?.contextWindow).toBe(1_000_000);
+    // The only engine is customAcp and the models it offers come from the CLI it drives, so the file carries no catalog.
+    expect(BUNDLED_MODEL_MANIFEST.engines.customAcp).toBeUndefined();
+    expect(bundledEngineCatalog("customAcp")).toBeNull();
   });
 });
 
@@ -277,7 +284,7 @@ describe("the schema", () => {
 
   it("rejects a default that is not a current listed model", () => {
     const data = manifest("2026-11-09T00:00:00Z", ["only-model"]);
-    data.engines.claude!.default = "other-model";
+    data.engines.customAcp!.default = "other-model";
     expect(parseModelManifest(data).ok).toBe(false);
   });
 });
