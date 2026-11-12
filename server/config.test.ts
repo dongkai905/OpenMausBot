@@ -251,7 +251,7 @@ describe("configuration boundaries", () => {
     expect(() => parseStoredConfig({ browserProfiles: [{ id: "../evil", name: "Unsafe" }] })).toThrow(
       "browserProfiles.0.id",
     );
-    expect(() => parseConfigPatch({ opencodeGo: { apiKey: 42 } })).toThrow("opencodeGo.apiKey");
+    expect(() => parseConfigPatch({ tts: { fishModel: "not-a-voice" } })).toThrow("tts.fishModel");
     expect(() => parseConfigPatch({ profile: [] })).toThrow("profile");
   });
 
@@ -895,22 +895,12 @@ it("never hands a workspace API key to an API-key instance with its own endpoint
         sameUrl: { driver: "openai-compat", config: { url: "https://openrouter.ai/api/v1/" } },
         groq: { driver: "openai-compat", config: { url: "https://third-party.example.test/v1" } },
         ownKey: { driver: "openai-compat", config: { key: "sk-own" } },
-        ownVariable: { driver: "openai-compat", config: { apiKeyEnv: "GROQ_API_KEY" } },
-        mistral: { driver: "mistral" },
-        mistralProxy: { driver: "mistral", config: { url: "https://mistral-proxy.example.test/v1" } },
-        grokApi: { driver: "grok" },
-        grokProxy: { driver: "grok", config: { url: "https://xai-proxy.example.test/v1" } },
-        grokOwn: { driver: "grok", environment: { XAI_API_KEY: "xai-own" } },
+        ownVariable: { driver: "openai-compat", config: { apiKeyEnv: "OPENROUTER_API_KEY" } },
       },
     });
     expect(map.openaiCompat.environment).toMatchObject({ OPENAI_COMPAT_API_KEY: "sk-or-WORKSPACE" });
     expect(map.sameUrl.environment).toMatchObject({ OPENAI_COMPAT_API_KEY: "sk-or-WORKSPACE" });
     for (const id of ["groq", "ownKey", "ownVariable"]) expect(map[id].environment, id).toEqual({});
-    expect(map.mistral.environment).toEqual({ MISTRAL_API_KEY: "mistral-WORKSPACE" });
-    expect(map.mistralProxy.environment).toEqual({});
-    expect(map.grokApi.environment).toEqual({ XAI_API_KEY: "xai-WORKSPACE" });
-    expect(map.grokProxy.environment).toEqual({});
-    expect(map.grokOwn.environment).toEqual({ XAI_API_KEY: "xai-own" });
   });
 
   it.each(["openai", "openrouter", "xaiApi", "claudeApi"])("preserves a custom driver's own routing when its id is %s", (id) => {
@@ -1012,15 +1002,15 @@ it("does not expand a one-off shadow fleet", () => {
 describe("Instance CLI override", () => {
   it("sets, replaces, and clears config.cli on a default-fleet instance", () => {
     const cfg: AppConfig = {};
-    const set = withInstanceCli(cfg, "claude", "/opt/claude-2.1/bin/claude");
+    const set = withInstanceCli(cfg, "openai", "/opt/openai/bin/openai");
     expect(set.ok).toBe(true);
-    expect(set.config.instances!.claude.config).toEqual({ cli: "/opt/claude-2.1/bin/claude" });
+    expect(set.config.instances!.openai.config).toEqual({ cli: "/opt/openai/bin/openai" });
 
-    const replaced = withInstanceCli(set.config, "claude", "~/bin/claude");
-    expect(replaced.config.instances!.claude.config).toEqual({ cli: "~/bin/claude" });
+    const replaced = withInstanceCli(set.config, "openai", "~/bin/openai");
+    expect(replaced.config.instances!.openai.config).toEqual({ cli: "~/bin/openai" });
 
-    const cleared = withInstanceCli(replaced.config, "claude", "");
-    expect(cleared.config.instances!.claude.config).toBeUndefined();
+    const cleared = withInstanceCli(replaced.config, "openai", "");
+    expect(cleared.config.instances!.openai.config).toBeUndefined();
   });
 
   it("preserves sibling config keys when clearing only cli", () => {
@@ -1121,10 +1111,10 @@ it("keeps the built-in routing of a provider instance in a saved fleet", () => {
 
   it("keeps a per-instance environment while layering the credential on top", () => {
     const cfg: AppConfig = {
-      xai: { key: "SECRET-XAI" },
-      instances: { grokApi: { driver: "grok", environment: { MY_FLAG: "1" } } },
+      openaiCompat: { key: "SECRET-COMPAT" },
+      instances: { own: { driver: "openai-compat", environment: { MY_FLAG: "1" } } },
     };
-    expect(instanceConfigs(cfg).grokApi.environment).toEqual({ MY_FLAG: "1", XAI_API_KEY: "SECRET-XAI" });
+    expect(instanceConfigs(cfg).own.environment).toEqual({ MY_FLAG: "1", OPENAI_COMPAT_API_KEY: "SECRET-COMPAT" });
   });
 });
 
@@ -1329,10 +1319,9 @@ it("uses a preset voice only when the person has not chosen one or another provi
   it("falls back to the config file when the env var is unset (dev mode)", () => {
     writeFileSync(
       join(DATA_DIR, "config.json"),
-      JSON.stringify({ xai: { key: "file-xai" }, tts: { key: "file-tts" }, imageGen: { key: "file-image" } }),
+      JSON.stringify({ tts: { key: "file-tts" }, imageGen: { key: "file-image" } }),
     );
     const cfg = loadConfig();
-    expect(cfg.xai?.key).toBe("file-xai");
     expect(cfg.tts?.key).toBe("file-tts");
     expect(cfg.imageGen?.key).toBe("file-image");
   });
@@ -1480,7 +1469,6 @@ it("uses a preset voice only when the person has not chosen one or another provi
     }));
 
     expect(loadConfig()).toMatchObject({
-      xai: { key: "file-xai", url: "https://api.example.test/v1" },
       profile: { name: "Ada" },
       features: { browser: true },
       browserProfiles: [
@@ -1515,62 +1503,26 @@ it("uses a preset voice only when the person has not chosen one or another provi
 
   it("treats a blanked file field as absent when env supplies the secret", () => {
     // The desktop shell may leave "" behind (a key cleared mid-session); the env-injected value must still win.
-    writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ xai: { key: "" } }));
-    process.env.XAI_API_KEY = "env-xai";
-    expect(loadConfig().xai?.key).toBe("env-xai");
+    writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ composio: { apiKey: "" } }));
+    process.env.COMPOSIO_API_KEY = "env-composio";
+    expect(loadConfig().composio?.apiKey).toBe("env-composio");
   });
 
   it("syncCredentialEnv keeps process.env in step with a credential save", () => {
-    process.env.XAI_API_KEY = "boot-injected";
     process.env.BOX_TOKEN = "boot-injected";
     process.env.COMPOSIO_API_KEY = "boot-injected";
     syncCredentialEnv({
-      xai: { key: "just-saved" },
       composio: { apiKey: "ak_just_saved" },
       box: { token: "" },
       profile: { name: "Ada" },
     });
-    expect(process.env.XAI_API_KEY).toBe("just-saved");
     expect(process.env.COMPOSIO_API_KEY).toBe("ak_just_saved");
     expect(process.env.BOX_TOKEN).toBeUndefined();
     expect(process.env.OMB_TTS_KEY).toBeUndefined();
     expect(process.env.OMB_FISH_AUDIO_API_KEY).toBeUndefined();
   });
 
-  it("saves and clears the built-in Groq key without changing an operator's Groq key", () => {
-    vi.stubEnv("GROQ_API_KEY", "groq-operator");
-    try {
-      syncCredentialEnv({ groq: { key: "groq-workspace" } });
-      expect(loadConfig().groq?.key).toBe("groq-workspace");
-      syncCredentialEnv({ groq: { key: "" } });
-      expect(loadConfig().groq?.key).toBeUndefined();
-      expect(process.env.GROQ_API_KEY).toBe("groq-operator");
-    } finally { vi.unstubAllEnvs(); }
-  });
-
-  it("saves and clears the built-in DeepSeek key without changing an operator's DEEPSEEK_API_KEY", () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "ds-operator");
-    try {
-      syncCredentialEnv({ deepseek: { key: "ds-workspace" } });
-      expect(loadConfig().deepseek?.key).toBe("ds-workspace");
-      syncCredentialEnv({ deepseek: { key: "" } });
-      expect(loadConfig().deepseek?.key).toBeUndefined();
-      expect(process.env.DEEPSEEK_API_KEY).toBe("ds-operator");
-    } finally { vi.unstubAllEnvs(); }
-  });
-
-  it("saves and clears the built-in Meta key without changing a Muse Code META_API_KEY", () => {
-    vi.stubEnv("META_API_KEY", "meta-operator");
-    try {
-      syncCredentialEnv({ meta: { key: "meta-workspace" } });
-      expect(loadConfig().meta?.key).toBe("meta-workspace");
-      syncCredentialEnv({ meta: { key: "" } });
-      expect(loadConfig().meta?.key).toBeUndefined();
-      expect(process.env.META_API_KEY).toBe("meta-operator");
-    } finally { vi.unstubAllEnvs(); }
-  });
-
-  it("syncCredentialEnv updates Fish Audio without replacing ElevenLabs", () => {
+it("syncCredentialEnv updates Fish Audio without replacing ElevenLabs", () => {
     process.env.OMB_TTS_KEY = "eleven-kept";
     process.env.OMB_FISH_AUDIO_API_KEY = "fish-old";
     syncCredentialEnv({ tts: { fishKey: "fish-new" } });
@@ -1732,30 +1684,17 @@ describe("customMcpServers", () => {
 
 describe("changedInstanceIds", () => {
   it("replaces only the engines whose launch config a save changed", () => {
-    const saved: AppConfig = { mistral: { key: "m1" }, openaiCompat: { key: "c1", url: "https://compat.example/v1" } };
-    expect(reloaded({ mistral: { key: "m1" }, openaiCompat: { key: "c1", url: "https://compat.example/v1" } }, saved)).toEqual([]);
-    expect(reloaded({ mistral: { key: "m2" } }, saved)).toEqual(["mistral"]);
+    const saved: AppConfig = { openaiCompat: { key: "c1", url: "https://compat.example/v1" } };
+    expect(reloaded({ openaiCompat: { key: "c1", url: "https://compat.example/v1" } }, saved)).toEqual([]);
     expect(reloaded({ openaiCompat: { key: "c2", url: "https://compat.example/v1" } }, saved)).toEqual(["openaiCompat"]);
     expect(reloaded({ openaiCompat: { key: "c1", url: "https://other.example/v1" } }, saved)).toEqual(["openaiCompat"]);
-    expect(reloaded({ anthropic: { key: "a" } }, saved), "Claude (API key) runs on the key too").toEqual(["claude", "claudeApi"]);
   });
   it("replaces nothing for sections no driver reads", () => {
     expect(reloaded({ onboarding: { hintsSeen: ["tour.composer"] } })).toEqual([]);
     expect(reloaded({ profile: {}, language: "de", tts: {}, features: {} })).toEqual([]);
     expect(reloaded({ box: { token: "boat" }, composio: { apiKey: "c" }, budgets: { monthlyUsd: 5 } })).toEqual([]);
   });
-  it("replaces an engine whose driver reads a saved key from the env", () => {
-    const own = instanceConfigs({ instances: { own: { driver: "mistral", config: { url: "http://127.0.0.1:9/v1" } } }, mistral: { key: "m1" } });
-    expect(own.own!.environment?.MISTRAL_API_KEY).toBeUndefined();
-    expect(changedInstanceIds(engineLaunches(own, { MISTRAL_API_KEY: "m1" }), engineLaunches(own, { MISTRAL_API_KEY: "m1" }))).toEqual([]);
-    expect(changedInstanceIds(engineLaunches(own, { MISTRAL_API_KEY: "m1" }), engineLaunches(own, { MISTRAL_API_KEY: "m2" }))).toEqual(["own"]);
-    const fleet = instanceConfigs({});
-    const compat = (env: Record<string, string>) => changedInstanceIds(engineLaunches(fleet, {}), engineLaunches(fleet, env));
-    expect(compat({ OPENAI_COMPAT_URL: "https://compat.example/v1" })).toEqual(["openaiCompat"]);
-    expect(compat({ OMB_OPENAI_API_KEY: "o" })).toEqual(["openai"]);
-    expect(compat({ BOX_TOKEN: "boat", COMPOSIO_API_KEY: "c" })).toEqual([]);
-  });
-  it("names an engine that was added or removed", () => {
+it("names an engine that was added or removed", () => {
     expect(changedInstanceIds({ a: { driver: "fake" } }, { b: { driver: "fake" } })).toEqual(["a", "b"]);
     expect(changedInstanceIds({ a: { driver: "fake", config: { x: 1 } } }, { a: { driver: "fake", config: { x: 1 } } })).toEqual([]);
   });
@@ -2066,22 +2005,3 @@ describe("DATA_DIR outside the suite's throwaway home", () => {
   });
 });
 
-describe("a key the desktop app hands the server as an environment variable", () => {
-  afterEach(() => vi.unstubAllEnvs());
-
-  it.each([
-    ["OMB_OPENAI_API_KEY", "openai", "OMB_OPENAI_API_KEY"],
-    ["OMB_ANTHROPIC_API_KEY", "claudeApi", "ANTHROPIC_API_KEY"],
-    ["OMB_OPENROUTER_API_KEY", "openrouter", "OMB_OPENROUTER_API_KEY"],
-    ["MISTRAL_API_KEY", "mistral", "MISTRAL_API_KEY"],
-    ["CEREBRAS_API_KEY", "cerebras", "CEREBRAS_API_KEY"],
-    ["OMB_GROQ_API_KEY", "groq", "GROQ_API_KEY"],
-    ["OMB_GREENFERENCE_API_KEY", "greenference", "GREENFERENCE_API_KEY"],
-    ["OMB_META_API_KEY", "meta", "META_API_KEY"],
-    ["OMB_DEEPSEEK_API_KEY", "deepseek", "DEEPSEEK_API_KEY"],
-    ["OPENAI_COMPAT_API_KEY", "openaiCompat", "OPENAI_COMPAT_API_KEY"],
-  ])("reaches its engine: %s", (variable, instanceId, engineEnv) => {
-    vi.stubEnv(variable, `fixture-${variable}`);
-    expect(instanceConfigs(loadConfig())[instanceId]?.environment?.[engineEnv]).toBe(`fixture-${variable}`);
-  });
-});
