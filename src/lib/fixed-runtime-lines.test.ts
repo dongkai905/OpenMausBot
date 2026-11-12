@@ -7,7 +7,6 @@ import type { Message } from "../state/store";
 import { RelayLabel } from "../components/InboxLine";
 import { acpStopFailure } from "../../server/drivers/acp/failure-words";
 import { stopCause, stopFailure } from "../../server/drivers/engine-errors";
-import { unsupportedCallsFailure, unsupportedCallsNotice } from "../../server/drivers/codex-unsupported-calls";
 import { unaskedStopFailure, unaskedStopMessage } from "../../server/harness/unasked-stop";
 import "../../server/server-line-packs";
 import { droppedLine, fullLine, laterLine, notYetLine, refusedLine, sentLine } from "../../server/host/devs-report-words";
@@ -54,20 +53,6 @@ describe("fixed runtime notices", () => {
     expect(runtimeNoticeTool({ message: "Old engine" })).toEqual({ name: "notice: Old engine", ok: true });
   });
 
-  it.each([1, 2, 7])("preserves Codex's exact plural and six-name cap for %s tools", (count) => {
-    const tools = Array.from({ length: count }, (_, i) => `app.TOOL_${i}`);
-    const named = tools.slice(0, 6).join(", ") + (count > 6 ? ` and ${count - 6} more` : "");
-    const english = `Codex could not run ${count === 1 ? "the tool" : "the tools"} ${named} ("unsupported call"): the AI provider sent the call back without the tool's app name, so it never reached the tool. Pick a model for this bot whose provider handles tool calls fully.`;
-    const failed = unsupportedCallsFailure(tools);
-    expect(failed.message).toBe(english);
-    expect(unsupportedCallsNotice(tools)).toBe(english);
-    expect(failed.text.key).toBe(count > 6 ? "chat.notice.codexUnsupportedMore" : count === 1 ? "chat.notice.codexUnsupportedOne" : "chat.notice.codexUnsupportedMany");
-    setLocale("pt-br");
-    const tool = runtimeNoticeTool(failed);
-    expect(activityText(tool, tool.name)).toContain(count === 1 ? "a ferramenta app.TOOL_0" : "as ferramentas app.TOOL_0");
-    expect(activityText(tool, tool.name)).not.toContain("app.TOOL_6");
-    if (count > 6) expect(activityText(tool, tool.name)).toContain("e mais 1");
-  });
 
   it("keeps cancellation quotes and redacts parameters before they reach the transcript", () => {
     expect(unaskedStopMessage('  Request\nwas "aborted".  ')).toBe('The AI\'s request was cut off before it finished, and nobody stopped it (it said only "Request was \'aborted\'."). Send the message again to try once more.');

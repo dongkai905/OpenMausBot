@@ -9,7 +9,9 @@ import { roomSessionsEnabled } from "../room-context-settings.ts";
 import type { Message } from "../store.ts";
 import { isRoomContextMessage, type RoomLine, type RoomWindow } from "./room-transcript.ts";
 
-export const ROOM_SESSION_ENGINES: Readonly<Record<string, string>> = {};
+// 步 6 物理删掉了厂商引擎，清单一度空了：那不是「这个特性不需要了」，而是「没有引擎能走它」——
+// 房间会话对所有引擎失效，特性等于静默作废。存活的 customAcp 接回来，沿用引擎本来的 ACP 空闲策略。
+export const ROOM_SESSION_ENGINES: Readonly<Record<string, string>> = { customAcp: "ACP" };
 
 // Known gap: a process kept warm past this (prompt-cache keep-warm) goes on in the recorded session after a start, so a line can be sent twice.
 export function roomSessionIdleMs(driverKind: string, env: Record<string, string | undefined> = process.env): number | undefined {

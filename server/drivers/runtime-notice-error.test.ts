@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { chatNotice } from "../chat-notices.ts";
-import { codexActionFailure } from "./codex-action-notice.ts";
-import { piModelId } from "./pi-model-id.ts";
 import { RuntimeNoticeError, runtimeErrorText } from "./runtime-notice-error.ts";
 import { acpRuntimeFailure } from "./acp/failure-words.ts";
 import { engineFailure } from "./engine-errors.ts";
@@ -32,18 +30,6 @@ describe("runtime notice provenance", () => {
     expect(runtimeErrorText({ text: error.text })).toBeUndefined();
   });
 
-  it.each([false, true])("codes the tool-action suffix only when an action may have run (%s)", (mayHaveRun) => {
-    const failure = codexActionFailure("Provider's own words", mayHaveRun);
-    expect(failure.message).toBe(`Provider's own words${mayHaveRun ? " A tool action may have run. Check its effects before trying again." : ""}`);
-    expect("text" in failure ? failure.text?.key : undefined).toBe(mayHaveRun ? "chat.notice.codexActionMayHaveRun" : undefined);
-  });
-
-  it("keeps a coded Codex failure when no tool action may have run", () => {
-    const text = { key: "chat.notice.codexModelUnavailable" };
-    expect(codexActionFailure("Model unavailable", false, text)).toEqual({ message: "Model unavailable", text });
-    expect(codexActionFailure("Model unavailable", true, text).text?.key).toBe("chat.notice.codexActionMayHaveRun");
-  });
-
   it.each([1_000, 89_000, 90_000, 180_000])("keeps the provider error's quiet duration at %i ms", (quietMs) => {
     const state = { kind: "provider-error", message: "Provider's own words" } as const;
     const words = quietNoticeText("Custom ACP", state, quietMs)!;
@@ -62,11 +48,4 @@ describe("runtime notice provenance", () => {
     expect(runtimeErrorText(stuck.stop)?.key).toBe("chat.notice.acpQuietStuck");
   });
 
-  it.each([null, undefined, {}, { provider: "x" }, { id: "y" }, { provider: 1, id: "y" }, { provider: "", id: "y" }])("does not confirm a partial Pi model: %j", (model) => {
-    expect(piModelId(model)).toBeNull();
-  });
-
-  it("keeps Pi's confirmed provider and model id verbatim", () => {
-    expect(piModelId({ provider: "FixtureProvider", id: "CaseSensitiveModel", name: "Fixture" })).toBe("FixtureProvider/CaseSensitiveModel");
-  });
 });

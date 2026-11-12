@@ -13,30 +13,11 @@ import { removeTempDir } from "../../testing/cleanup.ts";
 import { recordEvents } from "../../testing/events.ts";
 import { caseTokens, LIVE_REPLY_CASES, liveReplyScripts } from "../../testing/live-reply-cases.ts";
 import type { AcpConfig } from "./core.ts";
-import { ClineAgentDriver } from "./cline.ts";
-import { CommandCodeAgentDriver } from "./command-code.ts";
-import { CopilotAgentDriver } from "./copilot.ts";
-import { CursorAgentDriver } from "./cursor.ts";
 import { CustomAcpDriver } from "./custom.ts";
-import { DeepSeekAgentDriver } from "./deepseek.ts";
-import { DroidAgentDriver } from "./droid.ts";
-import { GeminiAgentDriver } from "./gemini.ts";
-import { GrokAgentDriver } from "./grok.ts";
-import { HermesAgentDriver } from "./hermes.ts";
-import { KimiAgentDriver } from "./kimi.ts";
-import { KiroAgentDriver } from "./kiro.ts";
-import { createOpenCodeDriver } from "./opencode-go.ts";
-import { QwenAgentDriver } from "./qwen.ts";
 
 const FAKE_CLI = join(dirname(fileURLToPath(import.meta.url)), "../../testing/fake-acp-cli.ts");
-const OpenCodeDriver = createOpenCodeDriver(async () => ({
-  default: "opencode/fixture-model",
-  options: [{ id: "opencode/fixture-model", label: "Fixture model" }],
-}));
-const ENGINES: ProviderDriver<AcpConfig>[] = [
-  OpenCodeDriver, HermesAgentDriver, GeminiAgentDriver, KimiAgentDriver, QwenAgentDriver, GrokAgentDriver, DeepSeekAgentDriver,
-  DroidAgentDriver, CommandCodeAgentDriver, KiroAgentDriver, CursorAgentDriver, ClineAgentDriver, CopilotAgentDriver, CustomAcpDriver,
-] as ProviderDriver<AcpConfig>[];
+// The one engine left is the custom ACP driver: the case list is about the streaming shape, not about a vendor's dialect.
+const ENGINES = [CustomAcpDriver] as ProviderDriver<AcpConfig>[];
 const CASES = LIVE_REPLY_CASES.filter((entry) => entry.action === undefined || entry.action === "stop");
 
 let scratch: string;
@@ -57,8 +38,8 @@ describe.each(ENGINES.map((driver) => ({ driver, kind: driver.driverKind })))("$
       displayName: "Live reply fixture",
       enabled: true,
       environment: {
-        HOME: home, USERPROFILE: home, HERMES_HOME: join(home, ".hermes"), CLINE_DATA_DIR: join(home, "cline"), CLINE_PROVIDER: "openai-compatible", CLINE_MODEL: "fixture-model", CLINE_API_KEY: "fixture-only", KIMI_CODE_HOME: join(home, ".kimi"),
-        OPENMAUSBOT_PROBE_LOCAL_INJECT: "0", OPENCODE_API_KEY: "fixture-only", DEEPSEEK_API_KEY: "fixture-only", KIRO_API_KEY: "fixture-only", FAKE_ACP_AUTOPILOT: "1",
+        HOME: home, USERPROFILE: home,
+        OPENMAUSBOT_PROBE_LOCAL_INJECT: "0", FAKE_ACP_AUTOPILOT: "1",
         FAKE_STREAM_SCRIPT: scripts, FAKE_STREAM_CADENCE: entry.action === "stop" ? "6:5" : "7:0",
       },
       config: { cli: FAKE_CLI, fullAuto: true },

@@ -2,7 +2,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { GroqDriver } from "./drivers/groq.ts";
+import { OpenAICompatDriver } from "./drivers/openai-compat.ts";
 import { recordEvents } from "./testing/events.ts";
 import { buildTurnContext, engineIsFresh, replaysNatively } from "./turn-context.ts";
 
@@ -34,13 +34,13 @@ describe("chat-completions history is sent once", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it("groq: the first user message is in the second request exactly once", async () => {
-    const instance = await GroqDriver.create({ instanceId: "groq-1", displayName: "Groq", enabled: true,
-      config: GroqDriver.decodeConfig({ url: base }), environment: { GROQ_API_KEY: `gsk_${"a".repeat(48)}` } });
+  it("openai-compatible: the first user message is in the second request exactly once", async () => {
+    const instance = await OpenAICompatDriver.create({ instanceId: "compat-1", displayName: "OpenAI-compatible", enabled: true,
+      config: OpenAICompatDriver.decodeConfig({ url: base, key: `sk-${"a".repeat(48)}` }), environment: {} });
     const recorder = recordEvents(instance.adapter);
     try {
       const transcript = [{ role: "user" as const, text: FIRST }, { role: "assistant" as const, text: "Noted." }];
-      const fresh = engineIsFresh({ instanceId: "groq-1", lastInstanceId: "groq-1", resumeCursors: {}, transcript });
+      const fresh = engineIsFresh({ instanceId: "compat-1", lastInstanceId: "compat-1", resumeCursors: {}, transcript });
       const { turnText } = buildTurnContext({ text: "what is my dog called?", transcript, rewound: false, fresh,
         externallyUpdated: false, replaysNatively: replaysNatively(instance.driverKind) });
       await instance.adapter.sendTurn({ threadId: "t", text: turnText, transcript, model: "openai/gpt-oss-120b" });

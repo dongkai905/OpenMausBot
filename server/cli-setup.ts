@@ -14,6 +14,7 @@ import { augmentedPath, resetPathCache } from "./env-path.ts";
 import { resolveCli } from "./procs.ts";
 import { ProviderRegistry } from "./harness/registry.ts";
 import { BUILT_IN_DRIVERS } from "./drivers/builtIn.ts";
+import { OpenAICompatDriver } from "./drivers/openai-compat.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
 import { API_ENDPOINTS, fetchSetupModels, normalizeApiUrl, verifySetupCompletion } from "./cli-api-setup.ts";
 
@@ -239,7 +240,9 @@ export async function runSetup(
           let routingProvider: string | undefined;
           if (prior) {
             const config = rawObject(prior[1].config);
-            const decoded = BUILT_IN_DRIVERS.find((d) => d.driverKind === "openai-compat")!.decodeConfig(config);
+            // The driver module, not the registry: the built-in registry holds only customAcp now
+            // (step 6), and an API connection is still configured through its own driver.
+            const decoded = OpenAICompatDriver.decodeConfig(config);
             url = normalizeApiUrl(decoded.url);
             key = decoded.key ?? prior[1].environment?.[decoded.apiKeyEnv]
               ?? prior[1].environment?.OPENAI_COMPAT_API_KEY

@@ -835,7 +835,10 @@ export function saveConfig(
   const keepImageModels = keepKeysOutOfImageModels(disk, checkedPatch.imageGen);
   const storedProfiles = storedBrowserProfilesSchema.safeParse(disk.browserProfiles);
   if (storedProfiles.success) disk.browserProfiles = storedProfiles.data;
-  for (const key of ["treg", "postiz", "openai", "openrouter", "openaiCompat"]) {
+  // 步 6 把这份名单缩到只剩五个厂商无关的段，结果 profile、budgets、threads、context、
+  // features、tts、imageGen 等 23 段再也存不下去 —— 改一次设置就把它们悄悄抹掉。
+  // 这里取回步 6 之前的名单，只去掉那些随厂商引擎一起删掉的段。
+  for (const key of ["treg", "postiz", "openai", "openrouter", "openaiCompat", "composio", "box", "tts", "decider", "imageGen", "live", "profile", "rooms", "mcp", "threads", "context", "memory", "localVm", "features", "budgets", "billing", "decisions", "loopGuard", "onboarding", "browserEngine", "newBots", "safetyFloor"] as const) {
     const section = checkedPatch[key];
     if (!section) continue;
     const current = jsonObjectSchema.safeParse(disk[key]);

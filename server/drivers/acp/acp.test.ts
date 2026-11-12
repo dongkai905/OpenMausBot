@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,13 +15,7 @@ import { promptSplitFingerprints, writePromptSplitReceipt } from "../prompt-spli
 import { classifyError } from "../retry.ts";
 import { createAcpDriver, skipSubscriptionAuthForLocalInject, type AcpSupport } from "./core.ts";
 import { DEFAULT_ACP_PROMPT_IDLE_MS } from "./quiet-status.ts";
-import { GrokAgentDriver, grokAcceptsUnadvertisedImages } from "./grok.ts";
-import { openCodePromptUnreachedModel } from "./opencode-go.ts";
-import { GeminiAgentDriver } from "./gemini.ts";
-import { KimiAgentDriver } from "./kimi.ts";
-import { DroidAgentDriver } from "./droid.ts";
-import { CursorAgentDriver } from "./cursor.ts";
-import { QwenAgentDriver } from "./qwen.ts";
+import { CustomAcpDriver } from "./custom.ts";
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { TurnWatchdog } from "../../turn-watchdog.ts";
 import { startFakeHttpMcp } from "../../testing/fake-http-mcp-server.ts";
@@ -177,52 +171,19 @@ describe("ACP decodeConfig", () => {
       await instance.dispose();
     }
   });
-  it("grok defaults to the grok binary", () => {
-    expect(GrokAgentDriver.decodeConfig({})).toEqual({ cli: "grok", fullAuto: false, workspace: undefined });
+  it("needs its command before it can run", () => {
+    expect(() => CustomAcpDriver.decodeConfig({})).toThrow(/needs its command/);
   });
-  it("gemini defaults to the gemini binary", () => {
-    expect(GeminiAgentDriver.decodeConfig(undefined)).toEqual({ cli: "gemini", fullAuto: false, workspace: undefined });
-  });
-  it("kimi defaults to the kimi binary and declares cross-platform setup", () => {
-    expect(KimiAgentDriver.decodeConfig(undefined)).toEqual({ cli: "kimi", fullAuto: false, workspace: undefined });
-    expect(KimiAgentDriver.install?.command).toMatchObject({
-      darwin: expect.stringContaining("install.sh"),
-      linux: expect.stringContaining("install.sh"),
-      win32: expect.stringContaining("install.ps1"),
-    });
-    expect(KimiAgentDriver.install?.signInCommand).toBe("kimi login");
-  });
-  it("droid defaults to the droid binary and declares cross-platform setup", () => {
-    expect(DroidAgentDriver.decodeConfig(undefined)).toEqual({ cli: "droid", fullAuto: false, workspace: undefined });
-    expect(DroidAgentDriver.install?.command).toMatchObject({
-      darwin: expect.stringContaining("factory.ai/cli"),
-      linux: expect.stringContaining("factory.ai/cli"),
-      win32: expect.stringContaining("factory.ai/cli"),
-    });
-    expect(DroidAgentDriver.install?.signInCommand).toBe("droid");
-  });
-  it("cursor defaults to its unambiguous binary and declares cross-platform setup", () => {
-    expect(CursorAgentDriver.decodeConfig(undefined)).toEqual({
-      cli: "cursor-agent",
-      fullAuto: false,
-      workspace: undefined,
-    });
-    expect(CursorAgentDriver.install?.command).toMatchObject({
-      darwin: expect.stringContaining("cursor.com/install"),
-      linux: expect.stringContaining("cursor.com/install"),
-      win32: expect.stringContaining("cursor.com/install"),
-    });
-    expect(CursorAgentDriver.install?.signInCommand).toBe("cursor-agent login");
-  });
+
   it("fullAuto only when explicitly true", () => {
-    expect(GrokAgentDriver.decodeConfig({ fullAuto: "yes" }).fullAuto).toBe(false);
-    expect(GrokAgentDriver.decodeConfig({ fullAuto: true }).fullAuto).toBe(true);
+    expect(CustomAcpDriver.decodeConfig({ cli: FAKE_CLI, fullAuto: "yes" }).fullAuto).toBe(false);
+    expect(CustomAcpDriver.decodeConfig({ cli: FAKE_CLI, fullAuto: true }).fullAuto).toBe(true);
   });
 
   it("advertises per-bot local CUA but rejects legacy full-auto turns without a mode", async () => {
-    const fullAuto = await GrokAgentDriver.create({
-      instanceId: "grok-full-auto",
-      displayName: "Grok Full Auto",
+    const fullAuto = await CustomAcpDriver.create({
+      instanceId: "acp-full-auto",
+      displayName: "ACP Full Auto",
       environment: {},
       enabled: true,
       config: { cli: FAKE_CLI, fullAuto: true },
@@ -252,7 +213,7 @@ describe("ACP turns (fake CLI)", () => {
   let recorder: EventRecorder;
   let scratch: string;
 
-  const create = async (driver = GrokAgentDriver, mode?: string) => {
+  const create = async (driver = CustomAcpDriver, mode?: string) => {
     if (mode) process.env.FAKE_ACP_MODE = mode;
     instance = await driver.create({
       instanceId: "acp-test",
@@ -358,7 +319,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("pairs an unkeyed tool call's lifecycle events on one stable itemId", async () => {
-    await create(GrokAgentDriver, "unkeyed-tool");
+    await create(CustomAcpDriver, "unkeyed-tool");
     const { turnId } = await instance.adapter.sendTurn({ threadId: "t-unkeyed-tool", text: "go" });
     await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
     const started = recorder.events.find((e) => e.type === "item.started" && e.itemType === "tool");
@@ -369,7 +330,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("ends a tool call that arrives already finished, so nothing counts it as running", async () => {
-    await create(GrokAgentDriver, "finished-tools");
+    await create(CustomAcpDriver, "finished-tools");
     const { turnId } = await instance.adapter.sendTurn({ threadId: "t-finished-tools", text: "go" });
     await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
     const started = recorder.events.flatMap((e) => e.type === "item.started" && e.itemType === "tool" ? [e.itemId] : []);
@@ -400,7 +361,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("completes a finished tool call once, though a later terminal update names it again", async () => {
-    await create(GrokAgentDriver, "finished-tools");
+    await create(CustomAcpDriver, "finished-tools");
     const { turnId } = await instance.adapter.sendTurn({ threadId: "t-finished-twice", text: "go" });
     await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
     const ends = recorder.events.filter((e) => e.type === "item.completed" && e.itemType === "tool" && e.itemId === "tc-done");
@@ -411,12 +372,13 @@ describe("ACP turns (fake CLI)", () => {
 
   it("normalizes a full turn into the canonical event sequence", async () => {
     await create();
-    const { turnId } = await instance.adapter.sendTurn({ threadId: "t-happy", text: "hi", model: "grok-4.5" });
+    const { turnId } = await instance.adapter.sendTurn({ threadId: "t-happy", text: "hi", model: "agent-default" });
     await recorder.until((e) => e.type === "turn.completed");
 
     const types = recorder.events.map((e) => e.type);
     expect(types).toEqual([
       "turn.started",
+      "session.model-variants",
       "session.started",
       "content.delta",
       "item.completed",
@@ -425,7 +387,7 @@ describe("ACP turns (fake CLI)", () => {
       "thread.token-usage.updated",
       "turn.completed",
     ]);
-    expect(recorder.events.every((e) => e.turnId === turnId && e.provider === "grokAgent")).toBe(true);
+    expect(recorder.events.every((e) => e.turnId === turnId && e.provider === "customAcp")).toBe(true);
     expect(recorder.events.filter((event) => event.itemId === "tc-1")).toMatchObject([
       { type: "item.started", input: expect.stringContaining("/fixture/readme.md") },
       { type: "item.completed", output: expect.stringContaining("fixture file content") },
@@ -621,7 +583,7 @@ describe("ACP turns (fake CLI)", () => {
   it("never triggers from a receipt written before lastUsed existed", async () => {
     const { threadId, usage, send } = await usageThread("legacy-receipt");
     writePromptSplitReceipt(
-      "grokAgent",
+      "customAcp",
       JSON.stringify([threadId, "fake-acp-session"]),
       promptSplitFingerprints("Standing rules.", "Memory: likes quiet hours."),
     );
@@ -630,7 +592,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(await send("turn 2")).toBe("turn 2");
   });
 
-  const reportingThread = async (name: string, driver?: typeof GrokAgentDriver) => {
+  const reportingThread = async (name: string, driver?: typeof CustomAcpDriver) => {
     const dump = join(scratch, `acp-${name}.json`);
     const updatesFile = join(scratch, `acp-${name}-updates.json`);
     process.env.FAKE_ACP_DUMP = dump;
@@ -805,7 +767,7 @@ describe("ACP turns (fake CLI)", () => {
     const say = (...texts: string[]) => texts.map((text) => chunk("agent_message_chunk", text));
     const reasoned = "💭 **Reasoning:**\n```\nSix times seven.\n```\n\nThe answer is 42.";
     /** Each turn's replies after the fake's own "hello from fake acp". */
-    const replyingThread = async (name: string, driver?: typeof GrokAgentDriver) => {
+    const replyingThread = async (name: string, driver?: typeof CustomAcpDriver) => {
       const { report, send, lastTurn } = await reportingThread(name, driver);
       return async (...updates: object[]) => {
         report(...updates);
@@ -951,39 +913,15 @@ describe("ACP turns (fake CLI)", () => {
     expect(JSON.parse(readFileSync(`${dump}.prompt.json`, "utf8"))).toEqual([{ type: "text", text }]);
   });
 
-  it("sends native images on Grok's verified runtime even with the false capability", async () => {
-    const dump = join(scratch, "grok-image.json");
-    const imagePath = join(scratch, "grok.png");
-    const bytes = Buffer.from("synthetic-private-image");
-    writeFileSync(imagePath, bytes);
-    process.env.FAKE_ACP_DUMP = dump;
-    process.env.FAKE_ACP_DUMP_PROMPT = "1";
-    process.env.FAKE_ACP_GROK_VERSION = "1.0.25";
-    await create(GrokAgentDriver);
-    expect(instance.adapter.capabilities.images).toBe(true);
-    const { turnId } = await instance.adapter.sendTurn({
-      threadId: "t-grok-image", text: "Inspect", images: [{ path: imagePath, mime: "image/png", bytes: bytes.length }],
-    });
-    const done = await recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId);
-    expect(done).toMatchObject({ ok: true });
-    expect(JSON.parse(readFileSync(`${dump}.prompt.json`, "utf8"))).toContainEqual({ type: "image", data: bytes.toString("base64"), mimeType: "image/png" });
-    expect(readFileSync(join(NATIVE_DIR, "t-grok-image.ndjson"), "utf8")).not.toContain(bytes.toString("base64"));
-  });
-
-  it.each([null, {}, { _meta: { grokShell: true, agentVersion: "1.0.24" } },
-    { _meta: { grokShell: true, agentVersion: "1.0.25-preview" } },
-    { _meta: { grokShell: false, agentVersion: "1.0.25" } }])("does not assume image support for unknown Grok runtime %j", (init) => {
-    expect(grokAcceptsUnadvertisedImages(init)).toBe(false);
-  });
-
-  it("emits each assistant text block before the tool that follows it", async () => {
-    await create(GrokAgentDriver, "interleave");
-    await instance.adapter.sendTurn({ threadId: "t-interleave", text: "go", model: "grok-4.5" });
+it("emits each assistant text block before the tool that follows it", async () => {
+    await create(CustomAcpDriver, "interleave");
+    await instance.adapter.sendTurn({ threadId: "t-interleave", text: "go", model: "agent-default" });
     await recorder.until((e) => e.type === "turn.completed");
 
     const types = recorder.events.map((e) => e.type);
     expect(types).toEqual([
       "turn.started",
+      "session.model-variants",
       "session.started",
       "content.delta",
       "item.completed",
@@ -1009,29 +947,7 @@ describe("ACP turns (fake CLI)", () => {
     ]);
   });
 
-  it("normalizes a structured ACP image block without treating it as text", async () => {
-    await create(GeminiAgentDriver, "image");
-    await instance.adapter.sendTurn({ threadId: "t-image", text: "draw it" });
-    await recorder.until((event) => event.type === "turn.completed");
-
-    const image = recorder.events.find(
-      (event) => event.type === "item.completed" && event.itemType === "assistant_image",
-    );
-    expect(image).toMatchObject({
-      type: "item.completed",
-      itemType: "assistant_image",
-      alt: "Generated image",
-    });
-    expect(image).not.toHaveProperty("fromTool");
-    expect(image && "data" in image ? image.data : "").toMatch(/^iVBOR/);
-    expect(
-      recorder.events.some(
-        (event) => event.type === "item.completed" && event.itemType === "assistant_text",
-      ),
-    ).toBe(false);
-  });
-
-  it("reads token usage from the root of the prompt result", async () => {
+it("reads token usage from the root of the prompt result", async () => {
     process.env.FAKE_ACP_USAGE_ROOT = "1";
     await create();
     await instance.adapter.sendTurn({ threadId: "t-usage-root", text: "go" });
@@ -1079,7 +995,7 @@ describe("ACP turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-refusal", text: "go" });
     expect(await recorder.until((e) => e.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "refusal" });
     const error = recorder.events.find((e) => e.type === "runtime.error") as { message: string } | undefined;
-    expect(error?.message).toContain("Grok refused to go on with this request (stop reason: refusal).");
+    expect(error?.message).toContain("ACP Test refused to go on with this request (stop reason: refusal).");
   });
 
   it("fails a max_tokens turn in plain words that advise continuing", async () => {
@@ -1088,7 +1004,7 @@ describe("ACP turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-max-tokens", text: "go" });
     expect(await recorder.until((e) => e.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "max_tokens" });
     const error = recorder.events.find((e) => e.type === "runtime.error") as { message: string } | undefined;
-    expect(error?.message).toContain("Grok's reply reached its maximum length before it finished (stop reason: max_tokens). Ask it to continue, or ask for a shorter answer.");
+    expect(error?.message).toContain("ACP Test's reply reached its maximum length before it finished (stop reason: max_tokens). Ask it to continue, or ask for a shorter answer.");
   });
 
   it("folds opencode cache reads into input and names them", async () => {
@@ -1141,7 +1057,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(usage).toMatchObject({ input: 157990, output: 3, cachedInput: 152960 });
   });
 
-  it("passes ACP stdio flags and strips foreign provider keys from the child env", async () => {
+  it("strips foreign provider keys from the child env", async () => {
     await create();
     const dump = join(scratch, "dump.json");
     process.env.FAKE_ACP_DUMP = dump;
@@ -1158,9 +1074,6 @@ describe("ACP turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
 
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.argv).toContain("agent");
-    expect(seen.argv).toContain("stdio");
-    expect(seen.argv).toContain("--permission-mode");
     expect(seen.env.XAI_API_KEY).toBeUndefined();
     expect(seen.env.OPENCODE_API_KEY).toBeUndefined();
     expect(seen.env.CLINE_API_KEY).toBeUndefined();
@@ -1234,77 +1147,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(prompt.find(block => block.type === "text")?.text).toContain(BUILT_IN_DATA_SYSTEM_PROMPT.trim());
   });
 
-  it("droid takes model and autonomy over the wire, never through argv", async () => {
-    // `droid exec -m <id> -o acp` ignores the flag (0.196.0).
-    instance = await DroidAgentDriver.create({
-      instanceId: "droid-test",
-      displayName: "Droid Test",
-      environment: {},
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: true },
-    });
-    recorder = recordEvents(instance.adapter);
-    const dump = join(scratch, "droid-dump.json");
-    process.env.FAKE_ACP_DUMP = dump;
-
-    await instance.adapter.sendTurn({ threadId: "t-droid", text: "go", model: "claude-sonnet-5" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.argv).toEqual(["exec", "-o", "acp"]);
-    expect(seen.argv).not.toContain("-m");
-
-    const applied = JSON.parse(readFileSync(`${dump}.config.json`, "utf8"));
-    expect(applied).toEqual([
-      { method: "session/set_mode", params: { sessionId: "fake-acp-session", modeId: "auto-high" } },
-      { method: "session/set_model", params: { sessionId: "fake-acp-session", modelId: "claude-sonnet-5" } },
-    ]);
-  });
-
-  it("droid pins read-only mode when fullAuto is off", async () => {
-    instance = await DroidAgentDriver.create({
-      instanceId: "droid-safe",
-      displayName: "Droid Safe",
-      environment: {},
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    recorder = recordEvents(instance.adapter);
-    const dump = join(scratch, "droid-safe.json");
-    process.env.FAKE_ACP_DUMP = dump;
-
-    await instance.adapter.sendTurn({ threadId: "t-droid-safe", text: "go" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    expect(JSON.parse(readFileSync(`${dump}.config.json`, "utf8"))).toEqual([
-      { method: "session/set_mode", params: { sessionId: "fake-acp-session", modeId: "normal" } },
-      { method: "session/set_model", params: { sessionId: "fake-acp-session", modelId: "claude-opus-5" } },
-    ]);
-  });
-
-  it("droid names the rejected setting when the agent predates session config", async () => {
-    process.env.FAKE_ACP_MODE = "no-session-config";
-    instance = await DroidAgentDriver.create({
-      instanceId: "droid-old-cli",
-      displayName: "Droid Old CLI",
-      environment: {},
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    recorder = recordEvents(instance.adapter);
-
-    await instance.adapter.sendTurn({ threadId: "t-droid-skew", text: "go" });
-    const done = await recorder.until((e) => e.type === "turn.completed");
-
-    expect(done).toMatchObject({ ok: false, stopReason: "rpc_error" });
-    const err = recorder.events.find((e) => e.type === "runtime.error")!;
-    expect(err.message).toContain("session/set_mode");
-    expect(err.message).toContain('autonomy mode "normal"');
-    expect(err.message).toMatch(/`droid` is current/);
-    expect(recorder.events.some((e) => e.type === "session.started")).toBe(true);
-  });
-
-  it("mounts local CUA only on an approval-capable ACP instance", async () => {
+it("mounts local CUA only on an approval-capable ACP instance", async () => {
     await create();
     const dump = join(scratch, "local-dump.json");
     process.env.FAKE_ACP_DUMP = dump;
@@ -1400,7 +1243,7 @@ describe("ACP turns (fake CLI)", () => {
       requireHeader: { name: "Authorization", value: "Bearer tok-voluum" } });
     process.env.FAKE_ACP_MCP_TRANSPORTS = "http,sse";
     try {
-      await create(GrokAgentDriver, "mcp-tools");
+      await create(CustomAcpDriver, "mcp-tools");
       await instance.adapter.sendTurn({ threadId: "t-strict-acp", text: "go", integrations: { custom: {
         voluum: { type: "http", url: strict.url, headers: { Authorization: "Bearer tok-voluum" } },
       } } });
@@ -1414,10 +1257,8 @@ describe("ACP turns (fake CLI)", () => {
     }
   });
 
-  it.each([
-    { engine: "Kimi", driver: KimiAgentDriver, outcome: "fitted to Moonshot's per-tool limit" },
-    { engine: "Grok", driver: GrokAgentDriver, outcome: "as the server sent them" },
-  ])("hands $engine a person's stdio MCP tools $outcome", async ({ driver }) => {
+  it("hands the ACP engine a person's stdio MCP tools as the server sent them", async () => {
+    const driver = CustomAcpDriver;
     const script = join(scratch, "wide-mcp.mjs");
     const tools = [{ name: "small", inputSchema: { type: "object", properties: { q: { type: "string" } } } }, { name: "configure", inputSchema: wideSchema(110) }];
     writeFileSync(script, `
@@ -1438,50 +1279,16 @@ describe("ACP turns (fake CLI)", () => {
       const raw = JSON.stringify(tools[1]!.inputSchema).length;
       expect(raw).toBeGreaterThan(12_000);
       expect(sizes.small).toBe(JSON.stringify(tools[0]!.inputSchema).length);
-      if (driver === KimiAgentDriver) expect(sizes.configure).toBeLessThanOrEqual(12_000);
-      else expect(sizes.configure).toBe(raw);
+      expect(sizes.configure).toBe(raw);
     } finally {
       delete process.env.FAKE_ACP_MCP_SCHEMA_BYTES;
     }
   });
 
-  it("tells the person in plain words when Kimi still refuses a tool's schema", async () => {
-    const failureFile = join(scratch, "schema-refusal.json");
-    process.env.FAKE_ACP_RPC_FAILURE_FILE = failureFile;
-    writeFileSync(failureFile, JSON.stringify({ code: -32603, message: "Internal error",
-      data: { details: "400 tools.function.parameters is not a valid moonshot flavored json schema, details: <At path 'root': schema exceeds maximum allowed size>" } }));
-    await create(KimiAgentDriver);
-    await instance.adapter.sendTurn({ threadId: "t-schema-refusal", text: "go" });
-    expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false });
-    expect(recorder.events.find((event) => event.type === "runtime.error")).toMatchObject({
-      message: "Kimi refused this turn as an invalid request because the input schema of one of this bot's tools is too large, so nothing ran. "
-        + "Turn off the MCP server or app that tool comes from for this bot, or switch the bot to another AI.",
-    });
-  });
-
-  it("tells the person where to turn tool selection off when Grok has its own MCP server", async () => {
-    const rpcFile = join(scratch, "grok-native-mcp-rpc.json");
-    process.env.FAKE_ACP_RPC_DUMP = rpcFile;
-    process.env.FAKE_ACP_GROK_NATIVE_MCP = "github";
-    try {
-      await create(GrokAgentDriver);
-      await instance.adapter.sendTurn({ threadId: "t-grok-native-mcp", text: "go", toolScope: { allow: ["native:*"] } });
-      expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false });
-      expect(recorder.events.find((event) => event.type === "runtime.error")).toMatchObject({
-        message: "Grok has an MCP connection outside the bot's selection. Remove the MCP servers from Grok's own settings, "
-          + "or set Tool selection back to all tools in this bot's settings (Access). No prompt was sent.",
-      });
-      expect(JSON.parse(readFileSync(rpcFile, "utf8"))).not.toContain("session/prompt");
-    } finally {
-      delete process.env.FAKE_ACP_GROK_NATIVE_MCP;
-    }
-  });
-
-  it("keeps a tool selection's gate in front of the connector", async () => {
+it("keeps a tool selection's gate in front of the connector", async () => {
     const strict = await startFakeHttpMcp({ strictInitialize: "http-400", tools: [{ name: "report", inputSchema: { type: "object" } }, { name: "campaigns", inputSchema: { type: "object" } }] });
     try {
-      // Kimi: Grok also checks its own catalog over _x.ai/mcp/list, which the fake does not keep.
-      await create(KimiAgentDriver, "mcp-tools");
+      await create(CustomAcpDriver, "mcp-tools");
       await instance.adapter.sendTurn({ threadId: "t-strict-acp-scoped", text: "go", toolScope: { allow: ["native:*", "mcp:voluum:report"] },
         integrations: { custom: { voluum: { type: "http", url: strict.url, headers: {} } } } });
       expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
@@ -1494,7 +1301,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("surfaces a permission ask as request.opened and completes once allowed", async () => {
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({
       threadId: "t-perm",
       text: "go",
@@ -1538,7 +1345,7 @@ describe("ACP turns (fake CLI)", () => {
     { name: "relative cwd", toolCall: { kind: "execute", rawInput: { command: "pwd", cwd: "unknown-relative-directory" } }, descriptor: false },
   ])("keeps command grants scoped to complete shell input: $name", async ({ toolCall, descriptor }) => {
     process.env.FAKE_ACP_PERMISSION_TOOL_CALL = JSON.stringify(toolCall);
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-acp-command-descriptor", text: "go", cwd: scratch });
     const opened = await recorder.until((event) => event.type === "request.opened");
     expect(opened).toHaveProperty("command", descriptor ? { command: toolCall.rawInput?.command, cwd: realpathSync(scratch) } : undefined);
@@ -1550,7 +1357,7 @@ describe("ACP turns (fake CLI)", () => {
     const command = "pwd";
     const directory = join(scratch, "execution-directory");
     process.env.FAKE_ACP_PERMISSION_TOOL_CALL = JSON.stringify({ kind: "execute", rawInput: { command, workdir: directory } });
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-acp-explicit-cwd", text: "go", cwd: scratch });
     const opened = await recorder.until((event) => event.type === "request.opened");
     expect(opened).toHaveProperty("command", { command, cwd: directory });
@@ -1561,7 +1368,7 @@ describe("ACP turns (fake CLI)", () => {
     await instance.dispose();
     recorder.stop();
     process.env.FAKE_ACP_PERMISSION_TOOL_CALL = JSON.stringify({ kind: "execute", rawInput: { command, cwd: scratch, workdir: directory } });
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-acp-conflicting-cwd", text: "go", cwd: scratch });
     const conflict = await recorder.until((event) => event.type === "request.opened");
     expect(conflict).toHaveProperty("command", undefined);
@@ -1570,7 +1377,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("emits a structured question beside the flat choices", async () => {
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-question-shape", text: "go" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     expect(opened).toMatchObject({
@@ -1584,7 +1391,7 @@ describe("ACP turns (fake CLI)", () => {
   it("answers a structured card reply by recovering the picked option", async () => {
     const answer = join(scratch, "question-answer.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-question-answer", text: "go" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     // Exactly what the tabbed QuestionCard submits: one Q:/A: block, not a bare option label.
@@ -1602,7 +1409,7 @@ describe("ACP turns (fake CLI)", () => {
   it("cancels a question whose answer matches no offered option", async () => {
     const answer = join(scratch, "question-cancel.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-question-cancel", text: "go" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     await instance.adapter.respondToRequest("t-question-cancel", (opened as { requestId: string }).requestId, {
@@ -1619,7 +1426,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("marks an ACP question as options-only, so the card offers no free text", async () => {
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-question-custom", text: "go" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     expect(opened).toMatchObject({ questions: [{ question: "Which color?", custom: false }] });
@@ -1637,7 +1444,7 @@ describe("ACP turns (fake CLI)", () => {
     ]);
     const answer = join(scratch, "question-hold.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-question-hold", text: "go" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     await instance.adapter.respondToRequest("t-question-hold", (opened as { requestId: string }).requestId, response as never);
@@ -1647,27 +1454,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(recorder.events.some((e) => e.type === "runtime.error")).toBe(error);
   });
 
-  it("still sends the picked option id on Antigravity's option shape", async () => {
-    process.env.FAKE_ACP_HOLD_ON_CANCELLED = "1";
-    process.env.FAKE_ACP_QUESTION_OPTIONS = JSON.stringify([
-      { optionId: "opt-0", kind: "allow_once", name: "Machines of Loving Grace (Recommended)" },
-      { optionId: "opt-1", kind: "allow_once", name: "A new piece on reasoning models" },
-    ]);
-    const answer = join(scratch, "question-pick.txt");
-    process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "question");
-    await instance.adapter.sendTurn({ threadId: "t-question-pick", text: "go" });
-    const opened = await recorder.until((e) => e.type === "request.opened");
-    expect(await instance.adapter.respondToRequest("t-question-pick", (opened as { requestId: string }).requestId, {
-      behavior: "answer",
-      message: "The user answered your questions.\n\nQ: Which color?\nA: A new piece on reasoning models",
-    })).toBe("answered");
-    const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: true });
-    expect(readFileSync(answer, "utf8")).toBe("opt-1");
-  });
-
-  it.each([false, true])("maps capped labels back to their option id, refusing collisions (%s)", async collision => {
+it.each([false, true])("maps capped labels back to their option id, refusing collisions (%s)", async collision => {
     const label = "Green ".repeat(30);
     const answer = join(scratch, "long-question-answer.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
@@ -1675,7 +1462,7 @@ describe("ACP turns (fake CLI)", () => {
       { optionId: "green-id", kind: "allow_once", name: label },
       { optionId: "other-id", kind: "allow_once", name: collision ? label + "other" : "Blue" },
     ]);
-    await create(GrokAgentDriver, "question");
+    await create(CustomAcpDriver, "question");
     await instance.adapter.sendTurn({ threadId: "t-long-question", text: "go" });
     const opened = await recorder.until(e => e.type === "request.opened");
     expect(opened).toMatchObject({ choices: expect.arrayContaining([label.trim().slice(0, 120).trim()]) });
@@ -1687,155 +1474,11 @@ describe("ACP turns (fake CLI)", () => {
     expect(readFileSync(answer, "utf8")).toBe(collision ? "cancelled" : "green-id");
   });
 
-  describe("Grok ask_user_question", () => {
-    // The request Grok's shell sends when its ask_user_question tool runs
-    // (xai-org/grok-build AskUserQuestionExtRequest, camelCase on the wire).
-    const GROK_ASK = {
-      sessionId: "fake-acp-session",
-      toolCallId: "call-1",
-      mode: "default",
-      questions: [
-        { question: "Which database?", options: [{ label: "Redis", description: "In-memory store" }, { label: "Postgres", description: "Relational" }] },
-        { question: "Which caches?", multiSelect: true, options: [{ label: "Hot path", description: "" }, { label: "Cold path", description: "" }] },
-        { question: "Anything else?", options: [{ label: "No", description: "" }, { label: "Yes", description: "" }] },
-      ],
-    };
-    const ask = async (threadId: string, env: Record<string, string> = {}, approvalMode?: "full") => {
-      Object.assign(process.env, {
-        FAKE_ACP_ASK_METHOD: "_x.ai/ask_user_question",
-        FAKE_ACP_ASK_PARAMS: JSON.stringify(GROK_ASK),
-        FAKE_ACP_ASK_ANSWER: join(scratch, "grok-ask.json"),
-        ...env,
-      });
-      await create(GrokAgentDriver, "ask-question");
-      await instance.adapter.sendTurn({ threadId, text: "go", ...(approvalMode ? { approvalMode } : {}) });
-    };
-    const reply = () => JSON.parse(readFileSync(join(scratch, "grok-ask.json"), "utf8"));
-
-    it("asks every question on one card and keys the answers by Grok's question text", async () => {
-      await ask("t-grok-ask");
-      const opened = await recorder.until((e) => e.type === "request.opened");
-      expect(opened).toMatchObject({
-        requestType: "question",
-        tool: "ask_user",
-        summary: "Which database? (+2 more questions)",
-        questions: [
-          { question: "Which database?", options: [{ label: "Redis", description: "In-memory store" }, { label: "Postgres", description: "Relational" }] },
-          { question: "Which caches?", multiSelect: true, options: [{ label: "Hot path" }, { label: "Cold path" }] },
-          { question: "Anything else?", options: [{ label: "No" }, { label: "Yes" }] },
-        ],
-      });
-      const outcome = await instance.adapter.respondToRequest("t-grok-ask", (opened as { requestId: string }).requestId, {
-        behavior: "answer",
-        message: "The user answered your questions.\n\nQ: Which database?\nA: Postgres\n\nQ: Which caches?\nA: Hot path, Cold path, and the CDN\n\nQ: Anything else?\nA: Use version 16",
-      });
-      expect(outcome).toBe("answered");
-      await recorder.until((e) => e.type === "turn.completed");
-      expect(reply()).toEqual({ result: {
-        outcome: "accepted",
-        answers: { "Which database?": ["Postgres"], "Which caches?": ["Hot path", "Cold path", "Other"], "Anything else?": ["Other"] },
-        annotations: { "Which caches?": { notes: "and the CDN" }, "Anything else?": { notes: "Use version 16" } },
-      } });
-    });
-
-    it("still asks under Full access, reads multi_select, and accepts the bare method name", async () => {
-      await ask("t-grok-ask-full", {
-        FAKE_ACP_ASK_METHOD: "x.ai/ask_user_question",
-        FAKE_ACP_ASK_PARAMS: JSON.stringify({ ...GROK_ASK, questions: [{ question: "Which caches?", multi_select: true, options: [{ label: "Hot path" }, { label: "Cold path" }] }] }),
-      }, "full");
-      const opened = await recorder.until((e) => e.type === "request.opened");
-      expect(opened).toMatchObject({ requestType: "question", questions: [{ question: "Which caches?", multiSelect: true }] });
-      // a multi-select question has no flat one-tap answer
-      expect(opened).not.toHaveProperty("choices");
-      await instance.adapter.respondToRequest("t-grok-ask-full", (opened as { requestId: string }).requestId, { behavior: "answer", message: "Cold path" });
-      await recorder.until((e) => e.type === "turn.completed");
-      expect(reply()).toEqual({ result: { outcome: "accepted", answers: { "Which caches?": ["Cold path"] } } });
-    });
-
-    it("cancels a denied card and refuses malformed params", async () => {
-      await ask("t-grok-ask-deny");
-      const opened = await recorder.until((e) => e.type === "request.opened");
-      expect(await instance.adapter.respondToRequest("t-grok-ask-deny", (opened as { requestId: string }).requestId, { behavior: "deny" })).toBe("rejected");
-      expect(await recorder.until((e) => e.type === "request.resolved")).toMatchObject({ behavior: "deny", source: "user" });
-      await recorder.until((e) => e.type === "turn.completed");
-      expect(reply()).toEqual({ result: { outcome: "cancelled" } });
-
-      process.env.FAKE_ACP_ASK_PARAMS = JSON.stringify({ ...GROK_ASK, questions: [{ options: [{ label: "Redis" }] }] });
-      const { turnId } = await instance.adapter.sendTurn({ threadId: "t-grok-ask-deny", text: "again" });
-      await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
-      expect(reply()).toMatchObject({ error: { code: -32602 } });
-      expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(1);
-
-      // More questions than one card holds: refused whole, not partly answered.
-      const seven = Array.from({ length: 7 }, (_, i) => ({ question: `Question ${i}?`, options: [{ label: "Yes" }, { label: "No" }] }));
-      process.env.FAKE_ACP_ASK_PARAMS = JSON.stringify({ ...GROK_ASK, questions: seven });
-      const many = await instance.adapter.sendTurn({ threadId: "t-grok-ask-deny", text: "seven" });
-      await recorder.until((e) => e.type === "turn.completed" && e.turnId === many.turnId);
-      expect(reply()).toMatchObject({ error: { code: -32602, message: "ask needs 1 to 6 distinct questions with question text" } });
-      expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(1);
-
-      // Two questions with the same text: Grok keys answers by text, so refused.
-      process.env.FAKE_ACP_ASK_PARAMS = JSON.stringify({ ...GROK_ASK, questions: [GROK_ASK.questions[0], GROK_ASK.questions[0]] });
-      const twins = await instance.adapter.sendTurn({ threadId: "t-grok-ask-deny", text: "twins" });
-      await recorder.until((e) => e.type === "turn.completed" && e.turnId === twins.turnId);
-      expect(reply()).toMatchObject({ error: { code: -32602 } });
-      expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(1);
-    });
-
-    it("cancels a question that arrives between turns", async () => {
-      await ask("t-grok-ask-idle", { FAKE_ACP_ASK_TIMING: "after-result" });
-      await recorder.until((e) => e.type === "turn.completed");
-      for (let i = 0; i < 80 && !existsSync(join(scratch, "grok-ask.json")); i++) await new Promise((resolve) => setTimeout(resolve, 25));
-      expect(reply()).toEqual({ result: { outcome: "cancelled" } });
-      expect(recorder.events.some((e) => e.type === "request.opened")).toBe(false);
-    });
-  });
-
-  it("per-bot Ask surfaces permissions from a legacy full-auto instance", async () => {
-    process.env.FAKE_ACP_MODE = "permission";
-    const dump = join(scratch, "ask-permission-overrides-full-auto.json");
-    process.env.FAKE_ACP_DUMP = dump;
-    instance = await GrokAgentDriver.create({
-      instanceId: "grok-ask-override",
-      displayName: "Grok Ask Override",
-      environment: {},
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: true },
-    });
-    recorder = recordEvents(instance.adapter);
-
-    await instance.adapter.sendTurn({
-      threadId: "t-ask-permission-override",
-      text: "go",
-      approvalMode: "ask",
-    });
-    const opened = await recorder.until((e) => e.type === "request.opened");
-    const argv = JSON.parse(readFileSync(dump, "utf8")).argv as string[];
-    expect(argv[argv.indexOf("--permission-mode") + 1]).toBe("default");
-
-    await instance.adapter.respondToRequest(
-      "t-ask-permission-override",
-      (opened as { requestId: string }).requestId,
-      { behavior: "allow" },
-    );
-    await recorder.until((e) => e.type === "turn.completed");
-  });
-
-  it("maps Auto-accept edits to Grok's native acceptEdits", async () => {
-    await create(GrokAgentDriver);
-    const dump = join(scratch, "grok-edits.json");
-    process.env.FAKE_ACP_DUMP = dump;
-    const { turnId } = await instance.adapter.sendTurn({ threadId: "t-grok-edits", text: "go", approvalMode: "edits" });
-    await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
-    const argv = JSON.parse(readFileSync(dump, "utf8")).argv as string[];
-    expect(argv[argv.indexOf("--permission-mode") + 1]).toBe("acceptEdits");
-  });
-
-  it.each([false, true])("returns rejected when an allow has no native permission option (always: %s)", async (always) => {
+it.each([false, true])("returns rejected when an allow has no native permission option (always: %s)", async (always) => {
     process.env.FAKE_ACP_PERMISSION_OPTIONS = JSON.stringify([{ optionId: "reject", kind: "reject_once" }]);
     const answer = join(scratch, "reject-only-answer.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     const threadId = "t-reject-only";
     await instance.adapter.sendTurn({ threadId, text: "go", approvalMode: "ask" });
     const opened = await recorder.until((event) => event.type === "request.opened");
@@ -1852,7 +1495,7 @@ describe("ACP turns (fake CLI)", () => {
     process.env.FAKE_ACP_ALLOW_ALWAYS = "1";
     const answer = join(scratch, "permission-answer.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-always-native", text: "go", approvalMode: "ask" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     expect(opened).toHaveProperty("allowSession", true);
@@ -1865,7 +1508,7 @@ describe("ACP turns (fake CLI)", () => {
     // Grok 4.6 often omits allow_always.
     const answer = join(scratch, "permission-answer-once.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-always-memory", text: "go", approvalMode: "ask" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     await instance.adapter.respondToRequest("t-always-memory", (opened as { requestId: string }).requestId, { behavior: "allow", always: true });
@@ -1886,50 +1529,9 @@ describe("ACP turns (fake CLI)", () => {
     expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(2);
   });
 
-  it.each(["grok-4.7", "grok-4.6", "grok-4.5", "local-model"])(
-    "keeps native Grok Auto when selecting and resuming %s",
-    async (model) => {
-      await create(GrokAgentDriver);
-      const agents = { command: "node", args: ["/fixture/agents-proxy.mjs"], env: {} };
-      for (const resumeCursor of [undefined, "fake-acp-session"]) {
-        const dump = join(scratch, `grok-auto-${resumeCursor ? "resume" : "new"}.json`);
-        const threadId = `t-grok-auto-${model}-${resumeCursor ? "resume" : "new"}`;
-        process.env.FAKE_ACP_DUMP = dump;
-        const { turnId } = await instance.adapter.sendTurn({
-          threadId,
-          text: "read the roster",
-          model,
-          effort: "high",
-          approvalMode: "auto",
-          resumeCursor,
-          integrations: {
-            agents,
-            custom: { agents: { command: "must-not-shadow-agents", args: [], env: {} } },
-          },
-        });
-        await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
-        const seen = JSON.parse(readFileSync(dump, "utf8"));
-        expect(seen.argv).toEqual([
-          "--permission-mode", "auto",
-          "agent", "-m", model, "--reasoning-effort", "high", "stdio",
-        ]);
-        const sessionMethod = resumeCursor ? "session/load" : "session/new";
-        const sent = readFileSync(join(NATIVE_DIR, `${threadId}.ndjson`), "utf8")
-          .trim().split("\n").map((line) => JSON.parse(line))
-          .find((entry) => entry.dir === "out" && entry.msg.method === sessionMethod);
-        expect(sent.msg.params.mcpServers).toEqual([{ name: "agents", ...agents, env: [] }]);
-        expect(JSON.parse(readFileSync(`${dump}.config.json`, "utf8"))).toEqual([
-          { method: "session/set_model", params: { sessionId: "fake-acp-session", modelId: model } },
-        ]);
-        expect(recorder.events.find((e) => e.type === "session.started" && e.turnId === turnId))
-          .toMatchObject({ model });
-      }
-    },
-  );
-
-  it("sends Grok session/set_model only when the session runs another model", async () => {
-    await create(GrokAgentDriver);
-    process.env.FAKE_ACP_SESSION_MODELS = "grok-4.7|Grok 4.7,grok-4.6|Grok 4.6";
+it("sends ACP session/set_model only when the session runs another model", async () => {
+    await create(CustomAcpDriver);
+    process.env.FAKE_ACP_SESSION_MODELS = "model-a|Model A,model-b|Model B";
     try {
       const configCalls = async (threadId: string, model: string) => {
         const dump = join(scratch, `${threadId}.json`);
@@ -1941,46 +1543,17 @@ describe("ACP turns (fake CLI)", () => {
         await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
         return existsSync(`${dump}.config.json`) ? JSON.parse(readFileSync(`${dump}.config.json`, "utf8")) : [];
       };
-      expect(await configCalls("t-grok-same-model", "grok-4.7")).toEqual([]);
-      expect(await configCalls("t-grok-other-model", "grok-4.6")).toEqual([
-        { method: "session/set_model", params: { sessionId: "fake-acp-session", modelId: "grok-4.6" } },
+      expect(await configCalls("t-same-model", "model-a")).toEqual([]);
+      expect(await configCalls("t-other-model", "model-b")).toEqual([
+        { method: "session/set_model", params: { sessionId: "fake-acp-session", modelId: "model-b" } },
       ]);
     } finally {
       delete process.env.FAKE_ACP_SESSION_MODELS;
     }
   });
 
-  it.each([
-    ["ask", true, "default"],
-    ["full", true, "bypassPermissions"],
-    ["custom", true, "default"],
-    ["auto", false, "auto"],
-  ] as const)("Grok %s with agents mounted=%s overrides a legacy full-auto setting", async (approvalMode, mounted, nativeMode) => {
-    instance = await GrokAgentDriver.create({
-      instanceId: "grok-mode-override",
-      displayName: "Grok",
-      environment: {},
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: true },
-    });
-    recorder = recordEvents(instance.adapter);
-    const dump = join(scratch, "grok-mode-override.json");
-    process.env.FAKE_ACP_DUMP = dump;
-    await instance.adapter.sendTurn({
-      threadId: "t-grok-mode-override",
-      text: "continue",
-      approvalMode,
-      resumeCursor: "fake-acp-session",
-      integrations: mounted ? { agents: { command: "node", args: [], env: {} } } : undefined,
-    });
-    await recorder.until((e) => e.type === "turn.completed");
-    expect(JSON.parse(readFileSync(dump, "utf8")).argv).toEqual([
-      "--permission-mode", nativeMode, "agent", "stdio",
-    ]);
-  });
-
-  it("keeps residual Grok Auto permissions interactive", async () => {
-    await create(GrokAgentDriver, "permission");
+it("keeps permissions interactive when the turn asks for auto approval", async () => {
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({
       threadId: "t-grok-auto-permission",
       text: "run the command",
@@ -1996,65 +1569,8 @@ describe("ACP turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
   });
 
-  it("grok accepts the grok.com authentication method offered by current CLI versions", async () => {
-    process.env.FAKE_ACP_AUTH_METHOD = "grok.com";
-    await create(GrokAgentDriver);
-    await instance.adapter.sendTurn({ threadId: "t-grok-current-auth", text: "go" });
-    expect(await recorder.until((e) => e.type === "turn.completed")).toMatchObject({ ok: true });
-  });
-
-  it("grok fails closed when the CLI advertises no supported authentication method", async () => {
-    await create(GrokAgentDriver, "no-auth");
-    await instance.adapter.sendTurn({ threadId: "t-auth", text: "go" });
-    const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: false, stopReason: "auth_required" });
-    const err = recorder.events.find((e) => e.type === "runtime.error")!;
-    expect(err.message).toMatch(/not signed in/);
-  });
-
-  it("grok local inject does not require grok.com login", async () => {
-    process.env.FAKE_ACP_MODE = "no-auth";
-    mkdirSync(join(scratch, ".grok"), { recursive: true });
-    instance = await GrokAgentDriver.create({
-      instanceId: "acp-test",
-      displayName: "ACP Test",
-      environment: { HOME: scratch, GROK_HOME: join(scratch, ".grok") },
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    recorder = recordEvents(instance.adapter);
-    await instance.adapter.sendTurn({
-      threadId: "t-local-auth",
-      text: "go",
-      model: "omlx::MiniMax-M3-4bit",
-    });
-    const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: true });
-    expect(recorder.events.some((e) => e.type === "runtime.error")).toBe(false);
-  });
-
-  it("gemini proceeds through a missing auth method (lenient login)", async () => {
-    await create(GeminiAgentDriver, "no-auth");
-    await instance.adapter.sendTurn({ threadId: "t-lenient", text: "go" });
-    const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: true });
-    expect(recorder.events.some((e) => e.provider === "geminiAgent")).toBe(true);
-  });
-
-  it("starts Gemini CLI on its stable ACP surface", async () => {
-    const dump = join(scratch, "gemini-acp.json");
-    process.env.FAKE_ACP_DUMP = dump;
-    await create(GeminiAgentDriver);
-    await instance.adapter.sendTurn({ threadId: "t-gemini-acp", text: "go", model: "gemini-test" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    const argv = JSON.parse(readFileSync(dump, "utf8")).argv as string[];
-    expect(argv).toEqual(["--acp", "-m", "gemini-test"]);
-    expect(argv).not.toContain("--experimental-acp");
-  });
-
-  it("rejects a second turn while one is in flight", async () => {
-    await create(GrokAgentDriver, "hang");
+it("rejects a second turn while one is in flight", async () => {
+    await create(CustomAcpDriver, "hang");
     await instance.adapter.sendTurn({ threadId: "t-busy", text: "one" });
     await recorder.until((e) => e.type === "session.started");
     await expect(instance.adapter.sendTurn({ threadId: "t-busy", text: "two" })).rejects.toThrow(/already running/);
@@ -2063,7 +1579,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("interrupt settles a hung turn as cancelled", async () => {
-    await create(GrokAgentDriver, "hang");
+    await create(CustomAcpDriver, "hang");
     await instance.adapter.sendTurn({ threadId: "t-int", text: "go" });
     await recorder.until((e) => e.type === "session.started");
     await instance.adapter.interruptTurn("t-int");
@@ -2076,7 +1592,7 @@ describe("ACP turns (fake CLI)", () => {
     process.env.FAKE_ACP_CANCEL_STOP_REASON = "end_turn";
     const rpc = join(scratch, "rpc.json");
     process.env.FAKE_ACP_RPC_DUMP = rpc;
-    await create(GrokAgentDriver, "hang");
+    await create(CustomAcpDriver, "hang");
     await instance.adapter.sendTurn({ threadId: "t-stop-end-turn", text: "go" });
     await vi.waitFor(() => expect(JSON.parse(readFileSync(rpc, "utf8"))).toContain("session/prompt"));
     await instance.adapter.interruptTurn("t-stop-end-turn");
@@ -2086,7 +1602,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("a Stop before the prompt is sent ends quietly, with no error", async () => {
-    await create(GrokAgentDriver, "hang-initialize");
+    await create(CustomAcpDriver, "hang-initialize");
     await instance.adapter.sendTurn({ threadId: "t-stop-startup", text: "go" });
     await recorder.until((e) => e.type === "turn.started");
     await instance.adapter.interruptTurn("t-stop-startup");
@@ -2096,7 +1612,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("an exit before result becomes runtime.error + failed turn", async () => {
-    await create(GrokAgentDriver, "exit-early");
+    await create(CustomAcpDriver, "exit-early");
     await instance.adapter.sendTurn({ threadId: "t-crash", text: "go" });
     const done = await recorder.until((e) => e.type === "turn.completed");
     expect(done).toMatchObject({ ok: false });
@@ -2104,7 +1620,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("an engine that aborts says so in plain words, with its last output masked", async () => {
-    await create(GrokAgentDriver, "abort-in-prompt");
+    await create(CustomAcpDriver, "abort-in-prompt");
     await instance.adapter.sendTurn({ threadId: "t-abort", text: "go" });
     const failed = await recorder.until((e) => e.type === "runtime.error") as { message: string };
     expect(failed.message).toMatch(/ exited 134 before the prompt result: it stopped itself \(abort\)\. Last output: Open https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?«redacted \d+ chars» \| 2 third_party\/tcmalloc\/internal\/sysinfo\.h:76\] CHECK in NumCPUs: maybe_cpus\.has_value\(\) \(false\)$/u);
@@ -2114,7 +1630,7 @@ describe("ACP turns (fake CLI)", () => {
 
   it("does not expire an agent while a person is answering an approval", async () => {
     process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
-    await create(GrokAgentDriver, "permission");
+    await create(CustomAcpDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-idle-approval", text: "go", approvalMode: "ask" });
     const opened = await recorder.until(e => e.type === "request.opened");
     await new Promise(resolve => setTimeout(resolve, 450));
@@ -2125,7 +1641,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(recorder.events.some(e => e.type === "runtime.error")).toBe(false);
   });
 
-  it.each([GrokAgentDriver, QwenAgentDriver])("does not expire $driverKind while a tool it started is still running", async (driver) => {
+  it.each([CustomAcpDriver])("does not expire $driverKind while a tool it started is still running", async (driver) => {
     process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     process.env.FAKE_ACP_TOOL_MS = "600";
     await create(driver, "slow-tool");
@@ -2135,38 +1651,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(recorder.events.find(e => e.type === "item.completed" && e.itemType === "tool")).toMatchObject({ ok: true });
   });
 
-  it("reports a running tool's kind for the chat's status line while it runs silently", async () => {
-    process.env.FAKE_ACP_TOOL_MS = "300";
-    await create(QwenAgentDriver, "slow-tool");
-    await instance.adapter.sendTurn({ threadId: "t-slow-kind", text: "go" });
-    await recorder.until(e => e.type === "turn.completed");
-    const types = recorder.events.map(e => e.type);
-    const progress = recorder.events.filter(e => e.type === "turn.progress");
-    expect(progress[0]).toMatchObject({ activity: "command", itemId: "tc-slow" });
-    expect(types.indexOf("turn.progress")).toBeGreaterThan(types.indexOf("item.started"));
-    expect(types.lastIndexOf("turn.progress")).toBeLessThan(types.indexOf("item.completed"));
-  });
-
-  it("shows a running tool's output and names the agent process while the tool runs", async () => {
-    const gate = join(scratch, "slow-tool-done");
-    Object.assign(process.env, { FAKE_ACP_TOOL_GATE: gate, FAKE_ACP_TOOL_OUTPUT: "Collecting 12 items\npage 3 of 40" });
-    try {
-      await create(QwenAgentDriver, "slow-tool");
-      await instance.adapter.sendTurn({ threadId: "t-slow-output", text: "go" });
-      expect(await recorder.until(e => e.type === "item.output")).toMatchObject({ itemId: "tc-slow", text: "Collecting 12 items\npage 3 of 40", whole: true });
-      const pid = instance.adapter.enginePid?.("t-slow-output");
-      expect(pid).toEqual(expect.any(Number));
-      expect(() => process.kill(pid!, 0)).not.toThrow();
-      writeFileSync(gate, "done");
-      await recorder.until(e => e.type === "turn.completed");
-      expect(instance.adapter.enginePid?.("t-slow-output")).toBeUndefined();
-    } finally {
-      delete process.env.FAKE_ACP_TOOL_GATE;
-      delete process.env.FAKE_ACP_TOOL_OUTPUT;
-    }
-  });
-
-  it.each([GrokAgentDriver, QwenAgentDriver])("still fails $driverKind when it goes silent once its tool has finished", async (driver) => {
+it.each([CustomAcpDriver])("still fails $driverKind when it goes silent once its tool has finished", async (driver) => {
     process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     await create(driver, "stall-after-tool");
     await instance.adapter.sendTurn({ threadId: "t-stall-tool", text: "go" });
@@ -2181,12 +1666,12 @@ describe("ACP turns (fake CLI)", () => {
     process.env.OMB_ACP_QUIET_NOTICE_MS = "150";
     process.env.OMB_ACP_QUIET_TICK_MS = "50";
     process.env.FAKE_ACP_QUIET_MS = "700";
-    await create(GrokAgentDriver, "quiet-then-answer");
+    await create(CustomAcpDriver, "quiet-then-answer");
     await instance.adapter.sendTurn({ threadId: "t-quiet", text: "go" });
     expect(await recorder.until(e => e.type === "turn.completed")).toMatchObject({ ok: true });
     const notices = recorder.events.filter(e => e.type === "runtime.notice") as Array<{ message: string }>;
     expect(notices.length).toBeGreaterThanOrEqual(1);
-    expect(notices[0].message).toMatch(/^Grok (is waiting on its model|is busy|has sent nothing)/);
+    expect(notices[0].message).toMatch(/^ACP Test (is waiting on its model|is busy|has sent nothing)/);
     expect(recorder.events.some(e => e.type === "runtime.error")).toBe(false);
   });
 
@@ -2195,7 +1680,7 @@ describe("ACP turns (fake CLI)", () => {
     process.env.OMB_ACP_QUIET_NOTICE_MS = "400";
     process.env.OMB_ACP_QUIET_TICK_MS = "50";
     process.env.FAKE_ACP_QUIET_MS = "200";
-    await create(GrokAgentDriver, "quiet-then-answer");
+    await create(CustomAcpDriver, "quiet-then-answer");
     await instance.adapter.sendTurn({ threadId: "t-quiet-idle", text: "one" });
     await recorder.until(e => e.type === "turn.completed");
     await new Promise(r => setTimeout(r, 800));
@@ -2205,28 +1690,8 @@ describe("ACP turns (fake CLI)", () => {
     expect(recorder.events.filter(e => e.type === "runtime.notice")).toEqual([]);
   });
 
-  it("reads Qwen's debug log: a logged rate-limit retry is reported and keeps the turn alive", async () => {
-    vi.spyOn(quietStatus, "sampleProcessTree").mockResolvedValue({ cpuMs: 0, connections: 1 });
-    process.env.QWEN_HOME = scratch;
-    // Margins wide enough for a slow Windows runner: the log must be read well inside the idle guard.
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "1500";
-    process.env.OMB_ACP_QUIET_NOTICE_MS = "150";
-    process.env.OMB_ACP_QUIET_TICK_MS = "50";
-    process.env.FAKE_ACP_QUIET_MS = "3500";
-    process.env.FAKE_ACP_QWEN_LOG = JSON.stringify([
-      "[ERROR] [OPENAI_ERROR] OpenAI API Error: 429 rate limited {",
-      "[WARN] [RETRY] Attempt 1 failed with status 429. Retrying after explicit delay of 20000ms... {",
-    ]);
-    await create(QwenAgentDriver, "quiet-then-answer");
-    await instance.adapter.sendTurn({ threadId: "t-qwen-retry", text: "go" });
-    expect(await recorder.until(e => e.type === "turn.completed")).toMatchObject({ ok: true });
-    const notices = (recorder.events.filter(e => e.type === "runtime.notice") as Array<{ message: string }>).map(n => n.message);
-    expect(notices.some(m => /Qwen hit a rate limit \(HTTP 429\) and is retrying \(attempt 2\)\. Next try in 20 s\./.test(m))).toBe(true);
-    expect(recorder.events.some(e => e.type === "runtime.error")).toBe(false);
-  });
-
-  it("preserves a streamed partial reply before disposal removes its listeners", async () => {
-    await create(GrokAgentDriver, "stall-after-text");
+it("preserves a streamed partial reply before disposal removes its listeners", async () => {
+    await create(CustomAcpDriver, "stall-after-text");
     await instance.adapter.sendTurn({ threadId: "t-dispose-partial", text: "go" });
     await recorder.until((event) => event.type === "content.delta" && event.streamKind === "assistant_text");
 
@@ -2239,7 +1704,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("rejects turns started by completion listeners during disposal", async () => {
-    await create(GrokAgentDriver, "stall-after-text");
+    await create(CustomAcpDriver, "stall-after-text");
     await instance.adapter.sendTurn({ threadId: "t-dispose-listener", text: "go" });
     await recorder.until((event) => event.type === "content.delta" && event.streamKind === "assistant_text");
     let followup: Promise<unknown> | undefined;
@@ -2284,7 +1749,7 @@ describe("ACP turns (fake CLI)", () => {
 
   it("an agent that goes silent mid-answer is failed and closed by the prompt idle guard", async () => {
     process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
-    await create(GrokAgentDriver, "stall-after-text");
+    await create(CustomAcpDriver, "stall-after-text");
     await instance.adapter.sendTurn({ threadId: "t-stall", text: "go" });
 
     const done = await recorder.until((e) => e.type === "turn.completed");
@@ -2300,16 +1765,16 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("an end_turn with no reply, image, or tool result becomes runtime.error + failed turn", async () => {
-    await create(GrokAgentDriver, "empty-reply");
+    await create(CustomAcpDriver, "empty-reply");
     await instance.adapter.sendTurn({ threadId: "t-empty", text: "go" });
     const done = await recorder.until((e) => e.type === "turn.completed");
     expect(done).toMatchObject({ ok: false, stopReason: "empty_turn" });
     const message = recorder.events.find((e) => e.type === "runtime.error")?.message;
     // The person reads the AI's name in plain words, never the internal id.
-    expect(message).toBe("Grok finished without replying.");
-    expect(message).not.toContain("grokAgent");
+    expect(message).toBe("ACP Test finished without replying.");
+    expect(message).not.toContain("customAcp");
     expect(recorder.events.find((e) => e.type === "runtime.error")).toMatchObject({
-      text: { key: "chat.notice.acpEmpty", params: { provider: "Grok" } },
+      text: { key: "chat.notice.acpEmpty", params: { provider: "ACP Test" } },
     });
   });
 
@@ -2319,7 +1784,7 @@ describe("ACP turns (fake CLI)", () => {
     const WEEKLY_LIMIT = '429 {"type":"error","error":{"type":"rate_limit_error","code":"1310","message":"[1310][Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-23 09:13:38][20261022010620e41a1d021c2d4ce4]"},"request_id":"20261022010620e41a1d021c2d4ce4"} retry-after-ms=115636000';
     const turn = async (threadId: string, reply: string) => {
       process.env.FAKE_ACP_TEXT_REPLY = reply;
-      await create(GrokAgentDriver);
+      await create(CustomAcpDriver);
       await instance.adapter.sendTurn({ threadId, text: "go" });
       const done = await recorder.until((e) => e.type === "turn.completed");
       const replies = recorder.events.filter((e) => e.type === "item.completed" && e.itemType === "assistant_text");
@@ -2332,7 +1797,7 @@ describe("ACP turns (fake CLI)", () => {
       expect(done).toMatchObject({ ok: false, stopReason: "rpc_error" });
       expect(replies).toEqual([]);
       expect(errors).toEqual([expect.objectContaining({
-        message: 'Grok stopped with an error (HTTP 403; Grok says: "OAuth authentication is currently not allowed for this organization").',
+        message: 'ACP Test stopped with an error (HTTP 403; ACP Test says: "OAuth authentication is currently not allowed for this organization").',
       })]);
       expect(errors[0]).not.toHaveProperty("limit");
       expect(classifyError({ text: errors[0]!.message }).reason).toBe("auth");
@@ -2350,9 +1815,9 @@ describe("ACP turns (fake CLI)", () => {
       expect(error.limitResetsAt).toBeGreaterThanOrEqual(before + 115_636_000);
       expect(error.limitResetsAt).toBeLessThanOrEqual(after + 115_636_000);
       expect(error.text).toMatchObject({ key: "chat.notice.usageLimitResets", params: {
-        provider: "Grok", resetsAt: error.limitResetsAt, timeZone: expect.any(String),
+        provider: "ACP Test", resetsAt: error.limitResetsAt, timeZone: expect.any(String),
       } });
-      expect(error.message).toMatch(/^This Grok account has reached its usage limit \(Grok says: "\[1310\]\[Weekly\/Monthly Limit Exhausted"\), which resets .+\. Until then, switch this bot to another AI\.$/);
+      expect(error.message).toMatch(/^This ACP Test account has reached its usage limit \(ACP Test says: "\[1310\]\[Weekly\/Monthly Limit Exhausted"\), which resets .+\. Until then, switch this bot to another AI\.$/);
       expect(error.message).not.toMatch(/rate_limit_error|retry-after-ms|request_id/);
       expect(classifyError({ text: error.message }).reason).toBe("quota");
     });
@@ -2367,23 +1832,23 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("names the AI, never its internal id, when it exits before answering", async () => {
-    await create(GrokAgentDriver, "exit-early");
+    await create(CustomAcpDriver, "exit-early");
     await instance.adapter.sendTurn({ threadId: "t-exit-name", text: "go" });
     await recorder.until((e) => e.type === "turn.completed");
     const errors = recorder.events.filter((e) => e.type === "runtime.error").map((e) => (e as { message: string }).message);
     expect(errors.length).toBeGreaterThan(0);
-    for (const message of errors) expect(message).not.toContain("grokAgent");
+    for (const message of errors) expect(message).not.toContain("customAcp");
   });
 
   it("reasoning with no answer is a lost turn, not a success", async () => {
-    await create(GrokAgentDriver, "reasoning-only");
+    await create(CustomAcpDriver, "reasoning-only");
     await instance.adapter.sendTurn({ threadId: "t-reasoning", text: "go" });
     const done = await recorder.until((e) => e.type === "turn.completed");
     expect(done).toMatchObject({ ok: false, stopReason: "empty_turn" });
     expect(recorder.events.some((e) => e.type === "content.delta" && (e as any).streamKind === "reasoning_text")).toBe(true);
     expect(recorder.events.some((e) => e.type === "item.completed")).toBe(false);
     expect(recorder.events.find((e) => e.type === "runtime.error")?.message)
-      .toBe("Grok finished without replying.");
+      .toBe("ACP Test finished without replying.");
   });
 
   it("preserves ACP error codes for provider setup classification", async () => {
@@ -2450,7 +1915,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("reuses a resume cursor when session/load returns a session", async () => {
-    await create(GrokAgentDriver);
+    await create(CustomAcpDriver);
     await instance.adapter.sendTurn({
       threadId: "t-resume-truthy",
       text: "go",
@@ -2465,7 +1930,7 @@ describe("ACP turns (fake CLI)", () => {
 
   it("falls through to session/new when session/load returns null", async () => {
     process.env.FAKE_ACP_LOAD_NULL = "1";
-    await create(GrokAgentDriver);
+    await create(CustomAcpDriver);
     await instance.adapter.sendTurn({
       threadId: "t-resume-null",
       text: "go",
@@ -2484,7 +1949,7 @@ describe("ACP turns (fake CLI)", () => {
     const dump = join(scratch, "recovery.json");
     process.env.FAKE_ACP_DUMP = dump;
     process.env.FAKE_ACP_DUMP_PROMPT = "1";
-    await create(GrokAgentDriver);
+    await create(CustomAcpDriver);
     const recoveryText = "User: Remember ALPHA.\nAssistant: Remembered.\nUser: What did I say?";
     await instance.adapter.sendTurn({
       threadId: "t-resume-history", text: "What did I say?", resumeCursor: "missing-cursor",
@@ -2593,57 +2058,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(JSON.parse(readFileSync(dump, "utf8")).env.TEST_POLICY).toBe("ask");
   });
 
-  it("declares effort levels for Grok only", async () => {
-    await create(GrokAgentDriver);
-    expect(instance.adapter.capabilities.effortLevels).toEqual(["low", "medium", "high"]);
-
-    await create(GeminiAgentDriver);
-    expect(instance.adapter.capabilities.effortLevels).toBeUndefined();
-
-    await create(KimiAgentDriver);
-    expect(instance.adapter.capabilities.effortLevels).toBeUndefined();
-  });
-
-  it("passes effort to Grok, and omits the flag when unset", async () => {
-    const withEffort = join(scratch, "grok-effort.json");
-    await create(GrokAgentDriver);
-    process.env.FAKE_ACP_DUMP = withEffort;
-    await instance.adapter.sendTurn({ threadId: "t-effort", text: "hi", effort: "high" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    const seen = JSON.parse(readFileSync(withEffort, "utf8"));
-    expect(seen.argv).toContain("--reasoning-effort");
-    expect(seen.argv[seen.argv.indexOf("--reasoning-effort") + 1]).toBe("high");
-
-    const without = join(scratch, "grok-no-effort.json");
-    await create(GrokAgentDriver);
-    process.env.FAKE_ACP_DUMP = without;
-    await instance.adapter.sendTurn({ threadId: "t-no-effort", text: "hi" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    expect(JSON.parse(readFileSync(without, "utf8")).argv).not.toContain("--reasoning-effort");
-  });
-
-  it("puts Grok -m after agent so ACP stdio binds the local slug", async () => {
-    const dump = join(scratch, "grok-argv-order.json");
-    await create(GrokAgentDriver);
-    process.env.FAKE_ACP_DUMP = dump;
-    await instance.adapter.sendTurn({ threadId: "t-argv", text: "hi", model: "grok-4.5", effort: "high" });
-    await recorder.until((e) => e.type === "turn.completed");
-
-    const argv = JSON.parse(readFileSync(dump, "utf8")).argv as string[];
-    const agent = argv.indexOf("agent");
-    const modelFlag = argv.indexOf("-m");
-    const stdio = argv.indexOf("stdio");
-    expect(agent).toBeGreaterThan(-1);
-    expect(modelFlag).toBeGreaterThan(agent);
-    expect(stdio).toBeGreaterThan(modelFlag);
-    expect(argv[modelFlag + 1]).toBe("grok-4.5");
-    expect(argv.indexOf("--reasoning-effort")).toBeGreaterThan(agent);
-    expect(argv.indexOf("--permission-mode")).toBeLessThan(agent);
-  });
-
-  describe("opt-in startup recovery", () => {
+describe("opt-in startup recovery", () => {
     const failStartup = async (message = "503 Service Unavailable") => {
       const failureFile = join(scratch, "startup-failure.json");
       process.env.FAKE_ACP_RPC_FAILURE_FILE = failureFile;
@@ -2678,7 +2093,7 @@ describe("ACP turns (fake CLI)", () => {
 
     it("acknowledges before a prompt timeout and never offers startup recovery afterward", async () => {
       process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
-      await create(GrokAgentDriver, "stall-after-text");
+      await create(CustomAcpDriver, "stall-after-text");
       const ack = await instance.adapter.sendTurn({ threadId: "startup-prompt", text: "go", startupRecovery: true });
       expect(recorder.events.some((event) => event.type === "turn.completed")).toBe(false);
       expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
@@ -2686,7 +2101,7 @@ describe("ACP turns (fake CLI)", () => {
     });
 
     it("resolves the pending ACK when Stop interrupts initialization", async () => {
-      await create(GrokAgentDriver, "hang-initialize");
+      await create(CustomAcpDriver, "hang-initialize");
       const pending = instance.adapter.sendTurn({ threadId: "startup-stop", text: "go", startupRecovery: true });
       let acknowledged = false;
       void pending.then(() => { acknowledged = true; });
@@ -2760,133 +2175,7 @@ describe("ACP turns (fake CLI)", () => {
       expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId)).toMatchObject({ ok: false });
     });
 
-    describe("a prompt that never reached its model", () => {
-      const UnreachedModelDriver = createAcpDriver({
-        ...SELECT_MODEL_SUPPORT, driverKind: "unreachedModelTest", selectModel: undefined, promptUnreachedModel: openCodePromptUnreachedModel,
-      });
-      // opencode 1.19.4 with its OpenAI-compatible baseURL on a closed port
-      const refused = { code: -32603, message: "Internal error: Cannot connect to API: ECONNREFUSED: Unable to connect. Is the computer able to access the url?", data: { service: "session", errorName: "APIError" } };
-      const refusePrompt = async (error: object = refused, mode?: string) => {
-        const failureFile = join(scratch, "prompt-failure.json");
-        process.env.FAKE_ACP_RPC_FAILURE_FILE = failureFile;
-        process.env.FAKE_ACP_RPC_FAILURE_METHOD = "session/prompt";
-        process.env.FAKE_ACP_RPC_FAILURE_GATE = join(scratch, "release-prompt-failure");
-        writeFileSync(failureFile, JSON.stringify(error));
-        await create(UnreachedModelDriver, mode);
-      };
-      const releaseFailure = () => writeFileSync(process.env.FAKE_ACP_RPC_FAILURE_GATE!, "");
-      const acknowledged = (pending: Promise<unknown>) => {
-        let settled = false;
-        void pending.then(() => { settled = true; }, () => { settled = true; });
-        return () => settled;
-      };
-      afterEach(() => {
-        delete process.env.FAKE_ACP_RPC_FAILURE_GATE; delete process.env.FAKE_ACP_RPC_FAILURE_AFTER_OUTPUT;
-        delete process.env.FAKE_ACP_RPC_FAILURE_AFTER_USAGE; delete process.env.FAKE_ACP_UPDATES_FILE; delete process.env.OMB_ACP_QUIET_TICK_MS;
-      });
-
-      it("holds the ACK through the prompt and rejects once its child stops, without terminal events", async () => {
-        process.env.FAKE_ACP_RPC_DUMP = join(scratch, "rpc.json");
-        await refusePrompt();
-        const kill = vi.spyOn(procs, "killCliTree");
-        const pending = instance.adapter.sendTurn({ threadId: "unreached", text: "go", startupRecovery: true });
-        const settled = acknowledged(pending);
-        await vi.waitFor(() => expect(readFileSync(process.env.FAKE_ACP_RPC_DUMP!, "utf8")).toContain("session/prompt"));
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(settled()).toBe(false);
-        releaseFailure();
-        const failed = await pending.catch((error) => error);
-        expect(failed).toBeInstanceOf(TurnNotStartedError);
-        expect(failed.message).toContain("ECONNREFUSED");
-        expect(recorder.events.some((event) => event.type === "runtime.error" || event.type === "turn.completed")).toBe(false);
-        expect(await kill.mock.results[0].value).toBe(true);
-        expect(instance.adapter.hasSession("unreached")).toBe(false);
-      });
-
-      it("fails normally when the same refusal follows text and a tool result", async () => {
-        process.env.FAKE_ACP_RPC_FAILURE_AFTER_OUTPUT = "1";
-        await refusePrompt();
-        releaseFailure();
-        const ack = await instance.adapter.sendTurn({ threadId: "unreached-after-output", text: "go", startupRecovery: true });
-        expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-          .toMatchObject({ ok: false, stopReason: "rpc_error" });
-        expect(recorder.events.some((event) => event.type === "runtime.error" && event.message.includes("ECONNREFUSED"))).toBe(true);
-      });
-
-      it("acknowledges at the prompt and fails normally without startup recovery", async () => {
-        await refusePrompt();
-        const ack = await instance.adapter.sendTurn({ threadId: "unreached-no-recovery", text: "go" });
-        expect(recorder.events.some((event) => event.type === "turn.completed")).toBe(false);
-        releaseFailure();
-        expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-          .toMatchObject({ ok: false, stopReason: "rpc_error" });
-      });
-
-      it("fails normally when the same refusal follows a plan", async () => {
-        process.env.FAKE_ACP_RPC_FAILURE_AFTER_USAGE = "1";
-        process.env.FAKE_ACP_UPDATES_FILE = join(scratch, "plan-updates.json");
-        writeFileSync(process.env.FAKE_ACP_UPDATES_FILE, JSON.stringify([{ update: { sessionUpdate: "plan", entries: [{ content: "Read the brief", status: "in_progress", priority: "medium" }] } }]));
-        await refusePrompt();
-        releaseFailure();
-        const ack = await instance.adapter.sendTurn({ threadId: "unreached-after-plan", text: "go", startupRecovery: true });
-        expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-          .toMatchObject({ ok: false, stopReason: "rpc_error" });
-      });
-
-      it("stops the prompt's quiet watch when it hands the turn to recovery", async () => {
-        process.env.OMB_ACP_QUIET_TICK_MS = "4321";
-        const started = vi.spyOn(globalThis, "setInterval");
-        const cleared = vi.spyOn(globalThis, "clearInterval");
-        await refusePrompt();
-        const pending = instance.adapter.sendTurn({ threadId: "unreached-quiet", text: "go", startupRecovery: true });
-        await vi.waitFor(() => expect(started.mock.calls.some(([, ms]) => ms === 4321)).toBe(true));
-        releaseFailure();
-        expect(await pending.catch((error) => error)).toBeInstanceOf(TurnNotStartedError);
-        const timer = started.mock.results[started.mock.calls.findIndex(([, ms]) => ms === 4321)].value;
-        expect(cleared.mock.calls.some(([handle]) => handle === timer)).toBe(true);
-      });
-
-      describe("a model OpenCode has no route to", () => {
-        // OpenCode 2.2.5's answer for a model declared under a provider it has no SDK package for.
-        const noRoute = { code: -32603, message: "Internal error: Unsupported package for chutes/deepseek-ai/DeepSeek-V4.1-Flash-1017: unknown", data: { service: "session", errorName: "provider.no-route" } };
-
-        it("hands the turn to the bot's backup, as nothing reached a model", async () => {
-          await refusePrompt(noRoute);
-          releaseFailure();
-          const failed = await instance.adapter.sendTurn({ threadId: "no-route-backup", text: "go", startupRecovery: true }).catch((error) => error);
-          expect(failed).toBeInstanceOf(TurnNotStartedError);
-          expect(recorder.events.some((event) => event.type === "runtime.error" || event.type === "turn.completed")).toBe(false);
-        });
-
-        it("without a backup, fails in one plain sentence naming the model", async () => {
-          await refusePrompt(noRoute);
-          releaseFailure();
-          const ack = await instance.adapter.sendTurn({ threadId: "no-route-alone", text: "go" });
-          expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-            .toMatchObject({ ok: false, stopReason: "rpc_error" });
-          expect(recorder.events.filter((event) => event.type === "runtime.error" && event.turnId === ack.turnId)).toEqual([expect.objectContaining({
-            message: "Select Model Test can't use the model chutes/deepseek-ai/DeepSeek-V4.1-Flash-1017 here, so choose another model for this bot.",
-            text: { key: "chat.notice.modelNoRoute", params: { provider: "Select Model Test", model: "chutes/deepseek-ai/DeepSeek-V4.1-Flash-1017" } },
-          })]);
-        });
-      });
-
-      it("fails normally for another prompt error before any activity", async () => {
-        await refusePrompt({ code: -32603, message: "Internal error: Invalid API key.", data: { service: "session", errorName: "APIError" } });
-        releaseFailure();
-        const ack = await instance.adapter.sendTurn({ threadId: "unreached-other", text: "go", startupRecovery: true });
-        expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId)).toMatchObject({ ok: false });
-      });
-
-      it("never offers a stalled prompt to recovery", async () => {
-        process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
-        await refusePrompt(refused, "hang");
-        const ack = await instance.adapter.sendTurn({ threadId: "unreached-stall", text: "go", startupRecovery: true });
-        expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-          .toMatchObject({ ok: false, stopReason: "rpc_error" });
-      });
     });
-  });
 
   describe("an engine's account and HTTP failures", () => {
     /** The provider's refusal as the CLI answers session/prompt: JSON-RPC's internal error around its own line. */
@@ -2902,42 +2191,21 @@ describe("ACP turns (fake CLI)", () => {
       return { completed, errors };
     };
 
-    it("names a Grok account out of credits, with Grok's own reason, as the account failure it is", async () => {
-      // what Cloud routine runs recorded, as far as the aggregate kept it
-      refuse("API error (status 402 Payment Required): Grok Build us…");
-      await create(GrokAgentDriver);
-      const { completed, errors } = await failed("t-grok-402");
-      expect(errors).toEqual([expect.objectContaining({
-        message: 'Your Grok account is out of credits (Grok says: "Grok Build us…"). Add credits with Grok, then run it again.',
-        setup: true,
-      })]);
-      expect(completed).toMatchObject({ ok: false, stopReason: "auth_required" });
-    });
-
-    it("names any other ACP engine out of credits the same way", async () => {
-      refuse("API error (status 402 Payment Required): Your plan has no credits left. Ask an admin to add more.");
-      await create(GeminiAgentDriver);
-      const { errors } = await failed("t-gemini-402");
-      expect(errors).toEqual([expect.objectContaining({
-        message: 'Your Gemini account is out of credits (Gemini says: "Your plan has no credits left"). Add credits with Gemini, then run it again.',
-      })]);
-    });
-
-    it("puts another HTTP failure in plain words that keep its class, and leaves an unknown one as it was", async () => {
+it("puts another HTTP failure in plain words that keep its class, and leaves an unknown one as it was", async () => {
       refuse("API error (status 503 Service Unavailable): upstream connect error");
-      await create(GrokAgentDriver);
+      await create(CustomAcpDriver);
       const outage = await failed("t-grok-503");
       expect(outage.errors).toEqual([expect.objectContaining({
-        message: 'Grok had a temporary server problem (HTTP 503; Grok says: "upstream connect error"). Try again in a few minutes.',
+        message: 'ACP Test had a temporary server problem (HTTP 503; ACP Test says: "upstream connect error"). Try again in a few minutes.',
       })]);
       expect(outage.errors[0]).not.toHaveProperty("setup");
       expect(outage.completed).toMatchObject({ ok: false, stopReason: "rpc_error" });
 
-      refuse("Grok could not finish the session");
-      await create(GrokAgentDriver);
+      refuse("ACP Test could not finish the session");
+      await create(CustomAcpDriver);
       const unknown = await failed("t-grok-unknown");
       expect(unknown.errors).toEqual([expect.objectContaining({
-        message: "Internal error: Grok could not finish the session (session/prompt, service: session, APIError)",
+        message: "Internal error: ACP Test could not finish the session (session/prompt, service: session, APIError)",
       })]);
     });
   });
@@ -3120,10 +2388,9 @@ describe("ACP turns (fake CLI)", () => {
       expect(launches()).toBe(2);
     });
 
-    it.each([
-      { driver: GrokAgentDriver, expectedLaunches: 1 },
-      { driver: QwenAgentDriver, expectedLaunches: 2 },
-    ])("rotating credentials refreshes $driver.driverKind with $expectedLaunches process(es)", async ({ driver, expectedLaunches }) => {
+    it("rotating credentials refreshes the ACP engine with 1 process", async () => {
+      const driver = CustomAcpDriver;
+      const expectedLaunches = 1;
       countFile = join(scratch, "launches");
       const appendFile = join(scratch, "rpc-all.jsonl");
       process.env.FAKE_ACP_LAUNCH_COUNT_FILE = countFile;
@@ -3173,126 +2440,7 @@ describe("ACP turns (fake CLI)", () => {
       ]);
     });
 
-    it("does not load or prompt Qwen after Stop during old-process cleanup", async () => {
-      const appendFile = join(scratch, "rpc-all.jsonl");
-      process.env.FAKE_ACP_RPC_APPEND_FILE = appendFile;
-      instance = await QwenAgentDriver.create({
-        instanceId: "qwen-stop", displayName: "Qwen Stop", enabled: true,
-        environment: { HOME: scratch, USERPROFILE: scratch },
-        config: { cli: FAKE_CLI, fullAuto: false },
-      });
-      recorder = recordEvents(instance.adapter);
-      const integration = (token: string) => ({ command: process.execPath, args: [FAKE_CLI], env: { OMB_COMMS_TOKEN: token } });
-      const first = await instance.adapter.sendTurn({ threadId: "qwen-stop", text: "one", integrations: { agents: integration("one") } });
-      await recorder.until((e) => e.type === "turn.completed" && e.turnId === first.turnId);
-
-      let stopped!: () => void;
-      let release!: () => void;
-      const stopping = new Promise<void>((resolve) => { stopped = resolve; });
-      const gate = new Promise<void>((resolve) => { release = resolve; });
-      const kill = procs.killCliTree;
-      vi.spyOn(procs, "killCliTree").mockImplementationOnce(async (child) => {
-        stopped();
-        await gate;
-        return kill(child);
-      });
-      try {
-        const second = await instance.adapter.sendTurn({
-          threadId: "qwen-stop", text: "two", resumeCursor: "fake-acp-session",
-          integrations: { agents: integration("two") },
-        });
-        await stopping;
-        await instance.adapter.interruptTurn("qwen-stop");
-        release();
-        // The person's Stop ends the turn as a stop, never as an error.
-        expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId)).toMatchObject({ ok: true, stopReason: "cancelled" });
-        expect(recorder.events.filter((e) => e.type === "runtime.error" && e.turnId === second.turnId)).toEqual([]);
-        const calls = readFileSync(appendFile, "utf8").trim().split("\n").map((line) => JSON.parse(line).method);
-        expect(calls.filter((method) => method === "initialize")).toHaveLength(1);
-        expect(calls.filter((method) => method === "session/load")).toHaveLength(0);
-        expect(calls.filter((method) => method === "session/prompt")).toHaveLength(1);
-        expect(instance.adapter.hasSession("qwen-stop")).toBe(false);
-      } finally { release(); }
-    });
-
-    it.each(["Stop", "prompt stall", "failed cleanup"])("waits for Qwen cleanup before an immediate retry after %s", async (reason) => {
-      const children: ReturnType<typeof procs.spawnCli>[] = [];
-      const spawn = procs.spawnCli;
-      vi.spyOn(procs, "spawnCli").mockImplementation((...args) => {
-        const child = spawn(...args);
-        vi.spyOn(child.stdin, "write");
-        children.push(child);
-        return child;
-      });
-      const calls = () => children.flatMap((child) => vi.mocked(child.stdin.write).mock.calls
-        .map(([chunk]) => JSON.parse(String(chunk)) as { method: string; params: { sessionId?: string } }));
-      let release!: () => void;
-      let stopping!: () => void;
-      const gate = new Promise<void>((resolve) => { release = resolve; });
-      const startedStopping = new Promise<void>((resolve) => { stopping = resolve; });
-      const kill = procs.killCliTree;
-      let rejectCleanup = reason === "failed cleanup";
-      vi.spyOn(procs, "killCliTree").mockImplementation(async (child, timeout) => {
-        // Hold only the original writer: Stop must still close its uninitialized replacement.
-        if (child === children[0]) {
-          stopping();
-          await gate;
-          if (rejectCleanup) return false;
-        }
-        return kill(child, timeout);
-      });
-      if (reason === "prompt stall") {
-        process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
-        process.env.FAKE_ACP_MODE = "stall-after-text";
-      }
-      instance = await QwenAgentDriver.create({
-        instanceId: "qwen-retry", displayName: "Qwen Retry", enabled: true,
-        environment: { HOME: scratch, USERPROFILE: scratch },
-        config: { cli: FAKE_CLI, fullAuto: false },
-      });
-      recorder = recordEvents(instance.adapter);
-      const integration = (token: string) => ({ agents: { command: process.execPath, args: [FAKE_CLI], env: { OMB_COMMS_TOKEN: token } } });
-      try {
-        const first = await instance.adapter.sendTurn({ threadId: "qwen-retry", text: "one", integrations: integration("one") });
-        expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === first.turnId))
-          .toMatchObject({ ok: reason !== "prompt stall" });
-        if (reason !== "prompt stall") {
-          const second = await instance.adapter.sendTurn({
-            threadId: "qwen-retry", text: "two", resumeCursor: "fake-acp-session", integrations: integration("two"),
-          });
-          await startedStopping;
-          if (reason === "Stop") await instance.adapter.interruptTurn("qwen-retry");
-          else release();
-          expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId))
-            .toMatchObject(reason === "Stop" ? { ok: true, stopReason: "cancelled" } : { ok: false });
-          if (rejectCleanup) {
-            expect(recorder.events.find((e) => e.type === "runtime.error" && e.turnId === second.turnId))
-              .toMatchObject({ message: expect.stringMatching(/could not close its previous tool session/) });
-            rejectCleanup = false;
-          }
-        }
-        process.env.FAKE_ACP_MODE = "happy";
-        const retry = await instance.adapter.sendTurn({
-          threadId: "qwen-retry", text: "retry", resumeCursor: "fake-acp-session", integrations: integration("three"),
-        });
-        // Observe writes directly: the retry must not even initialize while cleanup is unconfirmed.
-        expect(calls().filter((call) => call.method === "initialize")).toHaveLength(1);
-        expect(calls().filter((call) => call.method === "session/load")).toHaveLength(0);
-        release();
-        expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === retry.turnId)).toMatchObject({ ok: true });
-        expect(calls().filter((call) => call.method === "session/new")).toHaveLength(1);
-        expect(calls().filter((call) => call.method === "session/load")).toEqual([
-          expect.objectContaining({ params: expect.objectContaining({ sessionId: "fake-acp-session" }) }),
-        ]);
-        expect(calls().filter((call) => call.method === "session/prompt")).toHaveLength(2);
-      } finally {
-        release();
-        await instance.dispose();
-        await Promise.all(children.map((child) => kill(child, 0)));
-      }
-    });
-
-    it("an agent that refuses to re-load its live session gets one fresh process, then resumes", async () => {
+it("an agent that refuses to re-load its live session gets one fresh process, then resumes", async () => {
       countFile = join(scratch, "launches");
       const appendFile = join(scratch, "rpc-all.jsonl");
       const rejectFile = join(scratch, "reject-live-load");
@@ -3358,7 +2506,7 @@ describe("ACP turns (fake CLI)", () => {
     it("an interrupt that the agent honors keeps the process pooled", async () => {
       countFile = join(scratch, "launches");
       process.env.FAKE_ACP_LAUNCH_COUNT_FILE = countFile;
-      await create(GrokAgentDriver, "hang");
+      await create(CustomAcpDriver, "hang");
       await instance.adapter.sendTurn({ threadId: "t-pool-interrupt", text: "go" });
       await recorder.until((e) => e.type === "session.started");
       await instance.adapter.interruptTurn("t-pool-interrupt");
@@ -3372,7 +2520,7 @@ describe("ACP turns (fake CLI)", () => {
 
 describe("ACP snapshot", () => {
   it("a missing binary is unavailable", async () => {
-    const instance = await GrokAgentDriver.create({
+    const instance = await CustomAcpDriver.create({
       instanceId: "grok-missing",
       displayName: undefined,
       environment: {},
@@ -3384,165 +2532,7 @@ describe("ACP snapshot", () => {
     await instance.dispose();
   });
 
-  it("kimi checks KIMI_CODE_HOME before the child HOME", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-kimi-auth-"));
-    const kimiHome = join(scratch, "custom-kimi-home");
-    const childHome = join(scratch, "child-home");
-    mkdirSync(join(childHome, ".kimi-code", "credentials"), { recursive: true });
-    writeFileSync(join(childHome, ".kimi-code", "credentials", "kimi-code.json"), "{}");
-
-    const instance = await KimiAgentDriver.create({
-      instanceId: "kimi-custom-home",
-      displayName: undefined,
-      environment: { KIMI_CODE_HOME: kimiHome, HOME: childHome },
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    try {
-      expect((await instance.snapshot()).authenticated).toBe(false);
-      mkdirSync(join(kimiHome, "credentials"), { recursive: true });
-      writeFileSync(join(kimiHome, "credentials", "kimi-code.json"), "{}");
-      expect((await instance.snapshot()).authenticated).toBe(true);
-    } finally {
-      await instance.dispose();
-      await removeTempDir(scratch);
-    }
-  });
-
-  it("droid resolves the signed-in CLI before falling back to FACTORY_API_KEY", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-auth-"));
-    const overrideHome = join(scratch, "custom-home");
-    const childHome = join(scratch, "child-home");
-    mkdirSync(join(childHome, ".factory"), { recursive: true });
-    writeFileSync(join(childHome, ".factory", "auth.v2.file"), "{}");
-
-    // The child env inherits process.env, so a real exported FACTORY_API_KEY would satisfy every case;
-    // Windows resolves the home from USERPROFILE first, so both are pinned to the scratch home.
-    const make = (environment: Record<string, string>) =>
-      DroidAgentDriver.create({
-        instanceId: "droid-auth",
-        displayName: undefined,
-        environment: { FACTORY_API_KEY: "", ...(environment.HOME ? { USERPROFILE: environment.HOME } : {}), ...environment },
-        enabled: true,
-        config: { cli: FAKE_CLI, fullAuto: false },
-      });
-
-    const instances: ProviderInstance[] = [];
-    try {
-      const overridden = await make({ FACTORY_HOME_OVERRIDE: overrideHome, HOME: childHome });
-      instances.push(overridden);
-      expect((await overridden.snapshot()).authenticated).toBe(false);
-      mkdirSync(join(overrideHome, ".factory"), { recursive: true });
-      writeFileSync(join(overrideHome, ".factory", "auth.v2.file"), "{}");
-      expect((await overridden.snapshot()).authenticated).toBe(true);
-
-      const loggedOutWithKey = await make({
-        FACTORY_HOME_OVERRIDE: join(scratch, "empty-home"),
-        HOME: childHome,
-        FACTORY_API_KEY: "fk-test",
-      });
-      instances.push(loggedOutWithKey);
-      expect((await loggedOutWithKey.snapshot()).authenticated).toBe(true);
-
-      const fromHome = await make({ HOME: childHome });
-      instances.push(fromHome);
-      expect((await fromHome.snapshot()).authenticated).toBe(true);
-
-      // secure_auth_storage writes the keychain/keyring variant, so a fresh macOS login has only this one.
-      const keychainHome = join(scratch, "keychain-home");
-      mkdirSync(join(keychainHome, ".factory"), { recursive: true });
-      writeFileSync(join(keychainHome, ".factory", "auth.v2.loginkeychain"), "{}");
-      const fromKeychain = await make({ HOME: keychainHome });
-      instances.push(fromKeychain);
-      expect((await fromKeychain.snapshot()).authenticated).toBe(true);
-
-      const neither = await make({ HOME: join(scratch, "empty") });
-      instances.push(neither);
-      expect((await neither.snapshot()).authenticated).toBe(false);
-    } finally {
-      for (const i of instances) await i.dispose();
-      await removeTempDir(scratch);
-    }
-  });
-
-  it("droid reads custom models, favourites order, and the configured default", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-models-"));
-    mkdirSync(join(scratch, ".factory"), { recursive: true });
-    writeFileSync(
-      join(scratch, ".factory", "settings.json"),
-      JSON.stringify({
-        customModels: [
-          { id: "custom:LMStudio-Qwen-0", displayName: "Qwen (local)" },
-          { id: "custom:Azure-Opus-0", displayName: "Azure Opus" },
-        ],
-        modelFavorites: ["custom:Azure-Opus-0", "custom:LMStudio-Qwen-0"],
-        sessionDefaultSettings: { model: "custom:LMStudio-Qwen-0" },
-      }),
-    );
-
-    const instance = await DroidAgentDriver.create({
-      instanceId: "droid-models",
-      displayName: undefined,
-      environment: { HOME: scratch, USERPROFILE: scratch },
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    try {
-      expect(instance.models.options.slice(0, 2)).toEqual([
-        { id: "custom:Azure-Opus-0", label: "Azure Opus", custom: true },
-        { id: "custom:LMStudio-Qwen-0", label: "Qwen (local)", custom: true },
-      ]);
-      expect(instance.models.options.some((o) => o.id === "claude-opus-5")).toBe(true);
-      expect(instance.models.default).toBe("custom:LMStudio-Qwen-0");
-    } finally {
-      await instance.dispose();
-      await removeTempDir(scratch);
-    }
-  });
-
-  it("droid falls back to the built-in catalog when settings.json is unreadable", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-nosettings-"));
-    mkdirSync(join(scratch, ".factory"), { recursive: true });
-    writeFileSync(join(scratch, ".factory", "settings.json"), "{ not json");
-
-    const instance = await DroidAgentDriver.create({
-      instanceId: "droid-models-fallback",
-      displayName: undefined,
-      environment: { HOME: scratch },
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    try {
-      expect(instance.models.default).toBe("claude-opus-5");
-      expect(instance.models.options.every((o) => !o.id.startsWith("custom:"))).toBe(true);
-    } finally {
-      await instance.dispose();
-      await removeTempDir(scratch);
-    }
-  });
-
-  it("kimi resolves default credentials from the child HOME", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-kimi-home-"));
-    const credentialDir = join(scratch, ".kimi-code", "credentials");
-    mkdirSync(credentialDir, { recursive: true });
-    writeFileSync(join(credentialDir, "kimi-code.json"), "{}");
-
-    const instance = await KimiAgentDriver.create({
-      instanceId: "kimi-child-home",
-      displayName: undefined,
-      environment: { HOME: scratch },
-      enabled: true,
-      config: { cli: FAKE_CLI, fullAuto: false },
-    });
-    try {
-      expect((await instance.snapshot()).authenticated).toBe(true);
-    } finally {
-      await instance.dispose();
-      await removeTempDir(scratch);
-    }
-  });
-
-  it("awaits an async isAuthenticated", async () => {
+it("awaits an async isAuthenticated", async () => {
     const instance = await AsyncAuthDriver.create({
       instanceId: "async-auth",
       displayName: undefined,
