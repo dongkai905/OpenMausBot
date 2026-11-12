@@ -22,7 +22,9 @@ export function engineCatalogFrom(manifest: ModelManifestData, engine: ManifestE
   };
 }
 
-export function bundledEngineCatalog(engine: ManifestEngine): ModelCatalog {
-  return engineCatalogFrom(BUNDLED_MODEL_MANIFEST, engine)!;
+/** The bundled copy's catalog for an engine, or null when the bundled file lists no engine: the models a
+ * customAcp engine offers come from the CLI it drives, so the file may carry no catalog at all. */
+export function bundledEngineCatalog(engine: ManifestEngine): ModelCatalog | null {
+  return engineCatalogFrom(BUNDLED_MODEL_MANIFEST, engine);
 }
 

@@ -1375,6 +1375,18 @@ const teamConnections = createTeamConnectionsHost({ team: CLOUD_TEAM, dataDir: D
   mint: (capability) => mintInternalCapability({ ...capability, depth: 0, kind: "connectors", skillAuthoring: false, createdBots: 0, openedThreads: 0 }), mcpOAuth, isOwnerLive: (owner) => sessions.isLive(owner) || isCardOwnerLive(store, owner), onSettled: (name, phase, owner) => mcpSignInCards.settled(name, phase, owner), onRefresh: (person, name, outcome) => connectionHealth.refreshed(person, name, outcome), onPersonChanged: (person, kind, id) => connectionHealth.connectedAgain({ kind, id, person }),
   botMcp: (bot) => mcpServersHost.mounted(bot), oauthClient: mcpKeys.oauthClient, brokerUrl: () => (CLOUD_TEAM ? cloudConnectedAppsBrokerUrl() || null : null), fullAccess: fullAccessForSource, composio }); teamConnections.primeApps(); const connectionHealth = createConnectionHealthHost({ dataDir: CLOUD_TEAM ? DATA_DIR : null, mcpServers: () => cfg.mcpServers ?? {}, mcpOAuth, connections: teamConnections, bots: () => store.bots, botServers: (bot) => Object.keys(mcpServersHost.mounted(bot)), roster: () => teamOwners.people?.list() ?? [], personKey: (email) => personKey({ id: "", email }), personName: (email) => teamHost.people.profile(personKey({ id: "", email })).name || null, test: (name, signal) => mcpConfig.test(name, { signal, person: () => null }), asleep: () => cloudPowerNow()?.sleeping() ?? false, wokeAt: () => cloudPowerNow()?.sleptUntil() ?? null }); if (CLOUD_TEAM) connectionHealth.start();
 // OpenCode reads provider keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, …) from its environment. Wired before the first catalog probe below.
+/** Provider keys come from the server's env only when it is the person's own shell: never on a Cloud
+ * home, hosted team, managed desktop or open sign-in list, where every bot would bill the operator's key.
+ * The engine that read them is gone, so the policy has no reader today; it is kept here because the rule
+ * is about this machine's keys, not about any one engine. */
+function openCodeProviderKeysAllowed(state: {
+  cloudHome: boolean;
+  hostedWorkspace: boolean;
+  organisationManaged: boolean;
+  sharedSignIn: boolean;
+}): boolean {
+  return !state.cloudHome && !state.hostedWorkspace && !state.organisationManaged && !state.sharedSignIn;
+}
 let openCodeOrganisationManaged = (): boolean => false;
 const openCodeKeysAllowed = (): boolean => openCodeProviderKeysAllowed({
   cloudHome: Boolean(CLOUD_HOME),
@@ -1382,7 +1394,6 @@ const openCodeKeysAllowed = (): boolean => openCodeProviderKeysAllowed({
   organisationManaged: openCodeOrganisationManaged(),
   sharedSignIn: sharedSignIn(signInAllowList()),
 });
-setOpenCodeProviderKeyPolicy(openCodeKeysAllowed);
 let openCodeKeysLastAllowed = openCodeKeysAllowed();
 /** OpenCode lists a provider's models only while it may read that provider's key. */
 function resyncOpenCodeProviderKeys(): void {

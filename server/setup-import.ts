@@ -93,19 +93,14 @@ export function thisMachine(): SetupMachine {
 
 type ToolFormat = "claudeJson" | "json" | "toml";
 
-const CONFIG_MAX_BYTES = 1024 * 1024;
-const CLAUDE_JSON_MAX_BYTES = 256 * 1024 * 1024;
-
 /** Every path finding reads, and nothing else. */
-export function setupPaths(machine: Pick<SetupMachine, "home" | "platform" | "env">) {
-  const { home, platform, env } = machine;
-  const absolute = (value: string | undefined) => (value && isAbsolute(value) ? value : null);
-  return {
-    skills: [
-    ] satisfies Array<{ source: SkillSource; root: string; label: string }>,
-    tools: [
-    ] satisfies Array<{ source: SetupSource; path: string; format: ToolFormat; max: number }>,
-  };
+export function setupPaths(_machine: Pick<SetupMachine, "home" | "platform" | "env">) {
+  // The other tools this flow read from are gone with their engines, so there is no folder of theirs to look in.
+  // The lists stay, and keep their element type, because they are where a source is declared: an empty one means the
+  // welcome flow finds nothing to bring in, not that it found something it may not open.
+  const skills: Array<{ source: SkillSource; root: string; label: string }> = [];
+  const tools: Array<{ source: SetupSource; path: string; format: ToolFormat; max: number }> = [];
+  return { skills, tools };
 }
 
 interface FoundSkill {
@@ -148,8 +143,6 @@ interface Places {
   /** The home folder as given and as it really is: nothing outside them is looked at. */
   homes: string[];
   darwin: boolean;
-  /** Where the tools keep their logins and history. */
-  toolHomes: string[];
   /** Each skills folder that is safe to read, to where it really is. */
   roots: Map<string, string>;
   skillRoots: string[];
@@ -205,16 +198,16 @@ function placesFor(machine: SetupMachine): Places {
   for (const { root } of paths.skills) {
     const found = locate(machine, { homes, darwin }, root);
     // A skills folder that is the home folder or a tool's own folder (or holds one) would list their private files.
-    if (!found?.info.isDirectory() || homes.some((home) => within(found.path, home)) || toolHomes.some((tool) => within(found.path, tool))) continue;
+    if (!found?.info.isDirectory() || homes.some((home) => within(found.path, home))) continue;
     roots.set(root, found.path);
   }
-  return { homes, darwin, toolHomes, roots, skillRoots: [...roots.keys()].flatMap(forms) };
+  return { homes, darwin, roots, skillRoots: [...roots.keys()].flatMap(forms) };
 }
 
-/** A skill folder must stay a skill folder wherever its link leads: never a skills folder itself, nor a place in a
+/** A skill folder must stay a skill folder wherever its link leads: never a skills folder itself, nor the home folder. */
 function skillFolderAllowed(places: Places, real: string): boolean {
   if (places.homes.some((home) => within(real, home)) || places.skillRoots.some((root) => samePath(root, real))) return false;
-  return !places.toolHomes.some((tool) => within(tool, real)) || places.skillRoots.some((root) => within(root, real));
+  return true;
 }
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -353,7 +346,8 @@ function skillInput(machine: SetupMachine, skill: FoundSkill, budget: { bytes: n
       files: copy.files,
       entry: {
         description: skill.parsed.description,
-        source: skill.source,
+        // The store records the engine that runs the skill, and customAcp is the only one there is.
+        source: "customAcp",
         root: skill.root,
         origin: skill.origin,
         label: skill.label,
@@ -367,7 +361,7 @@ function skillInput(machine: SetupMachine, skill: FoundSkill, budget: { bytes: n
 }
 
 /** The person's own agent skills, read as an import reads them. */
-export function claudeCodeSkillInputs(machine: SetupMachine = thisMachine()): ImportedSkillInput[] {
+export function claudeCodeSkillInputs(_machine: SetupMachine = thisMachine()): ImportedSkillInput[] {
   // 步 6 / Task-135：厂商专属技能目录已删除，这里不再有可导入的厂商技能。
   return [];
 }
@@ -605,7 +599,7 @@ function foundTool(source: SetupSource, rawName: string, raw: Record<string, unk
 
 /** Every server the tools list, normalised and switched off by Paste config's parser, sorted into new, already here,
  * named like a different one here, and refused by the organization; a server two tools list is kept once. */
-function findTools(machine: SetupMachine, current: Record<string, unknown>, host: Pick<SetupHost, "mcpPolicyRefusal" | "claudeUserMcp">) {
+function findTools(machine: SetupMachine, current: Record<string, unknown>, host: Pick<SetupHost, "mcpPolicyRefusal">) {
   const existing = Object.entries(current).flatMap(([name, raw]) => {
     const parsed = parseStoredMcpServer(name, raw);
     return parsed.ok ? [identity(parsed.server)] : [];
@@ -619,7 +613,6 @@ function findTools(machine: SetupMachine, current: Record<string, unknown>, host
   const conflicts: FoundTool[] = [];
   const refused: FoundTool[] = [];
   for (const tool of setupPaths(machine).tools) {
-    if (inPlace && tool.source === "claudeCode") continue;
     const entries = toolEntries(machine, tool);
     for (const [rawName, raw] of Object.entries(entries ?? {})) {
       if (!isRecord(raw)) continue;
