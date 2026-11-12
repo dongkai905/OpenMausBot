@@ -61,15 +61,6 @@ export function companyInstanceConfigs(connection: ManagedDesktopConnection, run
     if (!provider.configured || !provider.models.length) continue;
     const id = companyInstanceId(connection, provider.id), base = `${connection.portalOrigin}/api/desktop/gateway/${provider.id}`;
     const displayName = `Company · ${connection.organizationName} · ${provider.id === "anthropic" ? "Claude" : provider.id === "openai" ? "Codex" : "OpenRouter"}`;
-    if (provider.id === "anthropic") entries[id] = {
-      driver: "claudeAgent", displayName,
-      config: { configDir: join(runtimeDirectory, id, "claude"), managed: true },
-      environment: { ANTHROPIC_API_KEY: connection.token, ANTHROPIC_AUTH_TOKEN: connection.token, ANTHROPIC_BASE_URL: base, ANTHROPIC_MODEL: provider.models[0] },
-    };
-    if (provider.id === "openai") entries[id] = {
-      driver: "codex", displayName, config: { managed: { url: `${base}/v1`, models: provider.models } },
-      environment: { OPENMAUSBOT_COMPANY_API_KEY: connection.token, CODEX_HOME: join(runtimeDirectory, id, "codex") },
-    };
     if (provider.id === "openrouter") entries[id] = {
       driver: "openai-compat", displayName, config: { url: `${base}/v1`, apiKeyEnv: "OPENMAUSBOT_COMPANY_API_KEY", model: provider.models[0], provider: "" },
       environment: { OPENMAUSBOT_COMPANY_API_KEY: connection.token },
@@ -127,9 +118,6 @@ export class ManagedDesktopProviders {
       const configs = companyInstanceConfigs(connection, directory);
       for (const [id, entry] of Object.entries(configs)) {
         if (this.options.registry.entries().some(existing => existing.instanceId === id)) throw new Error("Company instance conflicts with an existing account.");
-        if (entry.driver === "claudeAgent" || entry.driver === "codex") {
-          this.ensureDirectory(["providers", "company", id, entry.driver === "claudeAgent" ? "claude" : "codex"]);
-        }
         this.ids.add(id); this.known.add(id);
       }
       const active = () => revision === this.revision && Boolean(this.connection && this.connection.expiresAt > this.now() && !this.connection.suspended);

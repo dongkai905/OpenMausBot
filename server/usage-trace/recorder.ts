@@ -85,9 +85,9 @@ const STALE_MS = 30 * 60_000;
 const EXPECT_TTL_MS = 60_000;
 
 /** Claude reports each model call; Codex a thread's running total; the OpenAI-style chat engines a turn's running total. */
-const PER_CALL = new Set(["claude"]);
-const THREAD_TOTALS = new Set(["codex"]);
-const TURN_TOTALS = new Set(["grok", "groq", "greenference", "modelgo", "cerebras", "mistral", "minimax", "meta", "openai-compat"]);
+const PER_CALL = new Set<string>([]);
+const THREAD_TOTALS = new Set<string>([]);
+const TURN_TOTALS = new Set<string>([]);
 const MAX_LINKS = 5_000;
 const ENDED_GRACE_MS = 120_000;
 const RECEIPT_SLACK_MS = 3_000;

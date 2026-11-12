@@ -1,6 +1,5 @@
 export const PROVIDER_ICON_PRESETS = [
-  "openai", "anthropic", "google", "azure", "aws", "xai", "deepseek",
-  "meta", "mistral", "qwen", "moonshot", "cohere", "openrouter", "ollama",
+  "openai", "anthropic", "google", "azure", "aws", "openrouter", "ollama",
 ] as const;
 
 export type ProviderIconPreset = typeof PROVIDER_ICON_PRESETS[number];

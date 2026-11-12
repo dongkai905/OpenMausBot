@@ -421,7 +421,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             buffer += decoder.decode();
             const line = buffer.trim();
             if (line && line !== "data: [DONE]") consumeDataLine(line, true);
-            // MiniMax's api.minimax.io/v1 closes the connection after the
+            // Some compatible endpoints close the connection after the
             // finish_reason chunk and never sends `[DONE]`.
             if (buffer.trim() === "data: [DONE]" || finishReason) break;
             if (!sawChoice) {

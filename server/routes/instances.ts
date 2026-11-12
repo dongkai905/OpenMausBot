@@ -1,37 +1,12 @@
-import { agentEndpointAddress, discoverAgentEndpointModels, hasExplicitModel, isGatewayEndpoint } from "../agent-endpoint-models.ts";
-import { codexEndpointSchema, codexEndpointUpdateSchema, newCodexEndpoint, updateCodexEndpoint, withCodexEndpointInfo, isCodexEndpoint } from "../codex-endpoints.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
 import { modelManifest } from "../model-manifest/manifest.ts";
 import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
-import {
-  assertSeparateClaudeAccount,
-  configuredAccountDirectory,
-  createClaudeAccountSchema,
-  instanceSettingsSchema,
-  newClaudeAccount,
-} from "../claude-accounts.ts";
-import {
-  claudeEndpointSchema,
-  claudeEndpointUpdateSchema,
-  newClaudeEndpoint,
-  isClaudeEndpoint,
-  updateClaudeEndpoint,
-  withClaudeEndpointInfo,
-} from "../claude-endpoints.ts";
-import {
-  claudeBedrockSchema,
-  claudeBedrockUpdateSchema,
-  newClaudeBedrock,
-  updateClaudeBedrock,
-  withClaudeBedrockInfo,
-} from "../claude-bedrock.ts";
-import { updateClaudeCli } from "../claude-update.ts";
+import { instanceSettingsSchema } from "../instance-settings.ts";
 import { persistableInstanceConfigs, saveConfig, withInstanceCli, type AppConfig } from "../config.ts";
 import { addEndpoint, addEndpointSchema, endpointBaseUrl, isAddedEndpoint, withEndpointUrls } from "../openai-compat-endpoints.ts";
 import { findOllama, probeOllama } from "../drivers/ollama.ts";
 import type { InstanceConfigMap, ModelSelection, ProviderInstance } from "../contracts.ts";
-import { removeAntigravityProfile } from "../drivers/antigravity-acp.ts";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import { findCliCandidates, resetPathCache } from "../env-path.ts";
 import type { ProviderRegistry } from "../harness/registry.ts";
@@ -74,7 +49,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
     botForThread, activeGroupTurnForBot,
   } = deps;
   const describeInstances = async () => hostedModels ? deps.describeInstances()
-    : withEndpointUrls(withCodexEndpointInfo(withClaudeBedrockInfo(withClaudeEndpointInfo(await deps.describeInstances(), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {});
+    : withEndpointUrls(await deps.describeInstances(), cfg.instances ?? {});
   /** Bots, their backups and threads, the new-bot default, or a turn running on it: a provider in use can't go away. */
   const providerInUse = (instanceId: string): boolean => cfg.defaultModelSelection?.instanceId === instanceId || store.bots.some((bot) =>
     bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) => task.modelSelection?.instanceId === instanceId)) ||
@@ -106,7 +81,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   // once one is installed, by itself: nobody has to find Reset.
   registry?.onWrongCli?.((instanceId, cli) => useAppCopy(instanceId, cli));
   // One updater per executable: Claude instances can share an install, and two self-updates would race its files.
-  const claudeUpdatesInFlight = new Set<string>();
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (method === "GET" && path === "/api/instances/hidden") {
       const hidden = Object.entries(persistableInstanceConfigs(cfg)).filter(([, entry]) => entry.hidden === true);
@@ -175,9 +149,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         const instanceId = `chatgpt-${randomUUID()}`;
         // Reuse the selected executable, never another account's environment.
         const cli = (instances.chatgpt?.config as { cli?: unknown } | undefined)?.cli
-          ?? (instances.codex?.config as { cli?: unknown } | undefined)?.cli;
-        instances[instanceId] = { driver: "codex", displayName: parsed.data.displayName,
-          config: { authMode: "chatgpt-plan", ...(typeof cli === "string" && cli ? { cli } : {}) } };
         await persistProviderInstance(instanceId, instances);
         return json(res, 201, { instanceId, instances: await describeInstances() });
       } finally { providerConfigBusy.set(false); }
@@ -198,118 +169,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       } finally { providerConfigBusy.set(false); }
     }
 
-    if (method === "POST" && (path === "/api/instances/claude-endpoint" || path === "/api/instances/codex-endpoint")) {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      const codex = path.endsWith("/codex-endpoint");
-      const parsed = (codex ? codexEndpointSchema : claudeEndpointSchema).safeParse(await readBody(req, 16384));
-      if (!parsed.success) return json(res, 400, { error: codex ? parsed.error.issues[0]?.message ?? "Check the endpoint settings." : "Enter a name, an http(s) base URL, an API key." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      providerConfigBusy.set(true);
-      try {
-        const { instanceId, instances } = (codex ? newCodexEndpoint : newClaudeEndpoint)(cfg, parsed.data);
-        if (!parsed.data.model) await discoverAgentEndpointModels(instances[instanceId]);
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 201, { instanceId, instances: await describeInstances() });
-      } catch (error) {
-        const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: error instanceof Error ? error.message : String(error) });
-      } finally { providerConfigBusy.set(false); }
-    }
-
-    const endpointPatch = /^\/api\/instances\/([\w.-]+)\/(claude|codex)-endpoint$/.exec(path);
-    if (method === "PATCH" && endpointPatch) {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      const instanceId = endpointPatch[1];
-      const codex = endpointPatch[2] === "codex";
-      const parsed = (codex ? codexEndpointUpdateSchema : claudeEndpointUpdateSchema).safeParse(await readBody(req, 16384));
-      if (!parsed.success) return json(res, 400, { error: "Check the address and API key." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      if (busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
-        return json(res, 409, { error: "Wait for bots using this endpoint to finish before changing its settings." });
-      }
-      providerConfigBusy.set(true);
-      providerInstancesChanging.add(instanceId);
-      try {
-        const { instances } = (codex ? updateCodexEndpoint : updateClaudeEndpoint)(cfg, instanceId, parsed.data);
-        const previous = persistableInstanceConfigs(cfg)[instanceId];
-        const addressChanged = agentEndpointAddress(previous) !== agentEndpointAddress(instances[instanceId]);
-        if (!parsed.data.model && !hasExplicitModel(previous) && (parsed.data.token !== undefined || addressChanged)) await discoverAgentEndpointModels(instances[instanceId]);
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 200, { instances: await describeInstances() });
-      } catch (error) {
-        const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: error instanceof Error ? error.message : String(error) });
-      } finally {
-        providerInstancesChanging.delete(instanceId);
-        providerConfigBusy.set(false);
-      }
-    }
-
-    if (method === "POST" && path === "/api/instances/claude-bedrock") {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      const parsed = claudeBedrockSchema.safeParse(await readBody(req, 16384));
-      if (!parsed.success) return json(res, 400, { error: parsed.error.issues[0]?.message ?? "Enter a name, an AWS profile and a region." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      providerConfigBusy.set(true);
-      try {
-        const { instanceId, instances } = newClaudeBedrock(cfg, parsed.data);
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 201, { instanceId, instances: await describeInstances() });
-      } catch (error) {
-        const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: error instanceof Error ? error.message : String(error) });
-      } finally { providerConfigBusy.set(false); }
-    }
-
-    const bedrockPatch = /^\/api\/instances\/([\w.-]+)\/claude-bedrock$/.exec(path);
-    if (method === "PATCH" && bedrockPatch) {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      const instanceId = bedrockPatch[1];
-      const parsed = claudeBedrockUpdateSchema.safeParse(await readBody(req, 16384));
-      if (!parsed.success) return json(res, 400, { error: parsed.error.issues[0]?.message ?? "Check the AWS profile, region and models." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      if (busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
-        return json(res, 409, { error: "Wait for bots using this engine to finish before changing its settings." });
-      }
-      providerConfigBusy.set(true);
-      providerInstancesChanging.add(instanceId);
-      try {
-        const { instances } = updateClaudeBedrock(cfg, instanceId, parsed.data);
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 200, { instances: await describeInstances() });
-      } catch (error) {
-        const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: error instanceof Error ? error.message : String(error) });
-      } finally {
-        providerInstancesChanging.delete(instanceId);
-        providerConfigBusy.set(false);
-      }
-    }
-
-    if (method === "POST" && path === "/api/instances/claude-accounts") {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      const parsed = createClaudeAccountSchema.safeParse(await readBody(req, 8192));
-      if (!parsed.success) return json(res, 400, { error: "Enter an account name (up to 80 characters) and an optional configuration directory." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      providerConfigBusy.set(true);
-      try {
-        const { instanceId, instances } = newClaudeAccount(cfg, parsed.data);
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 201, { instanceId, instances: await describeInstances() });
-      } finally { providerConfigBusy.set(false); }
-    }
-
-    const authStatus = /^\/api\/instances\/([\w.-]+)\/auth\/status$/.exec(path);
     if (method === "GET" && authStatus) {
       res.setHeader("cache-control", "no-store");
       const state = await providerAuthSessions.status(authStatus[1], auth.kind === "session" ? auth.session.id : "loopback", url.searchParams.get("flowId") ?? "");
@@ -334,16 +193,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
           return json(res, 200, await (deps.checkInstance ?? checkEngine)(instance));
         }
         if (action === "refresh-models") {
-          const endpoint = persistableInstanceConfigs(cfg)[instanceId];
-          if (endpoint && (isClaudeEndpoint(endpoint) || isCodexEndpoint(endpoint)) && isGatewayEndpoint(endpoint) && !hasExplicitModel(endpoint)) {
-            if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-            providerConfigBusy.set(true);
-            try {
-              const instances = persistableInstanceConfigs(cfg);
-              await discoverAgentEndpointModels(instances[instanceId]);
-              await persistProviderInstance(instanceId, instances);
-            } finally { providerConfigBusy.set(false); }
-          }
           if (!(await registry.refreshModels(instanceId))) return json(res, 404, { error: "unknown instance" });
           return json(res, 200, { instances: await describeInstances() });
         }
@@ -419,41 +268,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
     }
 
     // No command or path comes from the request: the registry supplies this instance's executable. JSON-only.
-    const claudeUpdate = /^\/api\/instances\/([\w.-]+)\/claude-update$/.exec(path);
-    if (method === "POST" && claudeUpdate) {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
-        return json(res, 415, { error: "content-type must be application/json" });
-      }
-      await readBody(req);
-      const target = registry.cliTarget(claudeUpdate[1]);
-      if (!target) return json(res, 404, { error: "no such provider instance" });
-      if (target.driverKind !== "claudeAgent") {
-        return json(res, 400, { error: "only Claude Code instances can be updated here" });
-      }
-      if (!target.cli) return json(res, 409, { error: "this Claude instance has no configured executable" });
-      if (claudeUpdatesInFlight.has(target.cli)) {
-        return json(res, 409, { error: "this Claude installation is already updating" });
-      }
-      const active = busyProviderSelections().some((selection) => registry.cliTarget(selection.instanceId)?.cli === target.cli);
-      if (active) {
-        return json(res, 409, { error: "wait for running Claude tasks to finish before updating" });
-      }
-
-      claudeUpdatesInFlight.add(target.cli);
-      try {
-        const result = await updateClaudeCli(target.cli, cliProbeEnvironment());
-        resetPathCache();
-        return json(res, 200, { ok: true, version: result.version });
-      } catch (error) {
-        return json(res, 500, { error: error instanceof Error ? error.message : String(error), ...userErrorFields(error) });
-      } finally {
-        claudeUpdatesInFlight.delete(target.cli);
-        // Even a failed update may have replaced the executable.
-        registry.forgetSnapshots();
-      }
-    }
-
-    // PATCH /api/instances/:id {cli: "/path/to/cli" | ""}: "" reverts to the driver default.
     const instancePatch = /^\/api\/instances\/([\w.-]+)$/.exec(path);
     if (method === "PATCH" && instancePatch) {
       // JSON-only, so a hostile page cannot send it as a simple request.
@@ -475,9 +289,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         const instances = persistableInstanceConfigs(result.config);
         if (!result.ok || !Object.hasOwn(instances, instanceId)) return json(res, 404, { error: `unknown instance "${instanceId}"` });
         const entry = instances[instanceId];
-        if ((body.configDir !== undefined && entry.driver !== "claudeAgent") || (body.displayName !== undefined && !["claudeAgent", "codex"].includes(entry.driver))) {
-          return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
-        }
         if (body.hidden === true && providerInUse(instanceId)) {
           return json(res, 409, { error: "Choose another model for the bots and default model using this provider before hiding it." });
         }
@@ -486,7 +297,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
           else delete entry.hidden;
         }
         if (body.tools !== undefined) {
-          if (!["openai-compat", "grok", "minimax", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta"].includes(entry.driver)) {
+          if (entry.driver !== "openai-compat") {
             return json(res, 400, { error: "The tools setting is available for OpenAI-compatible, Grok API, MiniMax API, Mistral API, Cerebras API, Groq API, Greenference API, ModelGo API and Meta API instances only." });
           }
           entry.config = { ...entry.config as Record<string, unknown>, tools: body.tools };
@@ -508,15 +319,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         }
         if (body.displayName !== undefined) entry.displayName = body.displayName;
         if (body.configDir !== undefined) {
-          let previousDir: string | undefined;
-          try { previousDir = configuredAccountDirectory(entry); } catch { }
           entry.config = { ...entry.config as Record<string, unknown>, configDir: body.configDir };
-          if (previousDir !== configuredAccountDirectory(entry)) {
-            const used = store.bots.some((bot) => bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) =>
-              task.modelSelection?.instanceId === instanceId || task.resumeCursors[instanceId] || task.lastInstanceId === instanceId));
-            if (used) return json(res, 409, { error: "This account is used by bots or conversation history. Add another account and select it for the bot instead." });
-            assertSeparateClaudeAccount(instances, instanceId, entry);
-          }
         }
         await persistProviderInstance(instanceId, instances);
         return json(res, 200, { instances: await describeInstances() });
@@ -531,31 +334,17 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
       const instances = persistableInstanceConfigs(cfg);
       if (!Object.hasOwn(instances, instanceId)) return json(res, 404, { error: "unknown instance" });
-      const addedChatgpt = instances[instanceId].driver === "codex" && instanceId.startsWith("chatgpt-");
-      const addedAntigravity = instances[instanceId].driver === "antigravityAgent" && instanceId.startsWith("antigravity-");
-      if (!addedChatgpt && !addedAntigravity && !isCodexEndpoint(instances[instanceId]) && !isAddedEndpoint(instanceId, instances[instanceId]) && (instances[instanceId].driver !== "claudeAgent" || instanceId === "claude")) {
-        return json(res, 400, { error: "Only added accounts and custom endpoints can be removed here." });
+      if (!isAddedEndpoint(instanceId, instances[instanceId])) {
+        return json(res, 400, { error: "Only custom endpoints can be removed here." });
       }
       if (providerInUse(instanceId)) {
         return json(res, 409, { error: "Choose another account for the bots and default model using this account before removing it." });
-      }
-      // OpenMausBot keeps a ChatGPT account's sign-in in its own data folder: removing the account clears it.
-      const live = addedChatgpt ? registry.get(instanceId) : undefined;
-      if (live?.signOut) {
-        try { await providerAuthSessions.signOut(live, auth.kind === "session" ? auth.session.id : "loopback"); }
-        catch (error) {
-          if ((error as { code?: unknown }).code !== "chatgpt_revocation_unconfirmed") {
-            return json(res, 409, { error: error instanceof Error ? error.message : String(error), ...userErrorFields(error) });
-          }
-        }
       }
       providerConfigBusy.set(true);
       providerInstancesChanging.add(instanceId);
       try {
         delete instances[instanceId];
         await persistProviderInstance(instanceId, instances);
-        // An added Antigravity account's Google sign-in lives in OpenMausBot's data folder too: removing the account deletes it.
-        if (addedAntigravity) await removeAntigravityProfile(instanceId);
         return json(res, 200, { instances: await describeInstances() });
       } finally {
         providerInstancesChanging.delete(instanceId);

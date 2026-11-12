@@ -46,7 +46,7 @@ export interface ConnectionListing {
  * goes for "Claude (API key)" alone: there it never takes over Claude bots that sign in with a Claude account. */
 interface Provider { id: string; label: string; for: string[]; config(cfg: AppConfig): Partial<AppConfig> | null }
 
-const keyed = (name: "openai" | "openrouter" | "mistral" | "cerebras" | "greenference" | "modelgo") => (cfg: AppConfig): Partial<AppConfig> | null => {
+const keyed = (name: "openai" | "openrouter") => (cfg: AppConfig): Partial<AppConfig> | null => {
   const key = cfg[name]?.key;
   return key ? { [name]: { key } } : null;
 };
@@ -58,19 +58,8 @@ const keyedUrl = (name: "xai" | "groq" | "meta") => (cfg: AppConfig): Partial<Ap
 export const KEY_PROVIDERS: readonly Provider[] = [
   { id: "openai", label: "OpenAI", for: ["openai"], config: keyed("openai") },
   { id: "openrouter", label: "OpenRouter", for: ["openrouter"], config: keyed("openrouter") },
-  { id: "anthropic", label: "Anthropic", for: ["claudeApi"], config: (cfg) => cfg.anthropic?.key
-    ? { anthropic: { key: cfg.anthropic.key, ...(cfg.anthropic.url ? { url: cfg.anthropic.url } : {}), everyClaudeBot: false } } : null },
-  { id: "xai", label: "xAI", for: ["xaiApi"], config: keyedUrl("xai") },
-  { id: "mistral", label: "Mistral", for: ["mistral"], config: keyed("mistral") },
-  { id: "cerebras", label: "Cerebras", for: ["cerebras"], config: keyed("cerebras") },
-  { id: "groq", label: "Groq", for: ["groq"], config: keyedUrl("groq") },
-  { id: "greenference", label: "Greenference", for: ["greenference"], config: keyed("greenference") },
-  { id: "modelgo", label: "ModelGo", for: ["modelgo"], config: keyed("modelgo") },
-  { id: "meta", label: "Meta", for: ["meta"], config: keyedUrl("meta") },
   { id: "openaiCompat", label: "OpenAI-compatible", for: ["openaiCompat"], config: (cfg) => cfg.openaiCompat?.key
     ? { openaiCompat: Object.fromEntries(Object.entries(cfg.openaiCompat).filter(([, value]) => typeof value === "string" && value)) } : null },
-  { id: "opencodeGo", label: "OpenCode", for: ["opencodeGo"], config: (cfg) => cfg.opencodeGo?.apiKey || Object.keys(cfg.opencodeGo?.providerKeys ?? {}).length
-    ? { opencodeGo: { ...(cfg.opencodeGo!.apiKey ? { apiKey: cfg.opencodeGo!.apiKey } : {}), ...(cfg.opencodeGo!.providerKeys ? { providerKeys: cfg.opencodeGo!.providerKeys } : {}) } } : null },
 ];
 
 const LOCAL_NAME = /(?:^|\.)(?:localhost|local|lan|home|internal|ts\.net)$/iu;

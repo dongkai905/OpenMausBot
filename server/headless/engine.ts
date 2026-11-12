@@ -8,16 +8,11 @@ import type { VerbContext, VerbOutcome } from "./context.ts";
 type Rec = Record<string, any>;
 
 export const ENGINE_KINDS: Record<string, { config: string; instance: string; apiInstance?: string; baseUrl: "no" | "allowed" | "required" }> = {
-  claude: { config: "anthropic", instance: "claude", apiInstance: "claudeApi", baseUrl: "allowed" },
   openai: { config: "openai", instance: "openai", baseUrl: "no" },
   openrouter: { config: "openrouter", instance: "openrouter", baseUrl: "no" },
   "openai-compatible": { config: "openaiCompat", instance: "openaiCompat", baseUrl: "required" },
   xai: { config: "xai", instance: "xaiApi", baseUrl: "allowed" },
   groq: { config: "groq", instance: "groq", baseUrl: "allowed" },
-  greenference: { config: "greenference", instance: "greenference", baseUrl: "no" },
-  modelgo: { config: "modelgo", instance: "modelgo", baseUrl: "no" },
-  mistral: { config: "mistral", instance: "mistral", baseUrl: "no" },
-  cerebras: { config: "cerebras", instance: "cerebras", baseUrl: "no" },
 };
 
 /** Never from the command line itself. */
@@ -72,7 +67,6 @@ export async function applyEngine(client: HeadlessClient, request: EngineRequest
   if (request.baseUrl !== undefined && kind.baseUrl === "no") throw usageError(`${request.kind} takes no base URL`);
   if (request.baseUrl === undefined && kind.baseUrl === "required") throw usageError(`${request.kind} needs --base-url`);
   if (request.baseUrl !== undefined && !/^https?:\/\/[^\s]+$/.test(request.baseUrl)) throw usageError("the base URL must start with http:// or https://");
-  if (request.onlyClaudeApi && request.kind !== "claude") throw usageError("--only-claude-api is for the claude engine");
   const instanceId = request.onlyClaudeApi ? kind.apiInstance! : kind.instance;
   const status: Rec = (await client.json<Rec>("/api/config"))[kind.config] ?? {};
   const configured = status.configured === true;
@@ -85,10 +79,6 @@ export async function applyEngine(client: HeadlessClient, request: EngineRequest
   } else if (request.baseUrl !== undefined && typeof status.url === "string" && status.url !== request.baseUrl) {
     patch.url = request.baseUrl;
     changed.push("baseUrl");
-  }
-  if (request.kind === "claude" && (patch.key !== undefined || status.everyClaudeBot !== !request.onlyClaudeApi)) {
-    patch.everyClaudeBot = !request.onlyClaudeApi;
-    if (status.everyClaudeBot !== !request.onlyClaudeApi) changed.push("everyClaudeBot");
   }
   // The address of a key already set is never shown, so --base-url cannot be compared with it.
   const unverified = configured && !request.rotate && request.baseUrl !== undefined && typeof status.url !== "string";

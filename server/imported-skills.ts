@@ -32,7 +32,7 @@ const choicesPath = (botId: string) => join(DATA_DIR, "skill-state", botId, "imp
 const sha256Hex = z.string().regex(/^[a-f0-9]{64}$/);
 const entrySchema = z.object({
   description: z.string(),
-  source: z.enum(["claudeCode", "codex"]),
+  source: z.enum(["customAcp"]),
   /** The folder it was read from, such as ~/.claude/skills: an engine that loads that folder itself skips the copy. */
   root: z.string(),
   /** Its own folder there, which the engine loads only while it is still there. */
@@ -423,7 +423,7 @@ export function nativeSkillFolders(
   const env = { ...(options.env ?? process.env), ...engine.environment };
   const absolute = (value: string | undefined) => (value && isAbsolute(value) ? value : null);
   const home = absolute(engine.environment?.HOME) ?? options.home ?? homedir();
-  if (engine.driverKind === "claudeAgent") {
+  if (engine.driverKind === "customAcp") {
     if (env.OMB_CLAUDE_INHERIT_USER_CONFIG === "1") return [join(absolute(env.CLAUDE_CONFIG_DIR) ?? join(home, ".claude"), "skills")];
     if (!options.claudeUserSkills) return [];
     const folder = join(home, ".claude", "skills");
@@ -433,17 +433,13 @@ export function nativeSkillFolders(
       return [];
     }
   }
-  if (engine.driverKind === "codex") return codexSkillRoots(home, env.CODEX_HOME);
+
   return [];
 }
 
-/** The folders codex-cli (0.163.0–0.167.0) loads user and admin skills from, in its own order: $CODEX_HOME/skills (a
- * ChatGPT-plan instance links the person's into its own home), ~/.agents/skills and /etc/codex/skills. It also reads
+/** The folders an agent CLI loads user and admin skills from, in its own order: the agent's own skills home,
+ * ~/.agents/skills and /etc/agent-skills. It also reads
  * `.agents/skills` from the turn's folder up to the repository root, where OpenMausBot links a bot's granted skills. */
-export function codexSkillRoots(home: string, codexHome: string | undefined): string[] {
-  const own = codexHome && isAbsolute(codexHome) ? codexHome : join(home, ".codex");
-  return [join(own, "skills"), join(home, ".agents", "skills"), ...(process.platform === "win32" ? [] : ["/etc/codex/skills"])];
-}
 
 /** After the bot's own skills, with a budget of its own, so bringing many in never pushes the bot's own out. `unlisted`
  * counts the ones on for the bot that are left out of its list: it searches for them. */

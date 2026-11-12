@@ -15,13 +15,13 @@ export const mask = (value: string) => (REDACTION_MARKER.test(value) ? value : `
 
 const KEY_PREFIXES: RegExp[] = [
   /\bom[dg]_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, // desktop device and model-only credentials
-  /\bsk-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_-]{16,}/g, // anthropic / openai
+  /\bsk-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_-]{16,}/g, // model provider key
   /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/g, // stripe secret and restricted keys
-  /\bxai-[A-Za-z0-9_-]{20,}/g, // xai (grok)
-  /\bgsk_[A-Za-z0-9]{40,}/g, // groq
-  /\bcsk-[A-Za-z0-9]{32,}/g, // cerebras
-  /\bLLM\|\d{6,}\|[A-Za-z0-9_-]{16,}/g, // meta model api
-  /\bhf_[A-Za-z0-9]{30,}/g, // hugging face
+  /\bxai-[A-Za-z0-9_-]{20,}/g, // model provider key
+  /\bgsk_[A-Za-z0-9]{40,}/g, // model provider key
+  /\bcsk-[A-Za-z0-9]{32,}/g, // model provider key
+  /\bLLM\|\d{6,}\|[A-Za-z0-9_-]{16,}/g, // model provider key
+  /\bhf_[A-Za-z0-9]{30,}/g, // model provider key
   /\bpypi-AgE[A-Za-z0-9_-]{82,}/g, // pypi and testpypi api tokens (macaroons)
   /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/g, // github classic
   /\bgithub_pat_[A-Za-z0-9_]{20,}/g, // github fine-grained

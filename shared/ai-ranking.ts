@@ -12,14 +12,7 @@ export interface RankableAi {
 /** What a test message through an AI showed: `untestable` is an AI with no one-off call to send one, trusted as before. */
 export type AiTestState = "testing" | "passed" | "failed" | "untestable";
 
-const TIERS: Readonly<Record<string, number>> = {
-  claudeAgent: 0,
-  codex: 1,
-  geminiAgent: 2,
-  antigravityAgent: 2,
-  grokAgent: 3,
-  grok: 3,
-};
+const TIERS: Readonly<Record<string, number>> = {};
 const OTHER = 4;
 const FREE_FALLBACK = 5;
 

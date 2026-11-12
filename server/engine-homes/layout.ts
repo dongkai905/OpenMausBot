@@ -54,7 +54,6 @@ const KIMI_AI_SIGN_IN = `credentials/kimi-code-env-${createHash("sha256")
 /** File names as each engine's sign-in keeps them (the drivers' own sign-in checks read the same ones). */
 export const ENGINE_FOLDERS: readonly EngineFolder[] = [
   { env: "CLAUDE_CONFIG_DIR", home: ".claude", shared: [".credentials.json"] },
-  { env: "CODEX_HOME", home: ".codex", shared: ["auth.json", "config.toml"] },
   { env: "GROK_HOME", home: ".grok", shared: ["auth.json", "config.toml"] },
   { env: "KIMI_CODE_HOME", home: ".kimi-code", shared: ["credentials/kimi-code.json", KIMI_AI_SIGN_IN, "config.toml"] },
   { env: "DSH_HOME", home: ".dsh", shared: [".credentials.yaml", ".env"] },

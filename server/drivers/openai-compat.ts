@@ -84,7 +84,7 @@ function geminiChatModelId(id: string): string | null {
 /** OpenAI's /models also lists embeddings, speech, images, moderation and Responses-only models. */
 export function isOpenAIChatModel(id: string): boolean {
   if (!/^(gpt-|chatgpt-|o\d)/i.test(id)) return false;
-  return !/(audio|realtime|tts|transcribe|search|image|embedding|moderation|instruct|codex|computer-use|deep-research|-pro\b)/i.test(id);
+  return !/(audio|realtime|tts|transcribe|search|image|embedding|moderation|instruct|legacy-agent|computer-use|deep-research|-pro\b)/i.test(id);
 }
 
 export interface OpenAICompatConfig {

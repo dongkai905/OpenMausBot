@@ -105,7 +105,7 @@ export function enginesByUse(selections: ReadonlyArray<{ instanceId: InstanceId 
 type SharedRead = { generation: number; settledAt?: number; read: Promise<ProviderSnapshot> };
 
 /** Engines that rebuild their model list from the manifest without starting a CLI, so a downloaded change applies at once. */
-const MANIFEST_REBUILT_DRIVERS = new Set(["claudeAgent", "grokAgent", "kimiAgent"]);
+const MANIFEST_REBUILT_DRIVERS = new Set<string>([]);
 
 export class ProviderRegistry {
   private byId = new Map<InstanceId, RegistryEntry>();

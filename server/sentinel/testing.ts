@@ -57,7 +57,7 @@ export function fixtureDataDir(dataDir: string, bots: Array<{ id: string; name: 
 
 export function turnCompleted(event: { eventId: string; threadId: string; turnId?: string; at: number; ok?: boolean; stopReason?: string | null; cost?: number | null }): string {
   return JSON.stringify({
-    type: "turn.completed", eventId: event.eventId, provider: "claude", threadId: event.threadId, createdAt: new Date(event.at).toISOString(),
+    type: "turn.completed", eventId: event.eventId, provider: "customAcp", threadId: event.threadId, createdAt: new Date(event.at).toISOString(),
     ok: event.ok ?? true, stopReason: event.stopReason ?? "end_turn", cost: event.cost ?? 0.01,
     ...(event.turnId ? { turnId: event.turnId } : {}),
   });

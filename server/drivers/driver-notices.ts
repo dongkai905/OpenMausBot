@@ -15,8 +15,5 @@ export const DRIVER_NOTICE = {
   "chat.notice.elicitationContinueGeneric": "An MCP server asks to continue",
   "chat.notice.elicitationMessageGeneric": "An MCP server: {message}",
   "chat.notice.appAccessRequested": "App access requested",
-  "chat.notice.codexModelUnavailable": "This model isn't available on your ChatGPT plan, so it's now hidden from this account's model list. Pick another model.",
-  "chat.notice.codexElicitationDeclined": "{server} asked for input OpenMausBot can't show yet, so the request was declined.",
-  "chat.notice.codexElicitationDeclinedGeneric": "An MCP server asked for input OpenMausBot can't show yet, so the request was declined.",
   "chat.notice.usageLimitResets": "This {provider} account has reached its usage limit{detail}, which resets {resets}. Until then, switch this bot to another AI.",
 } as const;

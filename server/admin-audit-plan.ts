@@ -14,8 +14,7 @@ export interface AuditPlan {
   roomId?: string;
 }
 
-const ACCOUNT_ADD_ENGINES = new Map([["/api/instances/claude-accounts", "claude"], ["/api/instances/chatgpt-accounts", "chatgpt"],
-  ["/api/instances/antigravity-accounts", "antigravity"]]);
+const ACCOUNT_ADD_ENGINES = new Map<string, string>();
 
 export function adminAuditPlan(method: string, path: string, sharedComputers: boolean): AuditPlan | null {
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;

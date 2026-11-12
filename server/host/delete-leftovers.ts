@@ -29,7 +29,6 @@ const CODEX_SESSION_FOLDERS = ["sessions", "archived_sessions"] as const;
 
 export interface EngineSessionFolders {
   claude: readonly string[];
-  codex: readonly string[];
   /** Pi names a session by its file's path, so its folders only say where such a file may be. */
   pi: readonly string[];
 }
@@ -114,21 +113,6 @@ function removeClaudeSessions(root: string, sessions: ReadonlySet<string>): numb
   return removed;
 }
 
-function removeCodexSessions(root: string, sessions: ReadonlySet<string>): number {
-  let removed = 0;
-  const walk = (dir: string, depth: number) => {
-    if (depth > MAX_DEPTH || !realFolder(dir)) return;
-    for (const name of entries(dir)) {
-      const path = join(dir, name);
-      if (realFolder(path)) { walk(path, depth + 1); continue; }
-      const id = sessionIdIn(name);
-      if (id && sessions.has(id) && removeUnder(root, path)) removed++;
-    }
-  };
-  for (const folder of CODEX_SESSION_FOLDERS) walk(join(root, folder), 0);
-  return removed;
-}
-
 function removePiSession(roots: readonly string[], file: string): number {
   if (!file.endsWith(".jsonl")) return 0;
   try { if (!lstatSync(file).isFile()) return 0; } catch { return 0; }
@@ -168,19 +152,16 @@ export function removeMemoryLayer(dataDir: string, layer: string, records: Memor
 
 /** Where each engine keeps its sessions, for every environment an engine of this server runs with. */
 export function engineSessionFolders(dataDir: string, environments: Iterable<Record<string, string | undefined>>): EngineSessionFolders {
-  const claude = new Set<string>(), codex = new Set<string>(), pi = new Set<string>();
+  const claude = new Set<string>(), pi = new Set<string>();
   const absolute = (value: string | undefined) => (value && isAbsolute(value) ? resolve(value) : null);
   for (const env of environments) {
     const home = absolute(env.HOME) ?? absolute(env.USERPROFILE);
     const claudeFolder = absolute(env.CLAUDE_CONFIG_DIR) ?? (home && join(home, ".claude"));
-    const codexFolder = absolute(env.CODEX_HOME) ?? (home && join(home, ".codex"));
     if (claudeFolder) claude.add(claudeFolder);
-    if (codexFolder) codex.add(codexFolder);
     if (home) pi.add(join(home, ".pi", "agent"));
   }
   const plans = join(resolve(dataDir), "providers", "chatgpt-plan");
-  for (const plan of entries(plans)) codex.add(join(plans, plan, "codex"));
-  return { claude: [...claude], codex: [...codex], pi: [...pi] };
+  return { claude: [...claude], pi: [...pi] };
 }
 
 /** An instance's environment as its engine is started with it: the server's, the instance's own over it, and a Claude
@@ -266,7 +247,6 @@ export function createDeleteLeftovers(deps: DeleteLeftoversDeps) {
     const reached = (roots: readonly string[]) => roots.filter((root) => !relative(dataDir, resolve(root)).startsWith("..") ? plainlyUnder(dataDir, root) && realFolder(root) : true);
     if (ids.size) {
       for (const root of reached(folders.claude)) attempt(`engine sessions in ${root}`, () => void removeClaudeSessions(root, ids));
-      for (const root of reached(folders.codex)) attempt(`engine sessions in ${root}`, () => void removeCodexSessions(root, ids));
     }
     for (const file of files) attempt(`the engine session ${file}`, () => void removePiSession(reached(folders.pi), file));
   }

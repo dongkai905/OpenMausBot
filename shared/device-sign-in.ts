@@ -8,7 +8,6 @@
 
 export type DeviceSignInProvider = "codex" | "grok" | "kimi" | "cursor";
 
-const CODEX_PAGE = "https://auth.openai.com/codex/device";
 
 /** An https page on one of the provider's hosts, with no login, port or fragment. */
 function providerPage(value: string, hosts: RegExp): URL | null {
@@ -18,58 +17,7 @@ function providerPage(value: string, hosts: RegExp): URL | null {
   return url.username || url.password || url.port || !hosts.test(url.hostname) ? null : url;
 }
 
-const RULES: Record<DeviceSignInProvider, {
-  page(value: string): string | null;
-  /** null: the link alone finishes the sign-in, and no code is shown. */
-  code: RegExp | null;
-  /** The words a CLI prints before the page or the code on the same line. */
-  label?: RegExp;
-}> = {
-  codex: {
-    page: (value) => (/^https:\/\/auth\.openai\.com\/codex\/device\/?$/.test(value) ? CODEX_PAGE : null),
-    code: /^[A-Z0-9]{4,8}-[A-Z0-9]{4,8}$/,
-  },
-  grok: {
-    // xAI's own sign-in hosts. The page may carry the code itself (the
-    // provider's "complete" link); nothing else may ride in its query.
-    page: (value) => {
-      const url = providerPage(value, /(^|\.)(x\.ai|grok\.com)$/);
-      return url && [...url.searchParams.keys()].every((key) => key === "user_code") ? url.href : null;
-    },
-    code: /^[A-Z0-9]{4,12}(?:-[A-Z0-9]{2,12}){0,3}$/,
-  },
-  kimi: {
-    // Moonshot's hosts for both Kimi Code regions (kimi.com, kimi.ai). Its
-    // OAuth server writes the "complete" link, so only the code is kept of
-    // its query. kimi-code 2.4.1 prints "…device login: <page>" and "…enter
-    // code: <code>".
-    page: (value) => {
-      const url = providerPage(value, /(^|\.)kimi\.(com|ai)$/);
-      if (!url) return null;
-      const code = url.searchParams.get("user_code");
-      url.search = "";
-      if (code !== null) url.searchParams.set("user_code", code);
-      return url.href;
-    },
-    code: /^[A-Z0-9]{4,12}(?:-[A-Z0-9]{2,12}){0,3}$/,
-    label: /^[^:]*\b(?:login|code):\s+/i,
-  },
-  cursor: {
-    // cursor-agent 2026.10.22 prints "Open a browser and navigate to this link: https://cursor.com/loginDeepControl?…"
-    // and waits for that sign-in. Its query names the sign-in request (a PKCE challenge and a request id) the CLI then
-    // collects, never a token; only those and Cursor's own flags may ride in it.
-    page: (value) => {
-      const url = providerPage(value, /^(www\.)?cursor\.com$/);
-      if (!url || url.pathname !== "/loginDeepControl") return null;
-      const keys = [...url.searchParams.keys()];
-      const known = keys.every((key) => ["challenge", "uuid", "mode", "redirectTarget", "supportsSelectedTeamLogin"].includes(key));
-      const request = /^[\w-]{16,128}$/.test(url.searchParams.get("challenge") ?? "") && /^[\w-]{8,64}$/.test(url.searchParams.get("uuid") ?? "");
-      return known && request && new Set(keys).size === keys.length ? url.href : null;
-    },
-    code: null,
-    label: /^[^:]*\blink:\s+/i,
-  },
-};
+const RULES: Record<string, { code?: RegExp; page?: string }> = {};
 
 /** Whether this provider's CLI prints a code to enter, or only a link that finishes the sign-in. */
 export function deviceSignInHasCode(provider: DeviceSignInProvider): boolean {

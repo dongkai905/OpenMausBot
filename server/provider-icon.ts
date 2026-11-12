@@ -29,15 +29,12 @@ const SERVER_HOSTS: Record<string, ProviderIconPreset> = {
   "bedrock-runtime.*.amazonaws.com": "aws",
   "generativelanguage.googleapis.com": "google", "aiplatform.googleapis.com": "google", "*-aiplatform.googleapis.com": "google",
   "api.x.ai": "xai",
-  "api.deepseek.com": "deepseek",
   "dashscope.aliyuncs.com": "qwen", "dashscope-*.aliyuncs.com": "qwen",
   "*.*.maas.aliyuncs.com": "qwen",
-  "api.moonshot.ai": "moonshot", "api.moonshot.cn": "moonshot",
-  "api.mistral.ai": "mistral", "codestral.mistral.ai": "mistral",
+  
   "api.cohere.com": "cohere", "api.cohere.ai": "cohere",
   "openrouter.ai": "openrouter", "*.openrouter.ai": "openrouter",
   "api.anthropic.com": "anthropic",
-  "api.llama.com": "meta", "api.meta.ai": "meta",
 };
 const SERVER_MARKS = Object.entries(SERVER_HOSTS).map(([host, preset]) =>
   [new RegExp(`^${host.replaceAll(".", "\\.").replaceAll("*", "[a-z0-9-]+")}$`), preset] as const);

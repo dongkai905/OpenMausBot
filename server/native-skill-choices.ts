@@ -1,4 +1,4 @@
-// Per-bot switches for skills the engine loads by itself (Codex ~/.codex/skills and ~/.agents/skills, Claude project
+// Per-bot switches for skills the engine loads by itself (the agent skill foldersoject
 // skills, …). Off stays off across restarts; personal skill folders are never deleted.
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

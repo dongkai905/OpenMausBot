@@ -18,34 +18,9 @@ type EngineRow = Pick<EngineCapabilities, "resume" | "stepCap"> & { transcript?:
 const CHAT_ROW: EngineRow = { resume: false, stepCap: CHAT_STEP_CAP, transcript: true };
 
 const ENGINES: Readonly<Record<string, EngineRow>> = {
-  claudeAgent: { resume: true },
-  codex: { resume: true },
-  piAgent: { resume: true },
-  antigravityAgent: { resume: true },
-  grokAgent: { resume: true },
-  geminiAgent: { resume: true },
-  kimiAgent: { resume: true },
-  droidAgent: { resume: true },
-  cursorAgent: { resume: true },
-  museCode: { resume: true },
-  opencodeGo: { resume: true },
-  qwenAgent: { resume: true },
-  hermesAgent: { resume: true },
-  deepseekAgent: { resume: true },
-  clineAgent: { resume: true },
-  copilotAgent: { resume: true },
-  commandCodeAgent: { resume: true },
-  kiroAgent: { resume: true },
   customAcp: { resume: true },
   "openai-compat": CHAT_ROW,
   grok: CHAT_ROW,
-  minimax: CHAT_ROW,
-  mistral: CHAT_ROW,
-  cerebras: CHAT_ROW,
-  groq: CHAT_ROW,
-  greenference: CHAT_ROW,
-  modelgo: CHAT_ROW,
-  meta: CHAT_ROW,
 };
 
 export function replaysTranscriptNatively(driverKind: string | undefined): boolean {

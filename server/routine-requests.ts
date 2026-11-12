@@ -285,7 +285,7 @@ function normalizeSchedule(schedule: RoutineToolScheduleInput, now: number, ownE
   }
   if (schedule.type === "limit_reset") {
     const engine = (schedule.engine ?? ownEngine ?? "").trim();
-    if (!ENGINE_ID.test(engine)) throw new RoutineRequestError("engine must be an engine id such as claude or codex");
+    if (!ENGINE_ID.test(engine)) throw new RoutineRequestError("engine must be an engine id");
     return { type: "limit_reset", engine, repeat: schedule.repeat ?? "once" };
   }
   if (schedule.type === "once") {

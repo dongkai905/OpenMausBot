@@ -24,7 +24,6 @@ export const SPAWNED_PROXIES = {
   phone: resolveProxy("drivers/phone-proxy"),
   chatgptPlanToken: resolveProxy("drivers/chatgpt-plan-token-command"),
   hook: resolveProxy("hooks/omb-hook"),
-  piMcpExtension: resolveProxy("drivers/pi-mcp-extension"),
 } as const;
 
 // in the packaged app process.execPath is Electron — run the proxy as node
