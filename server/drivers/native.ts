@@ -58,7 +58,7 @@ export function streamedFragment(source: string, msg: unknown): boolean {
   if (msg === null || typeof msg !== "object") return false;
   const record = msg as Record<string, unknown>;
   if (source === "claude.sdk.message") return record.type === "stream_event" && (record.event as { type?: unknown } | undefined)?.type === "content_block_delta";
-  if (source === "codex.app-server") return typeof record.method === "string" && record.method.startsWith("item/") && /delta$/i.test(record.method);
+  if (source === "legacy.app-server") return typeof record.method === "string" && record.method.startsWith("item/") && /delta$/i.test(record.method);
   if (source === "pi.rpc") return record.type === "message_update" || record.type === "tool_execution_update";
   return false;
 }

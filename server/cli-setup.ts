@@ -132,24 +132,7 @@ interface NativeChoice {
   note?: string;
 }
 
-const NATIVE: readonly NativeChoice[] = [
-  { id: "codex", driver: "codex", label: "ChatGPT / Codex — sign in with your account", cli: "codex", pkg: "@openai/codex", login: ["login"] },
-  { id: "claude", driver: "claudeAgent", label: "Claude Code — sign in with your account", cli: "claude", pkg: "@anthropic-ai/claude-code", login: ["auth", "login"] },
-  {
-    id: "kimi", driver: "kimiAgent", label: "Kimi Code — sign in with your Kimi account", cli: "kimi", pkg: "@moonshot-ai/kimi-code",
-    login: ["login"], note: "Kimi shows a code and a link; open the link in any browser and approve the sign-in.",
-  },
-  {
-    id: "gemini", driver: "geminiAgent", label: "Gemini CLI — Gemini API key", cli: "gemini", pkg: "@google/gemini-cli",
-    key: { env: "GEMINI_API_KEY", url: "https://aistudio.google.com/apikey" },
-    // Google stopped serving Gemini CLI to consumer Google sign-ins on 2026-06-18.
-    note: "Gemini CLI no longer accepts personal Google sign-ins; use a Gemini API key. For a Google account, use the Antigravity engine in the app.",
-  },
-  {
-    id: "deepseek", driver: "deepseekAgent", label: "DeepSeek Harness — DeepSeek API key", cli: "dsh", pkg: "@deepseek-ai/dsh",
-    key: { env: "DEEPSEEK_API_KEY", url: "https://platform.deepseek.com/api_keys" },
-  },
-];
+const NATIVE: readonly NativeChoice[] = [];
 
 const NATIVE_DRIVERS = new Set(NATIVE.map((n) => n.driver));
 
@@ -179,7 +162,7 @@ async function connectNative(
       io.log("The key will be stored in your private config.json (plaintext, owner-only permissions on Unix). Never share this file.");
     } else {
       let args = [...(choice.login ?? [])];
-      if (choice.id === "codex") {
+    if (false) {
         const method = await io.choose("How would you like to sign in?", [
           "Open a browser on this computer", "Use a device code (SSH / remote server)",
         ], process.env.SSH_CONNECTION ? 1 : 0);

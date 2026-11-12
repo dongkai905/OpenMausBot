@@ -1,60 +1,10 @@
 import type { AnyProviderDriver } from "../contracts.ts";
-import { AntigravityDriver } from "./antigravity.ts";
-import { ClaudeDriver } from "./claude.ts";
-import { CodexDriver } from "./codex.ts";
-import { GrokDriver } from "./grok.ts";
-import { GrokAgentDriver } from "./acp/grok.ts";
-import { GeminiAgentDriver } from "./acp/gemini.ts";
-import { KimiAgentDriver } from "./acp/kimi.ts";
-import { DroidAgentDriver } from "./acp/droid.ts";
-import { CursorAgentDriver } from "./acp/cursor.ts";
-import { OpenCodeDriver } from "./acp/opencode-go.ts";
-import { QwenAgentDriver } from "./acp/qwen.ts";
 import { CustomAcpDriver } from "./acp/custom.ts";
-import { HermesAgentDriver } from "./acp/hermes.ts";
-import { DeepSeekAgentDriver } from "./acp/deepseek.ts";
-import { ClineAgentDriver } from "./acp/cline.ts";
-import { CopilotAgentDriver } from "./acp/copilot.ts";
-import { CommandCodeAgentDriver } from "./acp/command-code.ts";
-import { KiroAgentDriver } from "./acp/kiro.ts";
-import { OpenAICompatDriver } from "./openai-compat.ts";
-import { PiDriver } from "./pi.ts";
-import { MistralDriver } from "./mistral.ts";
-import { CerebrasDriver } from "./cerebras.ts";
-import { GroqDriver } from "./groq.ts";
-import { GreenferenceDriver } from "./greenference.ts";
-import { ModelgoDriver } from "./modelgo.ts";
-import { MetaDriver } from "./meta.ts";
-import { MuseCodeDriver } from "./muse-code.ts";
-import { MinimaxDriver } from "./minimax.ts";
 
+// 步 6 / Task-135（路线 B 物理剥夺）：原生大模型引擎层已**物理删除**
+// （嫁接方案 v4 §2.4「明确不接清单」）。
+// 只留 `customAcp` 一个引擎位 —— 外壳自己的引擎能力不再存在于代码里，
+// 因此**不能靠运行时拦截绕过**（强制力来自架构剥夺）。
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
-  GrokDriver,
-  GrokAgentDriver,
-  GeminiAgentDriver,
-  KimiAgentDriver,
-  DroidAgentDriver,
-  CursorAgentDriver,
-  OpenCodeDriver,
-  QwenAgentDriver,
-  HermesAgentDriver,
-  ClineAgentDriver,
-  CopilotAgentDriver,
-  CommandCodeAgentDriver,
-  KiroAgentDriver,
   CustomAcpDriver,
-  PiDriver,
-  OpenAICompatDriver,
-  ClaudeDriver,
-  CodexDriver,
-  AntigravityDriver,
-  MinimaxDriver,
-  MistralDriver,
-  CerebrasDriver,
-  GroqDriver,
-  GreenferenceDriver,
-  ModelgoDriver,
-  MetaDriver,
-  MuseCodeDriver,
-  DeepSeekAgentDriver,
 ];

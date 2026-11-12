@@ -47,7 +47,6 @@ export function claudeProjectSlug(cwd: string): string {
 const ENGINE_STATE: ReadonlyArray<{ variable: string; home: string; sessions: readonly string[]; private: readonly string[] }> = [
   { variable: "CLAUDE_CONFIG_DIR", home: ".claude", sessions: ["projects", "file-history", "session-env", "todos", "debug"],
     private: ["history.jsonl", "shell-snapshots", "plans", "paste-cache"] },
-  { variable: "CODEX_HOME", home: ".codex", sessions: ["sessions", "archived_sessions"], private: ["history.jsonl", "log", "shell_snapshots"] },
 ];
 
 function moveEntry(from: string, to: string): void {

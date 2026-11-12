@@ -9,7 +9,7 @@ import { roomSessionsEnabled } from "../room-context-settings.ts";
 import type { Message } from "../store.ts";
 import { isRoomContextMessage, type RoomLine, type RoomWindow } from "./room-transcript.ts";
 
-export const ROOM_SESSION_ENGINES: Readonly<Record<string, string>> = { claudeAgent: "CLAUDE" };
+export const ROOM_SESSION_ENGINES: Readonly<Record<string, string>> = {};
 
 // Known gap: a process kept warm past this (prompt-cache keep-warm) goes on in the recorded session after a start, so a line can be sent twice.
 export function roomSessionIdleMs(driverKind: string, env: Record<string, string | undefined> = process.env): number | undefined {

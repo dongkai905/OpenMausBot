@@ -94,30 +94,16 @@ export function thisMachine(): SetupMachine {
 type ToolFormat = "claudeJson" | "json" | "toml";
 
 const CONFIG_MAX_BYTES = 1024 * 1024;
-/** ~/.claude.json also keeps every project's history, so it can be large; only its mcpServers member is parsed. */
 const CLAUDE_JSON_MAX_BYTES = 256 * 1024 * 1024;
 
 /** Every path finding reads, and nothing else. */
 export function setupPaths(machine: Pick<SetupMachine, "home" | "platform" | "env">) {
   const { home, platform, env } = machine;
   const absolute = (value: string | undefined) => (value && isAbsolute(value) ? value : null);
-  const codexHome = absolute(env.CODEX_HOME) ?? join(home, ".codex");
-  const desktop = platform === "darwin" ? join(home, "Library", "Application Support", "Claude")
-    : platform === "win32" ? join(absolute(env.APPDATA) ?? join(home, "AppData", "Roaming"), "Claude")
-      : join(home, ".config", "Claude");
-  const codexLabel = codexHome === join(home, ".codex") ? "~/.codex/skills" : "$CODEX_HOME/skills";
   return {
-    codexHome,
     skills: [
-      { source: "claudeCode", root: join(home, ".claude", "skills"), label: "~/.claude/skills" },
-      { source: "codex", root: join(codexHome, "skills"), label: codexLabel },
     ] satisfies Array<{ source: SkillSource; root: string; label: string }>,
     tools: [
-      { source: "claudeCode", path: join(home, ".claude.json"), format: "claudeJson", max: CLAUDE_JSON_MAX_BYTES },
-      { source: "claudeDesktop", path: join(desktop, "claude_desktop_config.json"), format: "json", max: CONFIG_MAX_BYTES },
-      { source: "cursor", path: join(home, ".cursor", "mcp.json"), format: "json", max: CONFIG_MAX_BYTES },
-      { source: "codex", path: join(codexHome, "config.toml"), format: "toml", max: CONFIG_MAX_BYTES },
-      { source: "gemini", path: join(home, ".gemini", "settings.json"), format: "json", max: CONFIG_MAX_BYTES },
     ] satisfies Array<{ source: SetupSource; path: string; format: ToolFormat; max: number }>,
   };
 }
@@ -215,7 +201,6 @@ function placesFor(machine: SetupMachine): Places {
     return [...new Set([...spellings, ...(found ? [found.path] : [])])];
   };
   const paths = setupPaths(machine);
-  const toolHomes = [join(machine.home, ".claude"), paths.codexHome, join(machine.home, ".gemini"), join(machine.home, ".cursor")].flatMap(forms);
   const roots = new Map<string, string>();
   for (const { root } of paths.skills) {
     const found = locate(machine, { homes, darwin }, root);
@@ -227,7 +212,6 @@ function placesFor(machine: SetupMachine): Places {
 }
 
 /** A skill folder must stay a skill folder wherever its link leads: never a skills folder itself, nor a place in a
- * tool's own folder (~/.claude, $CODEX_HOME, ~/.gemini, ~/.cursor) outside its skills. */
 function skillFolderAllowed(places: Places, real: string): boolean {
   if (places.homes.some((home) => within(real, home)) || places.skillRoots.some((root) => samePath(root, real))) return false;
   return !places.toolHomes.some((tool) => within(tool, real)) || places.skillRoots.some((root) => within(root, real));
@@ -382,11 +366,10 @@ function skillInput(machine: SetupMachine, skill: FoundSkill, budget: { bytes: n
   };
 }
 
-/** The person's own Claude Code skills, read as an import reads them, for a server that cannot see this computer's
- * ~/.claude/skills: it keeps them as imported skills. */
+/** The person's own agent skills, read as an import reads them. */
 export function claudeCodeSkillInputs(machine: SetupMachine = thisMachine()): ImportedSkillInput[] {
-  const budget = { bytes: 0 };
-  return findSkills(machine).filter((skill) => skill.source === "claudeCode").map((skill) => skillInput(machine, skill, budget).input);
+  // 步 6 / Task-135：厂商专属技能目录已删除，这里不再有可导入的厂商技能。
+  return [];
 }
 
 /** One copy for every bot, made once however many bots there are or will be. One the scan flags comes in switched off:
@@ -565,7 +548,7 @@ function textValues(value: unknown): Record<string, string> | undefined {
 /** Each tool's entry in the {"mcpServers": …} shape Paste config takes. Token variables are not resolved: the person
  * adds the token as a header when they test the server. */
 function pasteEntry(source: SetupSource, raw: Record<string, unknown>): Record<string, unknown> {
-  const headers = textValues(source === "codex" ? raw.http_headers : raw.headers);
+  const headers = textValues(raw.headers);
   const remote = (type: "http" | "sse", url: unknown) => ({ type, url, ...(headers ? { headers } : {}) });
   if (source === "gemini") {
     if (typeof raw.httpUrl === "string") return remote("http", raw.httpUrl);
@@ -635,7 +618,6 @@ function findTools(machine: SetupMachine, current: Record<string, unknown>, host
   const present: FoundTool[] = [];
   const conflicts: FoundTool[] = [];
   const refused: FoundTool[] = [];
-  const inPlace = host.claudeUserMcp?.() === true;
   for (const tool of setupPaths(machine).tools) {
     if (inPlace && tool.source === "claudeCode") continue;
     const entries = toolEntries(machine, tool);

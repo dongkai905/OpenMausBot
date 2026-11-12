@@ -1,4 +1,4 @@
-// Device-code CLI sign-in from the app (`codex login --device-auth`, `grok login --device-auth`), or a CLI's own login
+// Device-code CLI sign-in from the app, or a CLI's own login
 // that prints one link to finish it (`cursor-agent login`), confirmed the way turns will see it; a DeviceSignIn holds the
 // per-CLI parts.
 import type { ChildProcess } from "node:child_process";

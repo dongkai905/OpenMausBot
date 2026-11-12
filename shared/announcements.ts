@@ -31,7 +31,7 @@ export type AnnouncementPlace = (typeof ANNOUNCEMENT_PLACES)[number];
 export const ADMIN_PLACES: ReadonlySet<AnnouncementPlace> = new Set(["api_keys", "ai_engines", "new_bot"]);
 
 /** Built-in marks a card may show beside its title instead of a picture. */
-export const ANNOUNCEMENT_MARKS = ["claude", "codex", "grok", "kimi", "modelgo", "greenference", "deepseek", "copilot", "kiro"] as const;
+export const ANNOUNCEMENT_MARKS = ["customAcp"] as const;
 export type AnnouncementMark = (typeof ANNOUNCEMENT_MARKS)[number];
 
 export const ANNOUNCEMENT_PLATFORMS = ["mac", "windows", "linux", "ios", "android"] as const;

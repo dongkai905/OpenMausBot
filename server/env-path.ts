@@ -58,7 +58,7 @@ function windowsKnownDirs(): string[] {
   const localAppData = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
   const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
   return [
-    join(appData, "npm"), // npm -g shims: claude, codex
+    join(appData, "npm"), // npm -g shims
     join(home, ".kimi-code", "bin"), // recover Kimi installs after a GUI launch too
     join(home, ".grok", "bin"), // x.ai installer
     join(localAppData, "agy", "bin"), // Antigravity installer

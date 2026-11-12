@@ -8,7 +8,7 @@ import { z } from "zod";
 // Claude Code's `[1m]` suffix selects a model's 1M-token context.
 export const CLAUDE_MODEL_ID = /^[a-z0-9][a-z0-9._:/-]*(?:\[1m\])?$/i;
 
-export const MANIFEST_ENGINES = ["claude", "cursor", "grok", "kimi", "antigravity"] as const;
+export const MANIFEST_ENGINES = ["customAcp"] as const;
 export type ManifestEngine = (typeof MANIFEST_ENGINES)[number];
 
 /** A model id reaches the engine's command line, so each engine keeps its own rule; a download passes the same one. */

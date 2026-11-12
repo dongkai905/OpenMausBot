@@ -17,8 +17,8 @@ import { newBotDefaultsSchema, type NewBotDefaults } from "./new-bot-defaults.ts
 import { replaySettings } from "./replay-settings.ts";
 import { EFFORT_LEVELS, type EffortLevel } from "../shared/wire.ts";
 import { isModelVariant, type InstanceConfigMap, type McpServerSpec, type ModelSelection } from "./contracts.ts";
-import { API_KEY_FLEET, DEFAULT_FLEET, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, CLAUDE_API_INSTANCE, PRODUCT_FLEET_ADDITIONS } from "./instance-fleets.ts";
-export { CLAUDE_API_INSTANCE, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, XAI_API_INSTANCE } from "./instance-fleets.ts";
+import { API_KEY_FLEET, DEFAULT_FLEET, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, PRODUCT_FLEET_ADDITIONS } from "./instance-fleets.ts";
+export { OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE } from "./instance-fleets.ts";
 import { DEFAULT_WINDOW_MINUTES, MAX_WINDOW_MINUTES } from "./cache-keepwarm.ts";
 import { PROVIDER_ICON_PRESETS, providerIconError } from "../shared/provider-icon.ts";
 import { helperStoredShape, type HelperConfig } from "./side-jobs.ts";
@@ -319,16 +319,8 @@ const appConfigSchema = z.object({
     publicUrl: z.string().url().optional(),
     phone: z.enum(["ios", "android"]).optional(),
   }).optional(),
-  mistral: z.object({ key: optionalText }).optional(),
-  cerebras: z.object({ key: optionalText }).optional(), treg: z.object({ key: optionalText }).optional(), postiz: z.object({ key: optionalText, url: optionalText }).optional(),
-  groq: z.object({ key: optionalText, url: optionalText }).optional(),
-  greenference: z.object({ key: optionalText }).optional(), modelgo: z.object({ key: optionalText }).optional(),
-  meta: z.object({ key: optionalText, url: optionalText }).optional(),
-  deepseek: z.object({ key: optionalText }).optional(),
-  xai: z.object({ key: optionalText, url: optionalText }).optional(),
-  /** Anthropic API key for Claude Code billed per token; `url` is for a proxy or test double. Never a login OAuth token. */
-  anthropic: z.object({ key: optionalText, url: optionalText, everyClaudeBot: z.boolean().optional() }).optional(),
-  /** OpenAI API key for the `openai` instance only; Codex keeps its own login. */
+treg: z.object({ key: optionalText }).optional(), postiz: z.object({ key: optionalText, url: optionalText }).optional(),
+  /** OpenAI API key for the `openai` instance only. */
   openai: z.object({ key: optionalText }).optional(),
   /** OpenRouter key, for the `openrouter` instance only. */
   openrouter: z.object({ key: optionalText }).optional(),
@@ -363,15 +355,13 @@ const appConfigSchema = z.object({
   composio: z.object({ apiKey: optionalText, userId: optionalText, sessionId: optionalText }).optional(),
   box: z.object({ token: optionalText }).optional(),
   vps: vpsConfigSchema.optional(),
-  /** OpenCode key, plus `providerKeys` for its other providers by the env name OpenCode reads; both write-only and only for its child. */
-  opencodeGo: z.object({ apiKey: optionalText, providerKeys: z.record(z.string(), z.string()).optional() }).optional(),
   /** `provider`: "elevenlabs" (default, `key`), "fish" (`fishKey`, `fishModel`), "system", "xai" (`xai.key`), "gemini" (`geminiKey`, `model`), "openai" (`openai.key`) or "chatterbox" (local; `baseUrl`, `model`). */
   tts: z.object({
     key: optionalText,
     fishKey: optionalText,
     geminiKey: optionalText,
     voice: optionalText,
-    provider: z.enum(["elevenlabs", "fish", "system", "chatterbox", "xai", "gemini", "openai"]).optional(),
+    provider: z.enum(["elevenlabs", "fish", "system", "chatterbox", "gemini", "openai"]).optional(),
     baseUrl: z
       .string()
       .trim()
@@ -419,12 +409,7 @@ const appConfigSchema = z.object({
 const storedAppConfigSchema = appConfigSchema.extend(helperStoredShape).extend({
   browserProfiles: storedBrowserProfilesSchema.optional(),
   /** Loose like mcpServers: a bad provider key is dropped later, never the whole file. */
-  opencodeGo: z.object({
-    apiKey: optionalText,
-    providerKeys: z.record(z.string(), z.unknown()).catch({})
-      .transform((keys) => Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string")))
-      .optional(),
-  }).optional(),
+  // 步 6 / Task-135：厂商引擎的凭据存储一并删除。
 });
 const appConfigPatchSchema = appConfigSchema.omit({ instances: true, mcpServers: true, cliStartup: true, customDomain: true })
   .extend({ threads: threadsPatchSchema.optional(), newBots: newBotsPatchSchema.optional(), imageGen: imageGenPatchSchema.optional() });
@@ -448,16 +433,7 @@ export interface AppConfig extends HelperConfig {
   };
   mcpServers?: Record<string, unknown>;
   language?: string; computerName?: string;
-  xai?: { key?: string; url?: string };
-  mistral?: { key?: string };
-  cerebras?: { key?: string }; treg?: { key?: string }; /** Postiz: an organisation API key and the server it belongs to (blank: Postiz Cloud). */ postiz?: { key?: string; url?: string };
-  groq?: { key?: string; url?: string };
-  greenference?: { key?: string }; modelgo?: { key?: string };
-  meta?: { key?: string; url?: string };
-  /** DeepSeek API key for the DeepSeek Harness engine (`dsh`). */
-  deepseek?: { key?: string };
-  /** `everyClaudeBot`: the key runs every Claude bot instead of its login; unset means true. */
-  anthropic?: { key?: string; url?: string; everyClaudeBot?: boolean };
+  treg?: { key?: string }; /** Postiz: an organisation API key and the server it belongs to (blank: Postiz Cloud). */ postiz?: { key?: string; url?: string };
   openai?: { key?: string };
   openrouter?: { key?: string };
   budgets?: { monthlyUsd?: number; warnAtPercent?: number };
@@ -471,8 +447,7 @@ export interface AppConfig extends HelperConfig {
   box?: { token?: string };
   /** A named host from the user's SSH config. Authentication stays with SSH. */
   vps?: { sshAlias?: string };
-  opencodeGo?: { apiKey?: string; providerKeys?: Record<string, string> };
-  tts?: { key?: string; fishKey?: string; geminiKey?: string; voice?: string; provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini" | "openai"; baseUrl?: string; model?: string; fishModel?: FishTtsModel; everyReply?: boolean };
+  tts?: { key?: string; fishKey?: string; geminiKey?: string; voice?: string; provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "gemini" | "openai"; baseUrl?: string; model?: string; fishModel?: FishTtsModel; everyReply?: boolean };
   decider?: DeciderConfig;
   imageGen?: ImageGenerationConfig;
   live?: LiveConfig;
@@ -677,9 +652,6 @@ function fallbackEnv(entry: InstanceConfigMap[string]): string[] {
     ? entry.config as { apiKeyEnv?: unknown } : {};
   const named = typeof config.apiKeyEnv === "string" && config.apiKeyEnv ? config.apiKeyEnv : undefined;
   switch (entry.driver) {
-    case "mistral": return ["MISTRAL_API_KEY"];
-    case "cerebras": return ["CEREBRAS_API_KEY"];
-    case "grok": return [named ?? "XAI_API_KEY"];
     case "openai-compat":
       return named && Object.values(API_KEY_FLEET).some((own) => (own.config as { apiKeyEnv?: string } | undefined)?.apiKeyEnv === named)
         ? [named]
@@ -730,15 +702,11 @@ export function loadConfig(): AppConfig {
     }
   }
   // Env wins over the file for every credential: the desktop shell injects them as env at spawn.
-  for (const [name, env] of [["mistral", "MISTRAL_API_KEY"], ["cerebras", "CEREBRAS_API_KEY"], ["groq", "OMB_GROQ_API_KEY"], ["meta", "OMB_META_API_KEY"],
-    ["deepseek", "OMB_DEEPSEEK_API_KEY"], ["greenference", "OMB_GREENFERENCE_API_KEY"], ["modelgo", "OMB_MODELGO_API_KEY"], ["xai", "XAI_API_KEY"]] as const) {
+  for (const [name, env] of [] as readonly (readonly [string, string])[]) {
     cfg[name] = { ...cfg[name], ...(process.env[env] !== undefined ? { key: process.env[env] } : {}) };
   }
   if (process.env.OMB_TREG_KEY !== undefined) cfg.treg = { ...cfg.treg, key: process.env.OMB_TREG_KEY }; if (process.env.OMB_POSTIZ_API_KEY !== undefined) cfg.postiz = { ...cfg.postiz, key: process.env.OMB_POSTIZ_API_KEY };
-  // Never ANTHROPIC_API_KEY: an operator's stray variable must not move every Claude bot onto API billing.
-  cfg.anthropic = { ...cfg.anthropic };
-  if (process.env.OMB_ANTHROPIC_API_KEY !== undefined) cfg.anthropic.key = process.env.OMB_ANTHROPIC_API_KEY;
-  if (process.env.OMB_ANTHROPIC_API_URL !== undefined) cfg.anthropic.url = process.env.OMB_ANTHROPIC_API_URL;
+  // 步 6 / Task-135：厂商引擎的 API key 注入一并删除。
   cfg.openai = { ...cfg.openai };
   if (process.env.OMB_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.OMB_OPENAI_API_KEY;
   cfg.openrouter = { ...cfg.openrouter };
@@ -752,8 +720,6 @@ export function loadConfig(): AppConfig {
   if (process.env.COMPOSIO_API_KEY !== undefined) cfg.composio.apiKey = process.env.COMPOSIO_API_KEY;
   cfg.box = { ...cfg.box };
   if (process.env.BOX_TOKEN !== undefined) cfg.box.token = process.env.BOX_TOKEN;
-  cfg.opencodeGo = { ...cfg.opencodeGo };
-  if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
   if (process.env.OMB_TTS_KEY !== undefined) cfg.tts.key = process.env.OMB_TTS_KEY;
   const presetVoice = process.env.OMB_TTS_DEFAULT_VOICE?.trim();
@@ -788,20 +754,12 @@ export function cacheUntilConfigChanges<T>(derive: (config: AppConfig) => T): ()
 /** Keeps process.env in step with a saved credential ("" drops the var), because loadConfig() prefers env. */
 export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { imageGen?: ImageGenCredentialPatch }): void {
   const secrets: Array<[value: string | undefined, name: string]> = [
-    [patch.xai?.key, "XAI_API_KEY"],
-    [patch.mistral?.key, "MISTRAL_API_KEY"],
-    [patch.cerebras?.key, "CEREBRAS_API_KEY"], [patch.treg?.key, "OMB_TREG_KEY"], [patch.postiz?.key, "OMB_POSTIZ_API_KEY"],
-    [patch.groq?.key, "OMB_GROQ_API_KEY"],
-    [patch.greenference?.key, "OMB_GREENFERENCE_API_KEY"], [patch.modelgo?.key, "OMB_MODELGO_API_KEY"],
-    [patch.meta?.key, "OMB_META_API_KEY"],
-    [patch.deepseek?.key, "OMB_DEEPSEEK_API_KEY"],
-    [patch.anthropic?.key, "OMB_ANTHROPIC_API_KEY"],
+    [patch.treg?.key, "OMB_TREG_KEY"], [patch.postiz?.key, "OMB_POSTIZ_API_KEY"],
     [patch.openaiCompat?.key, "OPENAI_COMPAT_API_KEY"],
     [patch.openai?.key, "OMB_OPENAI_API_KEY"],
     [patch.openrouter?.key, "OMB_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
     [patch.box?.token, "BOX_TOKEN"],
-    [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
     [patch.tts?.key, "OMB_TTS_KEY"],
     [patch.tts?.fishKey, "OMB_FISH_AUDIO_API_KEY"],
     [patch.tts?.geminiKey, "OMB_GEMINI_API_KEY"],
@@ -819,7 +777,6 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
   const settings: Array<[value: string | undefined, name: string]> = [
     [patch.openaiCompat?.url, "OPENAI_COMPAT_URL"],
-    [patch.anthropic?.url, "OMB_ANTHROPIC_API_URL"],
     [patch.openaiCompat?.model, "OPENAI_COMPAT_MODEL"],
     [patch.openaiCompat?.provider, "OPENAI_COMPAT_PROVIDER"],
     ...liveSettingEnv(patch.live),
@@ -849,40 +806,6 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
   return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }
 
-export function openCodeProviderKeys(cfg: Pick<AppConfig, "opencodeGo">): Record<string, string> {
-  const saved = cfg.opencodeGo?.providerKeys ?? {};
-  const usable = Object.keys(saved).sort()
-    .filter((name) => !openCodeProviderKeyNameRefusal(name) && OPENCODE_PROVIDER_KEY_VALUE.test(saved[name] ?? ""))
-    .slice(0, OPENCODE_PROVIDER_KEY_LIMIT);
-  return Object.fromEntries(usable.map((name) => [name, saved[name]!]));
-}
-
-/** "" removes a key; every other saved key stays. */
-export function mergeOpenCodeProviderKeys(
-  cfg: Pick<AppConfig, "opencodeGo">,
-  change: Record<string, string>,
-): { ok: true; keys: Record<string, string> } | { ok: false; error: string } {
-  const keys = new Map(Object.entries(openCodeProviderKeys(cfg)));
-  for (const [name, raw] of Object.entries(change)) {
-    const value = raw.trim();
-    if (!value) {
-      keys.delete(name);
-      continue;
-    }
-    const refusal = openCodeProviderKeyNameRefusal(name);
-    if (refusal) return { ok: false, error: refusal };
-    if (!OPENCODE_PROVIDER_KEY_VALUE.test(value)) return { ok: false, error: "That doesn't look like a key. Paste only the key, with no spaces." };
-    keys.set(name, value);
-  }
-  if (keys.size > OPENCODE_PROVIDER_KEY_LIMIT) {
-    return { ok: false, error: `OpenCode can hold up to ${OPENCODE_PROVIDER_KEY_LIMIT} provider keys. Remove one you no longer use, then add this one.` };
-  }
-  return { ok: true, keys: Object.fromEntries([...keys].sort(([a], [b]) => (a < b ? -1 : 1))) };
-}
-
-const configSaveListeners = new Set<(before: JsonObject, after: JsonObject) => void>();
-
-/** Called synchronously after each saveConfig with the file before and after; a listener must not throw. */
 export function onConfigSaved(listener: (before: JsonObject, after: JsonObject) => void): () => void {
   configSaveListeners.add(listener);
   return () => { configSaveListeners.delete(listener); };
@@ -909,7 +832,7 @@ export function saveConfig(
   const keepImageModels = keepKeysOutOfImageModels(disk, checkedPatch.imageGen);
   const storedProfiles = storedBrowserProfilesSchema.safeParse(disk.browserProfiles);
   if (storedProfiles.success) disk.browserProfiles = storedProfiles.data;
-  for (const key of ["xai", "anthropic", "mistral", "cerebras", "treg", "postiz", "groq", "greenference", "modelgo", "meta", "deepseek", "openai", "openrouter", "openaiCompat", "composio", "box", "opencodeGo", "tts", "decider", "imageGen", "live", "profile", "rooms", "mcp", "threads", "context", "memory", "localVm", "features", "budgets", "billing", "decisions", "loopGuard", "onboarding", "browserEngine", "newBots", "safetyFloor"] as const) {
+  for (const key of ["treg", "postiz", "openai", "openrouter", "openaiCompat"]) {
     const section = checkedPatch[key];
     if (!section) continue;
     const current = jsonObjectSchema.safeParse(disk[key]);
@@ -1093,30 +1016,11 @@ export function instanceOwnsRouting(
     && !workspace.some((url) => url !== undefined && sameUrl(config.url as string, url));
   const compatKeyEnv = routingDefaults?.apiKeyEnv ?? "OPENAI_COMPAT_API_KEY";
   switch (entry.driver) {
-    case "claudeAgent":
-      return claudeInstanceOwnsRouting(entry.environment);
     case "openai-compat":
       return own(config.key) || own(entry.environment?.OPENAI_COMPAT_API_KEY)
         || own(entry.environment?.[compatKeyEnv])
         || (own(config.apiKeyEnv) && config.apiKeyEnv !== compatKeyEnv)
         || ownUrl(routingDefaults?.url || cfg.openaiCompat?.url || process.env.OPENAI_COMPAT_URL || "https://openrouter.ai/api/v1");
-    case "mistral":
-      return own(entry.environment?.MISTRAL_API_KEY) || ownUrl("https://api.mistral.ai/v1");
-    case "cerebras":
-      return own(entry.environment?.CEREBRAS_API_KEY) || ownUrl("https://api.cerebras.ai/v1");
-    case "groq":
-      return own(entry.environment?.GROQ_API_KEY) || ownUrl("https://api.groq.com/openai/v1", cfg.groq?.url);
-    case "greenference":
-      return own(entry.environment?.GREENFERENCE_API_KEY) || ownUrl("https://llm.eu.greenference.com/v1");
-    case "modelgo": return own(entry.environment?.MODELGO_API_KEY) || ownUrl("https://api.modelgo.ai/v1");
-    case "meta":
-      return own(entry.environment?.META_API_KEY) || ownUrl("https://api.meta.ai/v1", cfg.meta?.url);
-    case "deepseekAgent":
-      // A second DeepSeek Harness account brings its own key; the workspace key fills only an instance without one.
-      return own(entry.environment?.DEEPSEEK_API_KEY);
-    case "grok":
-      return own(entry.environment?.XAI_API_KEY) || (own(config.apiKeyEnv) && config.apiKeyEnv !== "XAI_API_KEY")
-        || ownUrl("https://api.x.ai/v1", cfg.xai?.url);
     default:
       return false;
   }
@@ -1125,14 +1029,6 @@ export function instanceOwnsRouting(
 /** Each secret goes only to the driver that reads it; the Boat token reaches no engine. */
 function injectedEnvironment(cfg: AppConfig, instanceId: string, driver: string): Map<string, string> {
   const environment = new Map<string, string>();
-  if (driver === "mistral" && cfg.mistral?.key) environment.set("MISTRAL_API_KEY", cfg.mistral.key);
-  if (driver === "cerebras" && cfg.cerebras?.key) environment.set("CEREBRAS_API_KEY", cfg.cerebras.key);
-  if (driver === "groq" && cfg.groq?.key) environment.set("GROQ_API_KEY", cfg.groq.key);
-  if (driver === "greenference" && cfg.greenference?.key) environment.set("GREENFERENCE_API_KEY", cfg.greenference.key); if (driver === "modelgo" && cfg.modelgo?.key) environment.set("MODELGO_API_KEY", cfg.modelgo.key);
-  if (driver === "meta" && cfg.meta?.key) environment.set("META_API_KEY", cfg.meta.key);
-  if (driver === "deepseekAgent" && cfg.deepseek?.key) environment.set("DEEPSEEK_API_KEY", cfg.deepseek.key);
-  if (driver === "grok" && cfg.xai?.key) environment.set("XAI_API_KEY", cfg.xai.key);
-  if (driver === "claudeAgent") for (const [name, value] of Object.entries(anthropicKeyEnv(cfg.anthropic, instanceId === CLAUDE_API_INSTANCE))) environment.set(name, value);
   if (driver === "openai-compat" && instanceId === OPENAI_API_INSTANCE) {
     if (cfg.openai?.key) environment.set("OMB_OPENAI_API_KEY", cfg.openai.key);
   } else if (driver === "openai-compat" && instanceId === OPENROUTER_API_INSTANCE) {
@@ -1143,24 +1039,12 @@ function injectedEnvironment(cfg: AppConfig, instanceId: string, driver: string)
     if (driver === "openai-compat" && cfg.openaiCompat?.url)
       environment.set("OPENAI_COMPAT_URL", cfg.openaiCompat.url);
   }
-  if (driver === "opencodeGo") {
-    for (const [name, key] of Object.entries(openCodeProviderKeys(cfg))) environment.set(name, key);
-    if (cfg.opencodeGo?.apiKey) environment.set("OPENCODE_API_KEY", cfg.opencodeGo.apiKey);
-  }
   return environment;
 }
 
 export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
   const configured = cfg.instances && Object.keys(cfg.instances).length ? cfg.instances : null;
   const map: InstanceConfigMap = withoutComputerEngine(configured ? { ...configured } : { ...DEFAULT_FLEET });
-  if (
-    configured &&
-    (Object.hasOwn(configured, "claude") || Object.hasOwn(configured, "grok") || Object.hasOwn(configured, "codex"))
-  ) {
-    for (const [id, entry] of Object.entries(PRODUCT_FLEET_ADDITIONS)) {
-      if (!Object.hasOwn(map, id)) map[id] = { ...entry };
-    }
-  }
   // Re-applied on every load so the openai/openrouter instances never fall back to the shared key and URL.
   for (const [id, builtIn] of Object.entries(API_KEY_FLEET)) {
     const saved = map[id];
@@ -1168,10 +1052,7 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
     const savedConfig = typeof saved.config === "object" && saved.config !== null && !Array.isArray(saved.config) ? saved.config : {};
     map[id] = { ...builtIn, ...saved, config: { ...(builtIn.config as object | undefined), ...savedConfig } };
   }
-  if (map.chatgpt?.driver === "codex" && !(map.chatgpt.config as { cli?: unknown } | undefined)?.cli) {
-    const cli = (map.codex?.config as { cli?: unknown } | undefined)?.cli;
-    if (typeof cli === "string" && cli) map.chatgpt = { ...map.chatgpt, config: { ...map.chatgpt.config as object, cli } };
-  }
+  // 步 6 / Task-135：厂商引擎已删除，实例表里不再有它们。
   for (const [id, sourceEntry] of Object.entries(map)) {
     // Copy: writing into the caller's persisted entry would freeze the workspace URL into it.
     const entry = { ...sourceEntry };

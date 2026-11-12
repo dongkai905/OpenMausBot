@@ -1,16 +1,9 @@
-import { MODELGO_URL } from "./modelgo.ts";
 /**
  * Credentials an agent may ask the person to provide through an inline
  * card. The id is the entire authority surface: agents never choose a
  * config path, label, URL, or arbitrary field name.
  */
 export const CREDENTIAL_TARGETS = {
-  xaiApiKey: {
-    label: "xAI API key",
-    description: "Used by the built-in Grok provider.",
-    placeholder: "xai-…",
-    helpUrl: "https://console.x.ai/",
-  },
   boxToken: {
     label: "Boat API key",
     description: "Gives bots an isolated cloud computer when Boat is selected.",
@@ -65,59 +58,11 @@ export const CREDENTIAL_TARGETS = {
     placeholder: "sk-…",
     helpUrl: "https://platform.openai.com/api-keys",
   },
-  anthropicApiKey: {
-    label: "Anthropic API key",
-    description: "Runs Claude models with your own key. Bots signed in to Claude keep using their sign-in.",
-    placeholder: "sk-ant-…",
-    helpUrl: "https://console.anthropic.com/settings/keys",
-  },
   openrouterApiKey: {
     label: "OpenRouter API key",
     description: "Runs models from many providers through OpenRouter.",
     placeholder: "sk-or-v1-…",
     helpUrl: "https://openrouter.ai/keys",
-  },
-  mistralApiKey: {
-    label: "Mistral API key",
-    description: "Runs Mistral models with your own key.",
-    placeholder: "Paste your Mistral API key",
-    helpUrl: "https://console.mistral.ai/api-keys",
-  },
-  cerebrasApiKey: {
-    label: "Cerebras API key",
-    description: "Runs Cerebras models with your own key.",
-    placeholder: "csk-…",
-    helpUrl: "https://cloud.cerebras.ai/",
-  },
-  groqApiKey: {
-    label: "Groq API key",
-    description: "Runs Groq models with your own key.",
-    placeholder: "gsk_…",
-    helpUrl: "https://console.groq.com/keys",
-  },
-  greenferenceApiKey: {
-    label: "Greenference API key",
-    description: "Runs Greenference models with your own key.",
-    placeholder: "Paste your Greenference API key",
-    helpUrl: "https://greenference.com/dashboard/tokens",
-  },
-  modelgoApiKey: {
-    label: "ModelGo API key",
-    description: "Runs ModelGo models with your own key.",
-    placeholder: "Paste your ModelGo API key",
-    helpUrl: MODELGO_URL,
-  },
-  metaApiKey: {
-    label: "Meta API key",
-    description: "Runs Meta's models with your own key.",
-    placeholder: "LLM|…",
-    helpUrl: "https://dev.meta.ai/docs/authentication",
-  },
-  deepseekApiKey: {
-    label: "DeepSeek API key",
-    description: "Runs DeepSeek models with your own key.",
-    placeholder: "sk-…",
-    helpUrl: "https://platform.deepseek.com/api_keys",
   },
 } as const;
 
@@ -127,28 +72,11 @@ export type LoginCredentialTargetId = "onePasswordToken";
 export type ConfigCredentialTargetId = Exclude<CredentialTargetId, LoginCredentialTargetId>;
 /** AI provider keys: refused where Admin manages the models, and typed only in the computer's own app or a desktop paired to it, never on a phone. */
 export const PROVIDER_CREDENTIAL_TARGETS = [
-  "openaiApiKey", "anthropicApiKey", "openrouterApiKey", "mistralApiKey", "cerebrasApiKey", "groqApiKey", "greenferenceApiKey", "modelgoApiKey", "metaApiKey", "deepseekApiKey",
+  "deepseekApiKey",
 ] as const satisfies readonly ConfigCredentialTargetId[];
 export type DesktopCredentialSlot = ConfigCredentialTargetId;
 export type CredentialConfig = {
-  xai?: { key?: string };
-  box?: { token?: string };
-  opencodeGo?: { apiKey?: string };
-  tts?: { key?: string; fishKey?: string; geminiKey?: string };
-  imageGen?: { key?: string };
-  composio?: { apiKey?: string };
-  openai?: { key?: string };
-  anthropic?: { key?: string; everyClaudeBot?: boolean };
-  openrouter?: { key?: string };
-  mistral?: { key?: string };
-  cerebras?: { key?: string };
-  groq?: { key?: string };
-  greenference?: { key?: string };
-  modelgo?: { key?: string };
-  meta?: { key?: string };
-  deepseek?: { key?: string };
   /** Not in the settings file: the server fills it from its login store. */
-  onePassword?: { connected?: boolean };
 };
 
 /** A secret OpenMausBot does not keep itself: the bot names it, and gets a one-use reference or a private file. */
@@ -184,12 +112,8 @@ export function credentialSaveRequest(id: CredentialTargetId, value: string): { 
 
 export function credentialConfigPatch(id: ConfigCredentialTargetId, value: string): CredentialConfig {
   switch (id) {
-    case "xaiApiKey":
-      return { xai: { key: value } };
     case "boxToken":
       return { box: { token: value } };
-    case "opencodeGoApiKey":
-      return { opencodeGo: { apiKey: value } };
     case "ttsKey":
       return { tts: { key: value } };
     case "geminiTtsKey":
@@ -203,35 +127,17 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
     case "openaiApiKey":
       return { openai: { key: value } };
     // Settings' first Anthropic key leaves every bot signed in to Claude on its sign-in; a card appears only while none is set.
-    case "anthropicApiKey":
-      return { anthropic: { key: value, everyClaudeBot: false } };
     case "openrouterApiKey":
       return { openrouter: { key: value } };
-    case "mistralApiKey":
-      return { mistral: { key: value } };
-    case "cerebrasApiKey":
-      return { cerebras: { key: value } };
     case "groqApiKey":
       return { groq: { key: value } };
-    case "greenferenceApiKey":
-      return { greenference: { key: value } };
-    case "modelgoApiKey":
-      return { modelgo: { key: value } };
-    case "metaApiKey":
-      return { meta: { key: value } };
-    case "deepseekApiKey":
-      return { deepseek: { key: value } };
   }
 }
 
 export function credentialIsConfigured(config: CredentialConfig, id: CredentialTargetId): boolean {
   switch (id) {
-    case "xaiApiKey":
-      return Boolean(config.xai?.key);
     case "boxToken":
       return Boolean(config.box?.token);
-    case "opencodeGoApiKey":
-      return Boolean(config.opencodeGo?.apiKey);
     case "ttsKey":
       return Boolean(config.tts?.key);
     case "geminiTtsKey":
@@ -246,24 +152,10 @@ export function credentialIsConfigured(config: CredentialConfig, id: CredentialT
       return Boolean(config.composio?.apiKey);
     case "openaiApiKey":
       return Boolean(config.openai?.key);
-    case "anthropicApiKey":
-      return Boolean(config.anthropic?.key);
     case "openrouterApiKey":
       return Boolean(config.openrouter?.key);
-    case "mistralApiKey":
-      return Boolean(config.mistral?.key);
-    case "cerebrasApiKey":
-      return Boolean(config.cerebras?.key);
     case "groqApiKey":
       return Boolean(config.groq?.key);
-    case "greenferenceApiKey":
-      return Boolean(config.greenference?.key);
-    case "modelgoApiKey":
-      return Boolean(config.modelgo?.key);
-    case "metaApiKey":
-      return Boolean(config.meta?.key);
-    case "deepseekApiKey":
-      return Boolean(config.deepseek?.key);
   }
 }
 

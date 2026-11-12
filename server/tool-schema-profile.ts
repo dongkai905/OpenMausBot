@@ -2,7 +2,7 @@
 // still validates every call against its own full schema.
 type Json = Record<string, unknown>;
 
-export type ToolSchemaProfileId = "moonshot";
+export type ToolSchemaProfileId = "generic";
 
 export interface ToolSchemaProfile {
   id: ToolSchemaProfileId;
@@ -19,7 +19,6 @@ const PROFILES: Record<ToolSchemaProfileId, ToolSchemaProfile> = {
   // undocumented size (about 13.7 KB accepted, 15 KB refused): https://github.com/MoonshotAI/kimi-code/issues/4231,
   // https://github.com/morluto/rea/issues/3654. Depth 30 is walle's default (https://github.com/MoonshotAI/walle/blob/main/conf.go).
   // Kimi Code inlines every local $ref first (normalizeKimiToolSchema in MoonshotAI/kimi-code packages/kosong).
-  moonshot: { id: "moonshot", provider: "Kimi", maxSchemaBytes: 12_000, maxDepth: 30, measureInlined: true },
 };
 
 export const TOOL_SCHEMA_PROFILE_ENV = "OMB_TOOL_SCHEMA_PROFILE";
@@ -36,14 +35,12 @@ function hostOf(url: string | undefined): string {
   try { return url ? new URL(url).hostname.toLowerCase() : ""; } catch { return ""; }
 }
 
-const MOONSHOT_HOST = /(?:^|\.)(?:moonshot\.ai|moonshot\.cn|kimi\.com|kimi\.ai)$/;
 const OPENROUTER_HOST = /(?:^|\.)openrouter\.ai$/;
 
 /** Kimi Code always reaches Moonshot. Any other engine does when its endpoint is Moonshot's own, or when OpenRouter may
  * route one of Moonshot's models to Moonshot's endpoint. */
 export function toolSchemaProfileFor(target: { engine?: string; url?: string; model?: string }): ToolSchemaProfile | undefined {
   const host = hostOf(target.url);
-  if (target.engine === "kimiAgent" || MOONSHOT_HOST.test(host)) return PROFILES.moonshot;
   if (OPENROUTER_HOST.test(host) && /^moonshotai\//i.test(target.model ?? "")) return PROFILES.moonshot;
   return undefined;
 }

@@ -52,7 +52,7 @@ export function nativeSkills(
   engine: SkillTurnEngine,
   options: { claudeUserSkills: boolean; cwd: string | null; home?: string },
 ): NativeSkill[] {
-  const project = engine.driverKind === "claudeAgent" && options.cwd ? projectSkillFolders(options.cwd, options.home ?? homedir()) : [];
+  const project = engine.driverKind === "customAcp" && options.cwd ? projectSkillFolders(options.cwd, options.home ?? homedir()) : [];
   const seen = new Set<string>();
   return [...nativeSkillFolders(engine, options), ...project].flatMap((root) => {
     let names: string[];

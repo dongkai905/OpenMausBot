@@ -182,7 +182,7 @@ function assertLocalAuthOutsideSnapshot(dataDir: string): void {
     for (const field of fields) check(environment[field], field, home);
   }
   for (const instance of Object.values(instances)) {
-    if (!record(instance) || instance.driver !== "claudeAgent" || !record(instance.config)) continue;
+    if (!record(instance) || !record(instance.config)) continue;
     const environment = { ...process.env, ...(record(instance.environment) ? instance.environment : {}) };
     check(instance.config.configDir, "config.configDir", String(environment.HOME || environment.USERPROFILE || homedir()));
   }

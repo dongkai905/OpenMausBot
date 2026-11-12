@@ -30,11 +30,7 @@ export function credentialProvider(target: unknown): KeyProvider | "other" {
   return (typeof target === "string" && CREDENTIAL_PROVIDER.get(target)) || "other";
 }
 
-export const ENGINE = [
-  "claude", "codex", "gemini", "cursor", "opencode", "qwen", "hermes", "cline", "custom_acp", "pi", "openai_compat", "grok",
-  "grok_api", "kimi", "droid", "antigravity", "minimax", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "muse_code", "deepseek", "copilot", "command_code", "kiro",
-] as const;
-export type Engine = (typeof ENGINE)[number];
+export const ENGINE = [  "claude", "codex", "gemini", "cursor", "opencode", "qwen", "hermes", "cline", "custom_acp", "pi", "openai_compat", "grok",];
 
 const ENGINE_BY_DRIVER = new Map<string, Engine>(Object.entries({
   claudeAgent: "claude", codex: "codex", geminiAgent: "gemini", cursorAgent: "cursor", opencodeGo: "opencode",

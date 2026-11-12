@@ -16,7 +16,6 @@ import { z } from "zod";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES, MAX_SUMMARY_BYTES } from "./context-rebuild.ts";
 import { draftSummary, foldPoint } from "./compaction-summary.ts";
 import { compactBudget, compactionReading, contextWindowFor, shouldCompact } from "./context-budget.ts";
-import { autoCompactWindow } from "./drivers/claude.ts";
 import { RoomContextTracker, roomResetNote } from "./room-context.ts";
 import { createRoomTranscript, GROUP_CONTEXT_MESSAGES } from "./host/room-transcript.ts";
 import { createRoomSessions } from "./host/room-sessions.ts";
@@ -54,7 +53,6 @@ import { bindSafetyFloor, denyAtSafetyFloor, heldAtSafetyFloor, safetyFloorOn } 
 import { CommandAllowlistStore, commandAllowlistCandidate } from "./command-allowlist.ts";
 import { providerMcpTool, providerToolAllowKey } from "./provider-tool-allow.ts";
 import type { CommandAllowlistCandidate, CommandAllowlistResponse } from "../shared/command-allowlist.ts";
-import { claudeAccountInfo } from "./claude-accounts.ts";
 import {
   BrowserCleanupCoordinator,
   requireBrowserCleanupAcknowledged,
@@ -179,14 +177,12 @@ import {
   vpsSshAlias,
   DATA_DIR, EVENTS_DIR,
   onConfigSaved,
-  CLAUDE_API_INSTANCE,
-  openCodeProviderKeys,
 } from "./config.ts";
 import { serveStatic } from "./static-files.ts";
 import { startUpkeep } from "./host/start-upkeep.ts";
 import { ComputerControl } from "./computer-control.ts";
 import { resetPathCache } from "./env-path.ts";
-import { registerEnginesBinDir } from "./engine-install.ts"; import { engineUpdatesFor } from "./engine-updates-host.ts";
+import { registerEnginesBinDir } from "./engine-install.ts";
 import { appendUsage, flushUsageLedger, queuedTurnTrigger, usageTriggerFor, type UsageRow, type UsageTrigger } from "./usage-ledger.ts"; import { createUsageAttribution } from "./usage-attribution.ts";
 import { createTraceRecorder } from "./usage-trace/recorder.ts";
 import { GroupUsageReader } from "./group-thread-usage.ts";
@@ -235,7 +231,6 @@ import { createGoalCards, type LiveGoalRun } from "./host/goal-cards.ts";
 import { createOneOnOneGoals } from "./host/one-on-one-goals.ts";
 
 import { BUILT_IN_DRIVERS } from "./drivers/builtIn.ts";
-import { openCodeProviderKeysAllowed, setOpenCodeProviderKeyPolicy } from "./drivers/acp/opencode-go.ts";
 import { forgetNotificationReader, liveAppRows, openCardRows, readMessageText, recallMessages, recentMessages, closeMessageSearch, closeMessageDb, chatFollowups, cancelledChatFollowup, settleChatFollowups, threadsReferencing, logNotification, lastRowAt, threadsWithCardsSince } from "./message-db.ts";
 import { briefCrossingLabel, claimRecallCrossings, recallCrossingLabel } from "./recall-disclosure.ts";
 import { parseSince, parseUntil, recentWork, recentWorkPrompt, turnOutcomeLine } from "./recent-work.ts";
@@ -614,8 +609,6 @@ import { createBrowserViewerRoutes } from "./routes/browser-viewers.ts";
 import { localDesktopTarget, localVmViewerStatus } from "./desktop-viewer-targets.ts";
 import { viewerTargetId } from "../shared/desktop-viewer.ts";
 import { createComputerPreviews } from "./computer-previews.ts";
-import { createAntigravityLeftoverRoutes } from "./routes/antigravity-leftovers.ts";
-import { createAntigravityAccountRoutes } from "./routes/antigravity-accounts.ts";
 import { createConfigRoutes } from "./routes/config.ts";
 import { createInstanceRoutes } from "./routes/instances.ts";
 import { createMcpConfig } from "./host/mcp-config.ts";
@@ -624,7 +617,6 @@ import { teamAdminSummary } from "./cloud-team-admin.ts"; import { createConnect
 import { createSetupImportRoutes } from "./routes/setup-import.ts";
 import { createComputerRoutes } from "./routes/computers.ts";
 import { createStatusRoutes } from "./routes/status.ts";
-import { findAntigravityLeftovers, removeAntigravityLeftovers } from "./drivers/antigravity-temp.ts";
 import { createLiveRoutes } from "./routes/live.ts";
 import { createNotificationRoutes, notificationListedFor } from "./routes/notifications.ts";
 import { createTodayRoutes } from "./routes/today.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts";
@@ -810,7 +802,7 @@ function customDomainStatus() {
 }
 const registry = new ProviderRegistry(BUILT_IN_DRIVERS, { statusFile: join(DATA_DIR, "providers", "engine-status.json") });
 const supportsApprovalMode = createApprovalModeSupport(registry);
-registerEnginesBinDir(); const engineUpdates = engineUpdatesFor({ drivers: BUILT_IN_DRIVERS, turnRunning: () => store.bots.some((bot) => botHasActiveTurn(bot.id)) || store.groups.some(groupIsWorking) || Boolean(routines?.hasActiveRuns()), configuredClis: () => Object.values(providerConfigs()).flatMap((entry) => { const cli = (entry.config as { cli?: unknown } | undefined)?.cli; return typeof cli === "string" && cli ? [cli] : []; }), updated: () => { registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() }); } });
+registerEnginesBinDir();
 
 // Set only when a turn is admitted, never on queue or steer, so a second person's words cannot re-book the first person's turn.
 const turnTriggers = new Map<string, UsageTrigger>();
@@ -1076,10 +1068,7 @@ function canManageCommandAllowlist(auth: RequestAuth): boolean {
   return auth.kind === "loopback" ? auth.trust !== "service" : auth.scopes.includes("admin");
 }
 
-const COMMAND_ALLOWLIST_DRIVERS = new Set([
-  "claudeAgent", "codex", "antigravityAgent", "grokAgent", "opencodeGo", "kimiAgent",
-  "droidAgent", "cursorAgent", "qwenAgent", "geminiAgent", "hermesAgent", "customAcp",
-]);
+const COMMAND_ALLOWLIST_DRIVERS = new Set(["customAcp"]);
 
 function commandAllowlistResponse(bot: BotRecord): CommandAllowlistResponse {
   const instance = registry.get(bot.modelSelection.instanceId);
@@ -1401,7 +1390,6 @@ function resyncOpenCodeProviderKeys(): void {
   if (allowed === openCodeKeysLastAllowed) return;
   openCodeKeysLastAllowed = allowed;
   for (const instance of registry.instances()) {
-    if (instance.driverKind !== "opencodeGo") continue;
     void registry.refreshModels(instance.instanceId)
       .then(() => broadcast({ kind: "config", ...configStatus() }), () => {});
   }
@@ -7077,7 +7065,7 @@ const handoffs = new Handoffs({
     .filter((m) => m.role === "bot" && m.kind === "text" && !m.from && m.turnId === turnId).map((m) => m.id),
 });
 const roomSessions = createRoomSessions({ settings: () => cfg.context, messagesFor: (threadId) => store.messagesFor(threadId) });
-const nativeCompactTokens = (instance: { driverKind: string; instanceId: string }) => instance.driverKind === "claudeAgent" ? Number(autoCompactWindow({ ...process.env, ...cfg.instances?.[instance.instanceId]?.environment })) : undefined;
+const nativeCompactTokens = (_instance: { driverKind: string; instanceId: string }): number | undefined => undefined;
 
 const loopingEngine = (threadId: string, bot = store.botByThread(threadId)) => bot ? runningTurnInstance(botForThread(bot.id, threadId), threadId)?.adapter : undefined;
 const canSteerThread = (threadId: string) => {
@@ -7827,7 +7815,7 @@ async function beginTurn(
       const externalUpdate = Boolean(opts?.coordination?.resumed || unseen?.some((m) => m.keep));
       // What a resumed session keeps from its launch; Codex reasserts model and provider on resume, but an in-flight turn and an omitted effort keep the prior selection.
       const persistentConfig = [bot.name, bot.title, bot.description, sectionContextSystemPrompt(bot.section), ...(cfg.everyBotRules?.trim() ? [cfg.everyBotRules.trim()] : []),
-        ...(instance.driverKind === "codex" ? [model, effort ?? null] : [])];
+        ...(instance.driverKind === "customAcp" ? [model, effort ?? null] : [])];
       const sessionConfig = (soul: string | undefined) =>
         createHash("sha256").update(JSON.stringify([...persistentConfig, soul])).digest("hex").slice(0, 16);
       const plannedConfig = sessionConfig(bot.soul);
@@ -7872,7 +7860,7 @@ async function beginTurn(
           resumeCursor, sessionReset: !resume, recoveryText,
           handoff: strictResume ? {
             botId: bot.id, instanceId, config, resumeCursor: typeof resumeCursor === "string" ? resumeCursor : undefined,
-            ...(instance.driverKind === "codex" ? { effort: effort ?? null } : {}),
+            ...(instance.driverKind === "customAcp" ? { effort: effort ?? null } : {}),
             started: sessionStart(contextOrder, contextTurnText !== userTurnText ? windowIds : [], carried),
             recovery: sessionStart(contextOrder, recoveryText !== undefined ? windowIds : [], carried),
             resumed: sessionStart(contextOrder, [], [...placed, ...carried]),
@@ -11726,9 +11714,6 @@ function configStatus() {
   const eventLogRetentionDays = threadEventLogRetentionDays(cfg);
   return {
     cloudStarter: cloudPlanTier.starter(), waitingForRoom: engineMemory.waiting(), planTurns: starterCaps.status(), awakeLimit: starterAwake.limit(), pausedBots: starterAwake.paused(), xai: keyStatus(cfg.xai?.key),
-    mistral: keyStatus(cfg.mistral?.key),
-    cerebras: keyStatus(cfg.cerebras?.key),
-    groq: keyStatus(cfg.groq?.key), greenference: keyStatus(cfg.greenference?.key), modelgo: keyStatus(cfg.modelgo?.key),
     meta: keyStatus(cfg.meta?.key), deepseek: keyStatus(cfg.deepseek?.key),
     xResearch: xResearchStatus(), treg: keyStatus(cfg.treg?.key), postiz: { ...keyStatus(cfg.postiz?.key), ...(cfg.postiz?.url ? { url: cfg.postiz.url } : {}) },
     anthropic: { ...keyStatus(cfg.anthropic?.key), everyClaudeBot: cfg.anthropic?.everyClaudeBot !== false },
@@ -11750,7 +11735,6 @@ function configStatus() {
     },
     box: { ...boat.describeBoatAccount(cfg), ...(boat.boatAccount(cfg)?.included ? {} : keyHint(cfg.box?.token)) },
     vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
-    opencodeGo: { ...keyStatus(cfg.opencodeGo?.apiKey), providerKeys: Object.keys(openCodeProviderKeys(cfg)) },
     tts: tts.describeVoice(cfg),
     decider: describeDecider(cfg), helpers: describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
@@ -11817,7 +11801,6 @@ function configForAccess(status: ReturnType<typeof configStatus>, admin: boolean
     edition: { edition: status.edition.edition, features: status.edition.features },
     signIn: { admins: [], members: [] }, live: liveSettingsForClient(status.live), everyBotRules: undefined,
     vps: { configured: status.vps.configured, sshAlias: "" },
-    opencodeGo: { configured: status.opencodeGo.configured, providerKeys: [] },
     ...(CLOUD_TEAM ? { onboarding } : {}), profile: CLOUD_TEAM ? profile : { name: profile.name, email: "", ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}) },
     browserProfiles: status.browserProfiles.map((profile) => Object.fromEntries(Object.entries(profile).filter(([key]) => key !== "partitionId"))),
   };
@@ -11852,7 +11835,7 @@ async function describeInstances() {
   return engines.map((instance) => {
     const entry = configs[instance.instanceId];
     const described = {
-      ...instance, ...testedAi.info(instance), ...engineUpdates.shown(instance.driverKind),
+      ...instance, ...testedAi.info(instance), 
       ...instanceLook(entry),
       ...(entry?.access ? { access: entry.access } : {}), ...(entry?.driver === "openai-compat" && typeof (entry.config as { replyWaitMinutes?: unknown } | undefined)?.replyWaitMinutes === "number" ? { replyWaitMinutes: (entry.config as { replyWaitMinutes: number }).replyWaitMinutes } : {}), ...(heldKeys?.refusal(instance.instanceId) ? { snapshot: { state: "unavailable" as const, reason: TRIAL_KEY_HELD } } : {}),
     };
@@ -11869,18 +11852,7 @@ async function describeInstances() {
       ...described, ...policy, readOnly: true, managed: managedDesktop.info(instance.instanceId),
       install: undefined, authentication: undefined, cli: undefined, cliCandidates: [],
     };
-      // Windows keeps what Antigravity's runtime unpacked whenever it is stopped by force.
-    if (instance.driverKind === "antigravityAgent" && process.platform === "win32") return { ...described, ...policy, freeUpSpace: true };
-    if (entry?.driver !== "claudeAgent") return { ...described, ...policy };
-    if (instance.instanceId === CLAUDE_API_INSTANCE) {
-      return { ...described, ...policy, authentication: undefined, install: { ...instance.install, signInCommand: undefined } };
-    }
-    try {
-      const claudeAccount = claudeAccountInfo(instance.instanceId, entry, instance.cli ?? instance.cliDefault ?? "claude");
-      return { ...described, ...policy, claudeAccount, install: { ...instance.install, signInCommand: claudeAccount.signInCommand } };
-    } catch {
-      return { ...described, ...policy, install: { ...instance.install, signInCommand: undefined } };
-    }
+    return { ...described, ...policy };
   });
 }
 
@@ -12342,22 +12314,6 @@ ROUTES.push(createThreadModelRoutes({
 ROUTES.push(createUndoRoutes({
   refusal: (auth, threadId, requestId) => cardAnswerRefusal(auth, threadId, requestId, "allow"),
   undo: (auth, res, threadId, requestId) => withDecisionActor(decisionActorFor(auth), () => undoAppliedChange(res, threadId, requestId)),
-}));
-ROUTES.push(createAntigravityLeftoverRoutes({
-  hosted: Boolean(hostedModels),
-  isAntigravity: (instanceId) => registry.get(instanceId)?.driverKind === "antigravityAgent",
-  find: () => findAntigravityLeftovers(),
-  remove: () => removeAntigravityLeftovers(),
-}));
-ROUTES.push(createAntigravityAccountRoutes({
-  instances: () => persistableInstanceConfigs(cfg),
-  persist: persistProviderInstance,
-  describe: describeInstances,
-  exclusive: (work) => {
-    if (providerConfigBusy) return null;
-    providerConfigBusy = true;
-    return work().finally(() => { providerConfigBusy = false; });
-  },
 }));
 const mcpConfig = createMcpConfig({
   cfg, sessions, mcpOAuth, teamConnections,
@@ -15384,7 +15340,7 @@ server.listen(PORT, listenHost(server), async () => {
   console.log(`openmausbot server on http://127.0.0.1:${PORT}`);
   personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startCloudHomeConnectedApps({ cloudHome: CLOUD_HOME !== null, dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.OMB_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
   void afterFirstEngineRead().then(() => { if (builtInBrowserEnabled(cfg)) chromeLauncher.start(); });
-  followupsReady = true; engineUpdates.start();
+  followupsReady = true;
   drainQueuedSends();
   drainQueuedChannelSends();
   void cloudComputerPower.armRunning();
