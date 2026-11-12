@@ -165,8 +165,6 @@
   "server.runs.state.deferred": "延期されました：対象が使用中です",
   "server.runs.state.queued": "順番待ちです",
   "server.runs.state.running": "実行中です",
-  "server.model.orgBlockedAnswered": "{picked} は組織によってオフにされているため、代わりに {answered} が回答しました。この表示を消すには、別のモデルを選んでください。",
-  "server.model.otherAnswered": "{picked} を選びましたが、代わりに {answered} が回答しました。",
   "server.incidents.where.room": "ルーム「{room}」での",
   "server.problem.failed": "{bot} で問題が発生しました：{where}実行が失敗しました",
   "server.problem.failedWhy": "{bot} で問題が発生しました：{where}実行が失敗しました：「{detail}」",

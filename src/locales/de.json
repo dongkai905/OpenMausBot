@@ -81,8 +81,6 @@
   "server.runs.state.deferred": "ist zurückgestellt: das Ziel ist beschäftigt",
   "server.runs.state.queued": "wartet auf den Start",
   "server.runs.state.running": "läuft",
-  "server.model.orgBlockedAnswered": "{picked} wurde von deiner Organisation deaktiviert, daher hat stattdessen {answered} geantwortet. Wähle ein anderes Modell, damit dieser Hinweis nicht mehr erscheint.",
-  "server.model.otherAnswered": "Du hast {picked} gewählt, aber {answered} hat stattdessen geantwortet.",
   "server.problem.failed": "{bot} hatte ein Problem: Die Ausführung {where} ist fehlgeschlagen",
   "server.problem.failedWhy": "{bot} hatte ein Problem: Die Ausführung {where} ist fehlgeschlagen: „{detail}“",
   "server.problem.stalled": "{bot} hatte ein Problem: Die Ausführung {where} wurde gestoppt, weil sie keine Aktivität mehr zeigte",

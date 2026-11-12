@@ -216,8 +216,6 @@
   "server.runs.state.deferred": "deferred: target busy",
   "server.runs.state.queued": "queued",
   "server.runs.state.running": "running",
-  "server.model.orgBlockedAnswered": "{picked} is turned off by your organization, so {answered} answered instead. Choose another model to stop seeing this.",
-  "server.model.otherAnswered": "You chose {picked}, but {answered} answered instead.",
   "server.incidents.where.room": "in the room \"{room}\"",
   "server.problem.failed": "{bot} hit a problem: its run {where} failed",
   "server.problem.failedWhy": "{bot} hit a problem: its run {where} failed: \"{detail}\"",

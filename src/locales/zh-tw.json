@@ -203,8 +203,6 @@
   "server.runs.state.deferred": "已延後：目標正忙",
   "server.runs.state.queued": "正在排隊",
   "server.runs.state.running": "正在執行",
-  "server.model.orgBlockedAnswered": "{picked} 已被你的組織關閉，因此改由 {answered} 回答。選擇其他模型即可不再看到這則訊息。",
-  "server.model.otherAnswered": "你選擇了 {picked}，但改由 {answered} 回答。",
   "server.incidents.where.room": "在房間「{room}」中",
   "server.problem.failed": "{bot} 遇到問題：{where}的執行失敗了",
   "server.problem.failedWhy": "{bot} 遇到問題：{where}的執行失敗了：「{detail}」",
