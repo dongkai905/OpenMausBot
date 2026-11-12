@@ -1,14 +1,10 @@
 // The engine reads the server makes on its own (model lists, sign-in checks) load the engine's settings, extensions and
 // MCP servers from HOME, which a boxed bot can write: each asks for the bot box, which runs it there where the box is on.
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchDeepSeekCatalog } from "../drivers/acp/deepseek.ts";
-import { fetchHermesAcpModels } from "../drivers/acp/hermes.ts";
-import { discoverOpenCodeModels } from "../drivers/acp/opencode-go.ts";
-import { fetchPiModels, updatePiModelCatalog } from "../drivers/pi.ts";
 import { execCliBoxed } from "../procs.ts";
 import { botBox } from "./box.ts";
 import type { BoxRequest } from "./plan.ts";
@@ -39,30 +35,6 @@ describe.skipIf(!posix)("the server's own engine reads ask for the bot box", () 
   }
 
   const env = (extra: Record<string, string> = {}) => ({ PATH: "/usr/bin:/bin", HOME: dir, ...extra });
-
-  it("Pi's model list and its catalog update", async () => {
-    const pi = cli("pi");
-    await fetchPiModels(pi, env({ NANO_KEY: "k" }), ["NANO_KEY"]);
-    await updatePiModelCatalog(pi, env(), []);
-    expect(asked.map((request) => [request.command, request.args[0], request.allowEnv])).toEqual([
-      [pi, "--mode", ["NANO_KEY"]], [pi, "update", []],
-    ]);
-  });
-
-  it("OpenCode's session probe and its models reads, with the instance's own keys", async () => {
-    const opencode = cli("opencode");
-    mkdirSync(join(dir, "data"), { recursive: true });
-    await discoverOpenCodeModels(env({ VENICE_API_KEY: "v" }), opencode, { refresh: true, settleMs: 1, allowEnv: ["VENICE_API_KEY"] });
-    const seen = asked.map((request) => request.args.join(" "));
-    expect(seen).toEqual(expect.arrayContaining(["models --refresh", "acp", "models --verbose"]));
-    for (const request of asked) expect(request.allowEnv).toEqual(["VENICE_API_KEY"]);
-  });
-
-  it("Hermes' and DeepSeek's catalogs", async () => {
-    await fetchHermesAcpModels(cli("hermes"), env(), ["HERMES_KEY"]);
-    await fetchDeepSeekCatalog(cli("dsh"), env(), dir, ["DEEPSEEK_API_KEY"]).catch(() => {});
-    expect(asked.map((request) => [request.args.join(" "), request.allowEnv])).toEqual([["acp", ["HERMES_KEY"]], ["--profile acp", ["DEEPSEEK_API_KEY"]]]);
-  });
 
   it("execCliBoxed answers as execCli does: output, a failing exit and a timeout", async () => {
     const script = join(dir, "say");

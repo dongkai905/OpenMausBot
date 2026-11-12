@@ -6,42 +6,25 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import type { ApprovalMode } from "../../../shared/approval-mode.ts";
 import { ensureDirs } from "../../config.ts";
 import type { ProviderDriver } from "../../contracts.ts";
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { recordEvents } from "../../testing/events.ts";
 import type { AcpConfig } from "./core.ts";
 import { CustomAcpDriver } from "./custom.ts";
-import { DroidAgentDriver } from "./droid.ts";
-import { GeminiAgentDriver } from "./gemini.ts";
-import { HermesAgentDriver } from "./hermes.ts";
-import { KimiAgentDriver } from "./kimi.ts";
-import { createOpenCodeDriver, openCodeOwnedDirectories } from "./opencode-go.ts";
-import { QwenAgentDriver } from "./qwen.ts";
 
 const FAKE_CLI = join(dirname(fileURLToPath(import.meta.url)), "../../testing/fake-acp-cli.ts");
-const OpenCodeDriver = createOpenCodeDriver(async () => ({
-  default: "opencode/fixture-model",
-  options: [{ id: "opencode/fixture-model", label: "Fixture model" }],
-}));
 
 describe("remaining ACP approval mappings", () => {
   // A mode without an argv entry here proves the stored fullAuto: true never adds a bypass flag on its own.
+  // The one engine left is the custom ACP driver, so its argv is empty: everything the CLI takes is the CLI's own.
   const cases: {
     driver: ProviderDriver<AcpConfig>;
     argv: string[];
-    native?: Partial<Record<ApprovalMode, string[]>>;
   }[] = [
-    { driver: OpenCodeDriver, argv: ["acp"] },
-    { driver: GeminiAgentDriver, argv: ["--acp"], native: { full: ["--yolo"] } },
-    { driver: QwenAgentDriver, argv: ["--acp"], native: { full: ["--yolo"], auto: ["--approval-mode", "auto"] } },
-    { driver: KimiAgentDriver, argv: ["acp"] },
-    { driver: HermesAgentDriver, argv: ["acp"] },
-    { driver: DroidAgentDriver, argv: ["exec", "-o", "acp"] },
     { driver: CustomAcpDriver, argv: [] },
   ];
-  it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native }) => {
+  it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv }) => {
     ensureDirs();
     const scratch = mkdtempSync(join(tmpdir(), "omb-approval-matrix-"));
     const dump = join(scratch, "spawn.json");
@@ -53,14 +36,10 @@ describe("remaining ACP approval mappings", () => {
       environment: {
         HOME: scratch,
         USERPROFILE: scratch,
-        HERMES_HOME: join(scratch, ".hermes"),
-        KIMI_CODE_HOME: join(scratch, ".kimi"),
         OPENMAUSBOT_PROBE_LOCAL_INJECT: "0",
         FAKE_ACP_MODE: "permission",
         FAKE_ACP_DUMP: dump,
         FAKE_ACP_RPC_DUMP: rpcDump,
-        OPENCODE_API_KEY: "fixture-only",
-        OPENCODE_PERMISSION: '{"external_directory":"ask"}',
       },
       config: { cli: FAKE_CLI, fullAuto: true },
     });
@@ -83,15 +62,7 @@ describe("remaining ACP approval mappings", () => {
         const respawned = pidOf() !== pidBefore;
         // A pooled child never rewrites its spawn dump: argv and env are evidence only for a real spawn.
         if (respawned) {
-          expect(JSON.parse(readFileSync(dump, "utf8")).argv).toEqual([...argv, ...(native?.[approvalMode] ?? [])]);
-          if (driver === OpenCodeDriver) {
-            const permission = JSON.parse(JSON.parse(readFileSync(dump, "utf8")).env.OPENCODE_PERMISSION);
-            if (approvalMode === "full") expect(permission).toMatchObject({ "*": "allow", external_directory: "allow", read: "allow", bash: "allow", edit: "allow" });
-            else expect(permission).toEqual({ external_directory: {
-              "*": "ask",
-              ...Object.fromEntries(openCodeOwnedDirectories().flatMap((directory) => [[directory, "allow"], [join(directory, "*"), "allow"]])),
-            } });
-          }
+          expect(JSON.parse(readFileSync(dump, "utf8")).argv).toEqual([...argv]);
         }
         // A respawn rewrites the rpc dump and a reuse appends to it, so only methods past the baseline are this turn's.
         const methods = JSON.parse(readFileSync(rpcDump, "utf8")) as string[];
@@ -102,13 +73,6 @@ describe("remaining ACP approval mappings", () => {
           expect(turnMethods).toContain("session/prompt");
           expect(turnMethods).not.toContain("session/new");
           expect(turnMethods).not.toContain("session/load");
-        }
-        if (driver === DroidAgentDriver) {
-          const settings = JSON.parse(readFileSync(`${dump}.config.json`, "utf8"));
-          expect(settings[0]).toEqual({
-            method: "session/set_mode",
-            params: { sessionId: "fake-acp-session", modeId: approvalMode === "full" ? "auto-high" : "normal" },
-          });
         }
         expect(await instance.adapter.respondToRequest("approval-matrix-thread", opened.requestId!, { behavior: "deny" }))
           .toBe("rejected");

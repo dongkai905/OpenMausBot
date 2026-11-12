@@ -6,10 +6,8 @@ import { cloudPlaceRefusal } from "../surface.ts";
 import { ensureDirs } from "../config.ts";
 import type { ProviderInstance } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "./builtIn.ts";
-import { ClaudeDriver } from "./claude.ts";
-import { CodexDriver } from "./codex.ts";
+import { CustomAcpDriver } from "./acp/custom.ts";
 import { OpenAICompatDriver } from "./openai-compat.ts";
-import { PiDriver } from "./pi.ts";
 
 const created: ProviderInstance[] = [];
 const onBoat = (instance: ProviderInstance) =>
@@ -54,21 +52,11 @@ describe("typed capability fields for the cloud computer", () => {
   });
 
   it("lets host-harness drivers with computer tools use the cloud computer on their own engine", async () => {
-    const claude = await keep(ClaudeDriver.create({
-      instanceId: "caps-claude", displayName: "Caps Claude", environment: {}, enabled: true,
-      config: ClaudeDriver.defaultConfig(),
+    const custom = await keep(CustomAcpDriver.create({
+      instanceId: "caps-custom", displayName: "Caps Custom", environment: {}, enabled: true,
+      config: { cli: "echo" },
     }));
-    expect(onBoat(claude)).toBe(true);
-    const codex = await keep(CodexDriver.create({
-      instanceId: "caps-codex", displayName: "Caps Codex", environment: {}, enabled: true,
-      config: CodexDriver.defaultConfig(),
-    }));
-    expect(onBoat(codex)).toBe(true);
-    const pi = await keep(PiDriver.create({
-      instanceId: "caps-pi", displayName: "Caps Pi", environment: {}, enabled: true,
-      config: PiDriver.defaultConfig(),
-    }));
-    expect(onBoat(pi)).toBe(true);
+    expect(onBoat(custom)).toBe(true);
   });
 
   it("registers no driver that runs a turn somewhere other than its own engine", async () => {

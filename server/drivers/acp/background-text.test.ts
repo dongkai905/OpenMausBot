@@ -10,10 +10,7 @@ import { removeTempDir } from "../../testing/cleanup.ts";
 import * as procs from "../../procs.ts";
 import { BACKGROUND_TEXT_TIMEOUT_MS } from "./background-text.ts";
 import { createAcpDriver, type AcpConfig, type AcpSupport } from "./core.ts";
-import { CursorAgentDriver } from "./cursor.ts";
-import { GeminiAgentDriver } from "./gemini.ts";
-import { GrokAgentDriver } from "./grok.ts";
-import { QwenAgentDriver } from "./qwen.ts";
+import { CustomAcpDriver } from "./custom.ts";
 
 const FAKE_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "testing", "fake-acp-cli.ts");
 const ENV_KEYS = ["FAKE_ACP_MODE", "FAKE_ACP_DUMP", "FAKE_ACP_TEXT_REPLY"];
@@ -41,10 +38,7 @@ describe("ACP memory one-shot (generateMemoryText)", () => {
   });
 
   it.each([
-    ["grok cli", GrokAgentDriver],
-    ["gemini", GeminiAgentDriver],
-    ["cursor", CursorAgentDriver],
-    ["qwen", QwenAgentDriver],
+    ["custom acp", CustomAcpDriver],
   ])("answers with the engine's own text on %s, in a fresh session with no MCP servers", async (_name, driver) => {
     process.env.FAKE_ACP_TEXT_REPLY = '[{"text":"The person likes jazz","kind":"preference"}]';
     process.env.FAKE_ACP_DUMP = join(scratch, "dump.json");
@@ -63,26 +57,28 @@ describe("ACP memory one-shot (generateMemoryText)", () => {
   it("runs in the interactive mode even on an instance set to full auto", async () => {
     process.env.FAKE_ACP_TEXT_REPLY = "[]";
     process.env.FAKE_ACP_DUMP = join(scratch, "dump.json");
-    await (await create(GrokAgentDriver)).generateMemoryText!("prompt");
+    await (await create(CustomAcpDriver)).generateMemoryText!("prompt");
     const { argv } = JSON.parse(readFileSync(process.env.FAKE_ACP_DUMP, "utf8"));
-    expect(argv.slice(0, 2)).toEqual(["--permission-mode", "default"]);
+    // The instance is full auto, and the one-shot still asks: it never adds a flag that would approve by itself.
+    expect(argv).not.toContain("--permission-mode");
+    expect(argv).not.toContain("--approval-mode");
   });
 
   it("fails closed when the agent reaches for a tool", async () => {
-    const engine = await create(GrokAgentDriver);
+    const engine = await create(CustomAcpDriver);
     // the default fake turn streams text and then a tool call
     await expect(engine.generateMemoryText!("prompt")).rejects.toThrow(/tried to use a tool/);
   });
 
   it("refuses a permission request instead of answering it", async () => {
     process.env.FAKE_ACP_MODE = "permission";
-    const engine = await create(GrokAgentDriver);
+    const engine = await create(CustomAcpDriver);
     await expect(engine.generateMemoryText!("prompt")).rejects.toThrow(/may not use|tried to use a tool/);
   });
 
   it("waits as long as the caller's options say", async () => {
     process.env.FAKE_ACP_MODE = "hang";
-    const engine = await create(GrokAgentDriver);
+    const engine = await create(CustomAcpDriver);
     const started = Date.now();
     await expect(engine.generateMemoryText!("prompt", { timeoutMs: 500 })).rejects.toThrow(/timed out/);
     expect(Date.now() - started).toBeLessThan(BACKGROUND_TEXT_TIMEOUT_MS);
@@ -90,7 +86,7 @@ describe("ACP memory one-shot (generateMemoryText)", () => {
 
   it("stops on abort", async () => {
     process.env.FAKE_ACP_MODE = "hang";
-    const engine = await create(GrokAgentDriver);
+    const engine = await create(CustomAcpDriver);
     const controller = new AbortController();
     const pending = engine.generateMemoryText!("prompt", { signal: controller.signal });
     setTimeout(() => controller.abort(), 200);
@@ -99,7 +95,7 @@ describe("ACP memory one-shot (generateMemoryText)", () => {
 
   it.each([false, true])("waits for process shutdown before removing its folder (tool refusal: %s)", async (refused) => {
     if (!refused) process.env.FAKE_ACP_TEXT_REPLY = "[]";
-    const engine = await create(GrokAgentDriver);
+    const engine = await create(CustomAcpDriver);
     const kill = procs.killCliTree;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });

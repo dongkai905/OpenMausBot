@@ -9,7 +9,6 @@ import {
   classifyRoutineFailure, dispatchRefusal, nextScheduledRun, retryNote, ROUTINE_BUSY_RECHECK_MS, ROUTINE_BUSY_WAIT_MS, weekRuns, type RoutineAlert,
 } from "./routine-recovery.ts";
 import { RoutineManager, type Routine, type RoutineManagerOptions, type RoutineRun } from "./routines.ts";
-import { claudeLimitError } from "./drivers/claude-limits.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -534,14 +533,17 @@ describe("weekRuns", () => {
 
 describe("a coded engine error on a run", () => {
   it("keeps its code while the stored line is whole, and drops it when the 500-character cut leaves params that cannot rebuild it", async () => {
-    for (const [said, coded] of [["Weekly limit reached.", true], ["x".repeat(500), false]] as const) {
+    for (const [said, coded] of [["You've hit your usage limit.", true], [`You've hit your usage limit. ${"x".repeat(500)}`.slice(0, 500), false]] as const) {
       const h = harness();
-      const limit = claudeLimitError(null, said, 0, "UTC");
+      // A coded engine error: the server keeps the code while its params rebuild the stored line.
+      const limit = said === "You've hit your usage limit."
+        ? { message: `An MCP server: ${said}`, text: { key: "chat.notice.elicitationMessageGeneric" as const, params: { message: said } } }
+        : { message: said, text: undefined };
       const run = await h.start(h.routine().id);
       h.fail("thread-1", limit.message, { text: limit.text });
       const stored = h.run(run.id);
       expect(stored.error).toBe(limit.message.slice(0, 500));
-      expect(stored.errorCode).toBe(coded ? "chat.notice.claudeLimitSaid" : undefined);
+      expect(stored.errorCode).toBe(coded ? "chat.notice.elicitationMessageGeneric" : undefined);
       if (coded) expect(stored.errorParams).toEqual(limit.text!.params);
       else expect(stored.errorParams).toBeUndefined();
     }

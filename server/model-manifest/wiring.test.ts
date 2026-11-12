@@ -3,8 +3,9 @@ import { dirname } from "node:path";
 import { expect, it } from "vitest";
 
 import { DATA_DIR } from "../config.ts";
-import { BUNDLED_MODEL_MANIFEST } from "./bundled.ts";
-import { modelManifestCachePath } from "./manifest.ts";
+import { listPriceFor } from "../model-prices.ts";
+import { readStartupModelCache, writeStartupModelCache } from "../startup-model-catalog.ts";
+import { currentEngineCatalog, ModelManifestStore, modelManifestCachePath } from "./manifest.ts";
 
 // The store is one per process and the drivers read it as they load, so its cache is seeded before they are imported,
 // as a later start of the app would find it.
@@ -17,46 +18,25 @@ writeFileSync(path, JSON.stringify({
     version: 1,
     updatedAt: newer,
     engines: {
-      claude: {
-        default: "claude-sonnet-5",
+      customAcp: {
+        default: "acp-synthetic-9",
         models: [
-          { id: "claude-synthetic-9", name: "Claude Synthetic 9", status: "current", contextWindow: 1_000_000, minCliVersion: "9.9.9" },
-          { id: "claude-sonnet-5", name: "Claude Sonnet 5", status: "current" },
+          { id: "acp-synthetic-9", name: "ACP Synthetic 9", status: "current", contextWindow: 1_000_000, minCliVersion: "9.9.9" },
+          { id: "acp-sonnet-5", name: "ACP Sonnet 5", status: "current" },
         ],
       },
     },
-    prices: { "claude-synthetic-9": { inputPerMillion: 7, outputPerMillion: 9, asOf: "2026-11-10", source: "https://platform.claude.com/x" } },
+    prices: { "acp-synthetic-9": { inputPerMillion: 7, outputPerMillion: 9, asOf: "2026-11-10", source: "https://example.test/x" } },
   },
 }));
 
-const [{ officialModels }, { readClaudeModelCatalog, STATIC_CLAUDE_MODELS }, { readGrokModelCatalog }, { withOrgBlocks }, { listPriceFor }, { readStartupModelCache, writeStartupModelCache }] = await Promise.all([
-  import("../agent-endpoint-models.ts"),
-  import("../drivers/claude.ts"),
-  import("../drivers/acp/grok.ts"),
-  import("../drivers/claude-model-access.ts"),
-  import("../model-prices.ts"),
-  import("../startup-model-catalog.ts"),
-]);
-
-it("a list on disk reaches the picker, the official-endpoint list and the price table", () => {
-  const catalog = readClaudeModelCatalog({ HOME: "/nonexistent-home" });
-  expect(catalog.options.map((option) => option.id)).toEqual(["claude-synthetic-9", "claude-sonnet-5"]);
-  expect(catalog.options[0]).toMatchObject({ contextWindow: 1_000_000 });
-  expect(catalog.default).toBe("claude-sonnet-5");
-  expect(officialModels(false)).toContain("claude-synthetic-9");
-  expect(listPriceFor("claude-synthetic-9")).toMatchObject({ inputPerMillion: 7, outputPerMillion: 9 });
-});
-
-it("leaves the bundled list and the org blocks working", () => {
-  expect(STATIC_CLAUDE_MODELS.options.some((option) => option.id === "claude-synthetic-9")).toBe(false);
-  const catalog = readClaudeModelCatalog({ HOME: "/nonexistent-home" });
-  const blocked = withOrgBlocks(catalog, new Set(["claude-sonnet-5"]));
-  expect(blocked.options.find((option) => option.id === "claude-sonnet-5")?.orgBlocked).toBe(true);
-});
-
-it("an engine the download left out keeps its bundled list", () => {
-  const bundled = BUNDLED_MODEL_MANIFEST.engines.grok!.models.map((model) => model.id);
-  expect(readGrokModelCatalog({ HOME: "/nonexistent-home" }).options.map((option) => option.id)).toEqual(bundled);
+it("a list on disk reaches the picker and the price table", () => {
+  const store = new ModelManifestStore({ dataDir: DATA_DIR });
+  const catalog = currentEngineCatalog("customAcp", store);
+  expect(catalog?.options.map((option) => option.id)).toEqual(["acp-synthetic-9", "acp-sonnet-5"]);
+  expect(catalog?.options[0]).toMatchObject({ contextWindow: 1_000_000 });
+  expect(catalog?.default).toBe("acp-synthetic-9");
+  expect(listPriceFor("acp-synthetic-9")).toMatchObject({ inputPerMillion: 7, outputPerMillion: 9 });
 });
 
 it("the startup list keeps a model's update mark", () => {

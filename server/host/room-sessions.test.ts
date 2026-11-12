@@ -23,7 +23,7 @@ const DAY = 24 * 60 * 60_000;
  * window, plus two idle lives, so that it outlives its record and any process the driver can still hold. */
 const READING_LIFE = Math.max(DAY, MAX_WINDOW_MINUTES * MIN) + 2 * IDLE_MS;
 
-const engine = (instanceId: string, driverKind = "claudeAgent", strictResume = true): RoomSessionEngine =>
+const engine = (instanceId: string, driverKind = "customAcp", strictResume = true): RoomSessionEngine =>
   ({ instanceId, driverKind, adapter: { capabilities: { strictResume } } });
 const colors: Record<string, string> = { editor: "green", writer: "blue", scout: "red" };
 const from = (botId: string) => ({ botId, name: botId[0]!.toUpperCase() + botId.slice(1), color: colors[botId] ?? "green" });
@@ -174,10 +174,10 @@ describe("renderRoomDelta", () => {
 });
 
 describe("which engines keep a room session", () => {
-  it("is Claude Code alone, for as long as its driver keeps a quiet process", () => {
-    expect(Object.keys(ROOM_SESSION_ENGINES)).toEqual(["claudeAgent"]);
-    expect(roomSessionIdleMs("claudeAgent", {})).toBe(10 * 60_000);
-    expect(roomSessionIdleMs("claudeAgent", { OMB_CLAUDE_SESSION_IDLE_MS: "60000" })).toBe(60_000);
+  it("is the ACP engine alone, for as long as its driver keeps a quiet process", () => {
+    expect(Object.keys(ROOM_SESSION_ENGINES)).toEqual(["customAcp"]);
+    expect(roomSessionIdleMs("customAcp", {})).toBe(10 * 60_000);
+    expect(roomSessionIdleMs("customAcp", { OMB_ACP_SESSION_IDLE_MS: "60000" })).toBe(60_000);
     for (const other of ["codex", "museCode", "piAgent", "constructor", "toString"]) expect(roomSessionIdleMs(other, {})).toBeUndefined();
   });
 });
@@ -213,7 +213,7 @@ describe("room sessions: turns that are not managed", () => {
     const recalled = "Recalled for this message:\n- the intro is 12s";
     const cases: Array<{ name: string; mode: RoomDispatch["mode"]; arrange?: (r: ReturnType<typeof room>) => void; input?: Partial<RoomDispatchInput> }> = [
       { name: "setting off", mode: "legacy", arrange: (r) => { r.state.enabled = false; } },
-      { name: "an engine that does not promise strict resume", mode: "legacy", input: { instance: engine("claude", "claudeAgent", false) } },
+      { name: "an engine that does not promise strict resume", mode: "legacy", input: { instance: engine("claude", "customAcp", false) } },
       { name: "a strict-resume engine that is not covered", mode: "legacy", input: { instance: engine("codex", "codex", true) } },
       { name: "a guest-confined turn", mode: "legacy", input: { guestConfined: true } },
       { name: "a turn without the engine-hook channel", mode: "legacy", input: { hooks: false } },
@@ -247,8 +247,8 @@ describe("room sessions: turns that are not managed", () => {
 
   it("leaves an engine that does not promise strict resume, and any engine but Claude Code, alone", () => {
     // an adapter that does not declare the capability at all (an older Claude CLI reads as false)
-    const undeclared: RoomSessionEngine = { instanceId: "claude", driverKind: "claudeAgent", adapter: { capabilities: {} } };
-    for (const instance of [engine("claude", "claudeAgent", false), undeclared, engine("codex", "codex"), engine("muse", "museCode")]) {
+    const undeclared: RoomSessionEngine = { instanceId: "claude", driverKind: "customAcp", adapter: { capabilities: {} } };
+    for (const instance of [engine("claude", "customAcp", false), undeclared, engine("codex", "codex"), engine("muse", "museCode")]) {
       const r = room();
       r.say("Cut the intro.");
       const first = r.dispatch("editor", { instance });
@@ -556,8 +556,8 @@ describe("room sessions: when a record is not trusted", () => {
     const turn = r.dispatch("editor");
     r.bind(turn);
     r.sessions.onEvent({ eventId: "x1", provider: "codex", providerInstanceId: "codex", threadId: "room", createdAt: "", turnId: turn.turnId, type: "turn.completed", ok: false } as RuntimeEvent);
-    r.sessions.onEvent({ eventId: "x2", provider: "claudeAgent", providerInstanceId: "claude", threadId: "room", createdAt: "", turnId: "another-turn", type: "turn.completed", ok: false } as RuntimeEvent);
-    r.sessions.onEvent({ eventId: "x3", provider: "claudeAgent", providerInstanceId: "claude", threadId: "elsewhere", createdAt: "", turnId: turn.turnId, type: "turn.completed", ok: false } as RuntimeEvent);
+    r.sessions.onEvent({ eventId: "x2", provider: "customAcp", providerInstanceId: "claude", threadId: "room", createdAt: "", turnId: "another-turn", type: "turn.completed", ok: false } as RuntimeEvent);
+    r.sessions.onEvent({ eventId: "x3", provider: "customAcp", providerInstanceId: "claude", threadId: "elsewhere", createdAt: "", turnId: turn.turnId, type: "turn.completed", ok: false } as RuntimeEvent);
     r.emit(turn, { type: "session.started", sessionId: "S1" });
     r.emit(turn, r.output);
     r.botSays("editor", "Trimmed.", { turnId: turn.turnId, turnTerminal: true });
@@ -1652,11 +1652,11 @@ describe("room sessions: long turns, and turns in other rooms meanwhile", () => 
   });
 
   it("keeps a reading longer than a record when the idle life is set above a day", () => {
-    // OMB_CLAUDE_SESSION_IDLE_MS may be anything up to 2^31-1 ms, and a
+    // OMB_ACP_SESSION_IDLE_MS may be anything up to 2^31-1 ms, and a
     // record lives that long; a reading must not go before it.
-    vi.stubEnv("OMB_CLAUDE_SESSION_IDLE_MS", String(30 * 60 * MIN));
+    vi.stubEnv("OMB_ACP_SESSION_IDLE_MS", String(30 * 60 * MIN));
     try {
-      expect(roomSessionIdleMs("claudeAgent")).toBe(30 * 60 * MIN);
+      expect(roomSessionIdleMs("customAcp")).toBe(30 * 60 * MIN);
       const { r } = ready();
       // turn 2 is a delta in S1 with reading 120k; S1 compacts during it, no
       // hook; it settles ok at T0, and the reading after it is 25k

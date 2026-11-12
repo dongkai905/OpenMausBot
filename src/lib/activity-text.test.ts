@@ -27,15 +27,15 @@ describe("a delegating bot's resumed line", () => {
 
 describe("server notices", () => {
   const resets = {
-    name: "error: This Claude account has reached its weekly limit, which resets Oct 22, 3:00 PM (UTC). Until then, switch this bot to another AI or Claude account.",
-    nameCode: "chat.notice.claudeLimitResets",
-    nameParams: { limit: "chat.notice.part.weeklyLimit", meanwhile: "chat.notice.part.switchAccount", resetsAt: Date.UTC(2026, 9, 22, 15), timeZone: "UTC" },
+    name: "error: This Claude account has reached its usage limit (Claude says: \"quota\"), which resets Oct 22, 3:00 PM (UTC). Until then, switch this bot to another AI.",
+    nameCode: "chat.notice.usageLimitResets",
+    nameParams: { provider: "Claude", detail: " (Claude says: \"quota\")", resets: "Oct 22, 3:00 PM (UTC)" },
   };
   const english = resets.name.slice("error: ".length);
 
   it("word the parts they name and the moment they reset, in the reader's language", () => {
     setLocale("pt-br");
-    expect(activityText(resets, english)).toBe("Esta conta do Claude atingiu o limite semanal, que será renovado em 22 de out., 15:00 (UTC). Até lá, use outra IA ou outra conta do Claude para este bot.");
+    expect(activityText(resets, english)).toBe("Esta conta de Claude atingiu o limite de uso (Claude says: \"quota\"), que será renovado em Oct 22, 3:00 PM (UTC). Até lá, troque a IA deste bot.");
     expect(activityText({ nameCode: "chat.notice.usageLimit", nameParams: { provider: "Grok", detail: " (Grok says: \"quota\")" } }, "x"))
       .toBe("Esta conta de Grok atingiu o limite de uso (Grok says: \"quota\"). Espere o limite ser renovado ou troque a IA deste bot.");
   });
@@ -43,8 +43,8 @@ describe("server notices", () => {
   it("show the server's own English in English, and when a part or the zone cannot be worded", () => {
     expect(activityText(resets, english)).toBe(english);
     setLocale("pt-br");
-    expect(activityText({ ...resets, nameParams: { ...resets.nameParams, timeZone: "Not/AZone" } }, english)).toBe(english);
-    expect(activityText({ ...resets, nameParams: { ...resets.nameParams, limit: "chat.notice.part.inventedLater" } }, english)).toBe(english);
+    // A line whose params cannot all be worded is shown as the server wrote it.
+    expect(activityText({ ...resets, nameParams: { provider: "Claude", detail: " (Claude says: \"quota\")" } }, english)).toBe(english);
   });
 
   it("word a bot's fixed line, and leave its other lines as written", () => {
@@ -95,8 +95,8 @@ describe("data that looks like a catalog key", () => {
     setLocale("pt-br");
     expect(botLineText({ text: "x", textCode: "chat.notice.webhookHome", textParams: { name: "chat.notice.part.switchAccount" } }))
       .toContain("meu webhook “chat.notice.part.switchAccount”");
-    expect(activityText({ nameCode: "chat.notice.claudeLimitSaid", nameParams: { limit: "chat.notice.part.weeklyLimit", meanwhile: "chat.notice.part.chooseModel", said: "chat.notice.part.switchAccount" } }, "x"))
-      .toBe("Esta conta do Claude atingiu o limite semanal (o Claude diz: “chat.notice.part.switchAccount”). Por enquanto, escolha outro modelo para este bot.");
+    expect(activityText({ nameCode: "chat.notice.toolCount", nameParams: { provider: "Grok", limit: "chat.notice.part.usageLimit" } }, "x"))
+      .toBe("Grok recusou esta sessão porque o limite de ferramentas deste modelo é limite de uso e este bot oferece mais, mesmo com as listas reduzidas. Nada foi executado. Desligue alguns apps ou servidores MCP deste bot, ou mude para outro modelo.");
     expect(routineLineText("routines.server.waitingToStart", "Waiting to start: routines.server.part.stalled", { failure: "routines.server.part.stalled" }))
       .toBe("Esperando para começar. Motivo: routines.server.part.stalled");
   });
@@ -122,15 +122,15 @@ describe("what a reader is shown of a stored line", () => {
 });
 
 describe("a run's coded engine error as the routine page shows it", () => {
-  const whole = "This Claude account has reached its usage limit (Claude says: \"Weekly limit reached\"). For now, switch this bot to another AI or Claude account.";
-  const params = { limit: "chat.notice.part.usageLimit", meanwhile: "chat.notice.part.switchAccount", said: "Weekly limit reached" };
+  const whole = "Grok refused this turn because this model takes at most usage limit tools and this bot offers more, even with its tool lists trimmed, so nothing ran. Turn off some of this bot's apps or MCP servers, or switch the bot to another model.";
+  const params = { provider: "Grok", limit: "chat.notice.part.usageLimit" };
 
   it("is worded while it is whole, and shown in English once the server cut it and dropped its code", () => {
     setLocale("pt-br");
-    expect(routineRunText({ error: whole, errorCode: "chat.notice.claudeLimitSaid", errorParams: params } as unknown as RoutineRun, "error"))
-      .toBe("Esta conta do Claude atingiu o limite de uso (o Claude diz: “Weekly limit reached”). Por enquanto, use outra IA ou outra conta do Claude para este bot.");
-    const cut = `This Claude account has reached its usage limit (Claude says: "${"x".repeat(500)}`.slice(0, 500);
+    expect(routineRunText({ error: whole, errorCode: "chat.notice.toolCount", errorParams: params } as unknown as RoutineRun, "error"))
+      .toBe("Grok recusou esta sessão porque o limite de ferramentas deste modelo é limite de uso e este bot oferece mais, mesmo com as listas reduzidas. Nada foi executado. Desligue alguns apps ou servidores MCP deste bot, ou mude para outro modelo.");
+    const cut = `Grok refused this turn because this model takes at most ${"x".repeat(500)}`.slice(0, 500);
     expect(routineRunText({ error: cut } as unknown as RoutineRun, "error")).toBe(cut);
-    expect(routineRunText({ error: cut, errorCode: "chat.notice.claudeLimitSaid", errorParams: { ...params, said: "x".repeat(500) } } as unknown as RoutineRun, "error")).toBe(cut);
+    expect(routineRunText({ error: cut, errorCode: "chat.notice.toolCount", errorParams: { ...params, limit: "x".repeat(500) } } as unknown as RoutineRun, "error")).toBe(cut);
   });
 });
