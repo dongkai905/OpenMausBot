@@ -87,8 +87,7 @@ for (const list of [...clusters.values()].sort((a, b) => b.length - a.length)) {
 console.log(`[tsc-shard] clusters=${clusters.size} shards=${shards.length} max_files_per_shard=${args.maxFiles}`);
 
 const shardConfigs = [];
-const perCode = new Map();
-const perFile = new Map();
+const diagnostics = new Map();
 const results = [];
 let totalErrors = 0;
 let killedShards = 0;
@@ -120,18 +119,17 @@ shards.forEach((shardFiles, index) => {
       const whole = globalRe.exec(trimmed);
       if (whole) {
         errors += 1;
-        perCode.set(whole[1], (perCode.get(whole[1]) ?? 0) + 1);
         globalErrors.push(trimmed);
       }
       continue;
     }
     errors += 1;
     const file = path.relative(ROOT, path.resolve(ROOT, match[1]));
-    perCode.set(match[4], (perCode.get(match[4]) ?? 0) + 1);
-    if (!perFile.has(file)) perFile.set(file, { count: 0, codes: {} });
-    const record = perFile.get(file);
-    record.count += 1;
-    record.codes[match[4]] = (record.codes[match[4]] ?? 0) + 1;
+    // A file pulled into several shards (as an import of a shard's own file) is reported by each of them, so the
+    // diagnostics are kept by position and counted once. Counting them per shard inflates the total many times over.
+    diagnostics.set(`${file}:${match[2]}:${match[3]}:${match[4]}`, {
+      file, line: Number(match[2]), column: Number(match[3]), code: match[4], message: match[5],
+    });
   }
   if (killed) killedShards += 1;
   totalErrors += errors;
@@ -147,16 +145,28 @@ for (const name of shardConfigs) {
   try { fs.unlinkSync(path.join(ROOT, name)); } catch { /* the file is already gone */ }
 }
 
+// The same file can sit in several shards, so the counts above are per shard. These are the real ones.
+const unique = [...diagnostics.values()];
+const uniqueCode = new Map();
+const uniqueFile = new Map();
+for (const item of unique) {
+  uniqueCode.set(item.code, (uniqueCode.get(item.code) ?? 0) + 1);
+  if (!uniqueFile.has(item.file)) uniqueFile.set(item.file, { count: 0, codes: {} });
+  const record = uniqueFile.get(item.file);
+  record.count += 1;
+  record.codes[item.code] = (record.codes[item.code] ?? 0) + 1;
+}
+
 console.log("");
-console.log(`SHARDS=${shards.length} KILLED_SHARDS=${killedShards} TOTAL_ERRORS=${totalErrors}`);
-if (killedShards > 0) console.log(`!!! ${killedShards} shards were killed: TOTAL_ERRORS is a lower bound, not the final count`);
-console.log("--- by code ---");
-for (const [code, n] of [...perCode.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${code}: ${n}`);
-console.log("--- by file (top 20) ---");
-for (const [file, record] of [...perFile.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 20)) {
+console.log(`SHARDS=${shards.length} KILLED_SHARDS=${killedShards} REPORTED_ERRORS=${totalErrors} UNIQUE_ERRORS=${unique.length}`);
+if (killedShards > 0) console.log(`!!! ${killedShards} shards were killed: the counts above are a lower bound, not the final count`);
+console.log("--- by code (unique) ---");
+for (const [code, n] of [...uniqueCode.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${code}: ${n}`);
+console.log("--- by file (unique, top 20) ---");
+for (const [file, record] of [...uniqueFile.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 20)) {
   console.log(`  ${String(record.count).padStart(5)}  ${file}  ${JSON.stringify(record.codes)}`);
 }
-console.log(`FILES_WITH_ERRORS=${perFile.size}`);
+console.log(`FILES_WITH_ERRORS=${uniqueFile.size}`);
 
 if (args.out) {
   fs.writeFileSync(path.resolve(ROOT, args.out), JSON.stringify({
@@ -165,11 +175,12 @@ if (args.out) {
     filesChecked: files.length,
     shards: shards.length,
     killedShards,
-    totalErrors,
+    reportedErrors: totalErrors,
+    totalErrors: unique.length,
     lowerBoundOnly: killedShards > 0,
-    byCode: Object.fromEntries(perCode),
-    byFile: Object.fromEntries([...perFile.entries()].map(([file, record]) => [file, record.count])),
-    fileCodes: Object.fromEntries([...perFile.entries()].map(([file, record]) => [file, record.codes])),
+    byCode: Object.fromEntries(uniqueCode),
+    byFile: Object.fromEntries([...uniqueFile.entries()].map(([file, record]) => [file, record.count])),
+    fileCodes: Object.fromEntries([...uniqueFile.entries()].map(([file, record]) => [file, record.codes])),
     shards_detail: results,
   }, null, 2));
   console.log(`[tsc-shard] summary -> ${args.out}`);
