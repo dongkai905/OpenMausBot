@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { writeFileAtomic } from "./atomic.ts";
@@ -51,16 +51,6 @@ export function hostedModelPolicy(dataDirectory: string, env: NodeJS.ProcessEnv 
     const id = current && assigned(current.instanceId).length ? current.instanceId
       : Object.keys(providerFor).find(id => assigned(id).length);
     return id ? { instanceId: id, model: assigned(id)[0] } : { instanceId: "", model: "" };
-  };
-  const home = (name: string) => {
-    let directory = dataDirectory;
-    for (const part of ["providers", "hosted", name]) {
-      directory = join(directory, part);
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      const stat = lstatSync(directory);
-      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Hosted provider storage must be an owned directory.");
-    }
-    return directory;
   };
   return {
     allows, select,

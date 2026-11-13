@@ -6,7 +6,7 @@ const { activityPreview, botEngine, failedTurnCause, signedOutEngine } = await i
 const { setLocale } = await import("./i18n");
 
 const engine = (patch: Partial<InstanceInfo> = {}, snapshot: Partial<InstanceInfo["snapshot"]> = {}): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude",
   install: { command: { darwin: "x", linux: "x", win32: "x" }, signInCommand: "claude /login", server: { package: "@anthropic-ai/claude-code" } },
   authentication: { method: "paste-code" },
   models: { default: "sonnet", options: [] },
@@ -31,7 +31,7 @@ describe("failed turn text", () => {
   it("says Grok Build is signed out through the same rule, now that its card is the in-app code", () => {
     const grokRow = { name: "error: Grok is not signed in to your grok.com account — choose Sign in to Grok in engine setup", ok: false, setup: true };
     const grok = engine({
-      instanceId: "grok", driverKind: "grokAgent", displayName: "Grok", authentication: { method: "device-code" },
+      instanceId: "grok", driverKind: "customAcp", displayName: "Grok", authentication: { method: "device-code" },
       install: { command: { darwin: "curl -fsSL https://x.ai/cli/install.sh | bash", linux: "curl -fsSL https://x.ai/cli/install.sh | bash" }, signInCommand: "grok login" },
     } as Partial<InstanceInfo>);
     expect(signedOutEngine(grokRow, grok)).toBe(grok);

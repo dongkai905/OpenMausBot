@@ -28,7 +28,7 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("./Avatar", () => ({ BotAvatar: () => null }));
 
 const claude: InstanceInfo = {
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
   snapshot: { state: "available", version: "2.1.300", authenticated: true },
   models: { default: "claude-sonnet-5", options: [{ id: "claude-sonnet-5", label: "Claude Sonnet 5" }] },
 };

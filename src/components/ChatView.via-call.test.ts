@@ -10,7 +10,7 @@ vi.hoisted(() => {
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
-    state: { ...original.initialState, instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test" } as InstanceInfo] },
+    state: { ...original.initialState, instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test" } as InstanceInfo] },
     dispatch: vi.fn(),
   }) };
 });
@@ -97,7 +97,7 @@ describe("a call's record at the end of a chat that is still working", () => {
     const settled = [spoken, message("b1", "All tests pass.", { role: "bot", requestMessageId: "m1" }), record];
     resetTurnLive();
     expect(drawWorking(settled), "the turn has not ended yet: the reply may be words mid-turn").toContain("thinking-shimmer");
-    noteTurnEvent({ eventId: "end", provider: "claudeAgent", threadId: "t1", createdAt: "2026-10-23T12:00:00.000Z", turnId: "u1", type: "turn.completed", ok: true });
+    noteTurnEvent({ eventId: "end", provider: "customAcp", threadId: "t1", createdAt: "2026-10-23T12:00:00.000Z", turnId: "u1", type: "turn.completed", ok: true });
     const markup = drawWorking(settled);
     resetTurnLive();
     expect(markup).toContain("All tests pass.");

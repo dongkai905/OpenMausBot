@@ -93,7 +93,7 @@ describe("the words", () => {
   it("say how full an engine is and when it resets", () => {
     expect(limits.limitLine(claude(92), NOW)).toBe("Claude: 92% used · resets 3:40 PM");
     expect(limits.limitLine(claude(100, true), NOW)).toBe("Claude: at its limit · resets 3:40 PM");
-    expect(limits.nearLimitEngines([claude(89), { ...claude(90), engine: "codex" }]).map((limit) => limit.engine)).toEqual(["codex"]);
+    expect(limits.nearLimitEngines([claude(89), { ...claude(90), engine: "agent-two" }]).map((limit) => limit.engine)).toEqual(["agent-two"]);
   });
 
   it("read a limit-reset automation as a sentence, and say when its time is not known", () => {
@@ -108,13 +108,13 @@ describe("the words", () => {
   it("find the automations due before a reset on a bot that uses that engine", () => {
     const due = limits.dueBeforeReset([
       routine("before", NOW + HOUR), routine("after", RESET + 2 * 60_000), routine("paused", NOW + HOUR, { enabled: false }),
-      routine("other-bot", NOW + HOUR, { botId: "codex-bot" }), routine("limit", NOW + HOUR, { schedule: { type: "limit_reset", engine: "claude", repeat: "once", at: null } }),
-    ], (botId) => botId === "scout" ? "claude" : "codex", claude(92), NOW);
+      routine("other-bot", NOW + HOUR, { botId: "second-bot" }), routine("limit", NOW + HOUR, { schedule: { type: "limit_reset", engine: "claude", repeat: "once", at: null } }),
+    ], (botId) => botId === "scout" ? "claude" : "agent-two", claude(92), NOW);
     expect(due.map((candidate) => candidate.id)).toEqual(["before"]);
   });
 
   it("put each known reset in the calendar's range", () => {
-    expect(limits.resetMarkers([claude(92), { ...claude(10), engine: "codex", name: "Codex", resetsAt: null }], NOW, NOW + 24 * HOUR, NOW))
+    expect(limits.resetMarkers([claude(92), { ...claude(10), engine: "agent-two", name: "Codex", resetsAt: null }], NOW, NOW + 24 * HOUR, NOW))
       .toEqual([{ engine: "claude", name: "Claude", at: RESET }]);
     expect(limits.resetMarkers([claude(92)], RESET + 1, RESET + HOUR, NOW)).toEqual([]);
   });
@@ -160,8 +160,8 @@ describe("the bars", () => {
   it("show nothing for an engine that reports no usage", () => {
     expect(limits.reportsUsage({ ...claude(0), usedPercent: null })).toBe(false);
     expect(limits.reportsUsage({ ...claude(0), usedPercent: null, blocked: true })).toBe(true);
-    serve([{ ...claude(0), engine: "codex", name: "Codex", usedPercent: null, window: null, resetsAt: null }]);
-    expect(mount(createElement(UsageBars, { engine: "codex" })).innerHTML).toBe("");
+    serve([{ ...claude(0), engine: "agent-two", name: "Codex", usedPercent: null, window: null, resetsAt: null }]);
+    expect(mount(createElement(UsageBars, { engine: "agent-two" })).innerHTML).toBe("");
     expect(mount(createElement(UsageBars, { engine: "openai" })).innerHTML).toBe("");
   });
 

@@ -81,7 +81,7 @@ let state: AppState = {
   connected: true,
   selectedId: "pepper",
   bots: [profile("pepper", { messages, activeLeafId: running.id }), profile("scout")],
-  instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+  instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
   config: { features: { showToolCalls: true } } as AppState["config"],
 };
 const dispatch = vi.fn();

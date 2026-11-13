@@ -7,7 +7,7 @@ import { EngineUpdateNotice } from "./EngineSetup";
 const update = {
   title: "Update Codex for GPT-6 Astra",
   message: "This Codex version predates Astra support. Update it, then refresh models.",
-  command: "codex update",
+  command: "second update",
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -18,7 +18,7 @@ describe("EngineUpdateNotice", () => {
 
     expect(markup).toContain("data-engine-update-notice");
     expect(markup).toContain("Update Codex for GPT-6 Astra");
-    expect(markup).toContain("codex update");
+    expect(markup).toContain("second update");
     expect(markup).toContain('aria-label="Copy command"');
   });
 

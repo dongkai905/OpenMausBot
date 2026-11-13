@@ -4,12 +4,11 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { companyInstanceConfigs, companyInstanceId, legacyCompanyInstanceId, LICENSE_EXPIRED_MESSAGE, ManagedDesktopProviders, parseManagedDesktopConnection, type ManagedDesktopConnection } from "./managed-desktop.ts";
 import { ProviderRegistry } from "./harness/registry.ts";
+import type { AnyProviderDriver, RuntimeEvent } from "./contracts.ts";
 import { makeFakeDriver } from "./testing/fake-driver.ts";
 import { DATA_DIR, instanceConfigs, loadConfig, persistableInstanceConfigs, saveConfig } from "./config.ts";
-import { OpenAICompatDriver } from "./drivers/openai-compat.ts";
 import { recordEvents } from "./testing/events.ts";
 import { redactSecretsInText } from "./redact.ts";
-import { excludedWorkspaceAuthPath } from "./workspace-backup-policy.ts";
 import { selectDefaultModelSelection } from "./default-model-selection.ts";
 import { Store } from "./store.ts";
 
@@ -26,6 +25,47 @@ async function setup(options: { now?: () => number; dataDirectory?: string; migr
   const before = vi.fn(), after = vi.fn();
   const manager = new ManagedDesktopProviders({ registry, dataDirectory: join(DATA_DIR, `company-fixture-${randomUUID()}`), beforeReplace: before, afterReplace: after, ...options }); managers.push(manager);
   return { registry, manager, fakes, before, after };
+}
+
+
+/** The driver kind a Company instance is configured with: its own gateway's driver. */
+function companyDriverKind(): string {
+  return Object.values(companyInstanceConfigs(connection()))[0]!.driver;
+}
+
+/** A driver that posts the turn to the instance's own URL, so the test can see where it went. */
+function gatewayDriver(kind: string): AnyProviderDriver {
+  return {
+    driverKind: kind,
+    metadata: { displayName: "Company gateway" },
+    models: { default: "fixture", options: [{ id: "fixture", label: "fixture" }] },
+    decodeConfig: (raw: unknown) => (raw ?? {}) as Record<string, unknown>,
+    defaultConfig: () => ({}),
+    async create(input) {
+      const url = String((input.config as { url?: string } | undefined)?.url ?? "");
+      const listeners = new Set<(event: RuntimeEvent) => void>();
+      return {
+        instanceId: input.instanceId, driverKind: kind, displayName: input.displayName, enabled: input.enabled,
+        models: { default: "fixture", options: [{ id: "fixture", label: "fixture" }] },
+        snapshot: async () => ({ state: "available" as const }),
+        adapter: {
+          provider: kind,
+          capabilities: { sessionModelSwitch: "unsupported" as const },
+          sendTurn: async () => {
+            await fetch(`${url}/chat/completions`, { method: "POST" });
+            for (const listener of listeners) listener({ type: "turn.completed", ok: true, eventId: "fixture-event", provider: kind, threadId: "company-routing", createdAt: new Date().toISOString() });
+            return { turnId: "fixture-turn" };
+          },
+          interruptTurn: async () => {},
+          respondToRequest: async () => "unavailable" as const,
+          hasSession: () => false,
+          stopAll: async () => {},
+          onEvent: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+        },
+        dispose: async () => {},
+      };
+    },
+  };
 }
 
 it("adds Company instances without mutating personal/global configuration or persisting credentials", async () => {
@@ -52,7 +92,7 @@ it("adds Company instances without mutating personal/global configuration or per
 });
 
 it("keeps the Company's routing and its secret on its own instance", () => {
-  const value = connection(), map = companyInstanceConfigs(value, "/fixture/company-runtime");
+  const value = connection(), map = companyInstanceConfigs(value);
   const router = map[companyInstanceId(value, "openrouter")]!;
   expect(router.config).toMatchObject({ url: `${value.portalOrigin}/api/desktop/gateway/openrouter/v1`, provider: "", apiKeyEnv: "OPENMAUSBOT_COMPANY_API_KEY" });
   expect(router.environment).toEqual({ OPENMAUSBOT_COMPANY_API_KEY: value.token });
@@ -73,9 +113,9 @@ it("refuses a redirected Company storage parent before creating native homes", a
 it("never discovers or injects personal local routes into an approved Company model", async () => {
   const value = { ...connection(), providers: [{ id: "openrouter" as const, configured: true, models: ["custom-company-model"] }] };
   const dataDirectory = join(DATA_DIR, `company-compat-${randomUUID()}`);
-  const fetcher = vi.fn(async () => Response.json({ data: [{ id: "custom-company-model" }] }));
+  const fetcher = vi.fn(async (_url: string) => Response.json({ data: [{ id: "custom-company-model" }] }));
   vi.stubGlobal("fetch", fetcher);
-  const registry = new ProviderRegistry([OpenAICompatDriver], { npmAvailable: () => false }); registries.push(registry);
+  const registry = new ProviderRegistry([gatewayDriver(companyDriverKind())], { npmAvailable: () => false }); registries.push(registry);
   const manager = new ManagedDesktopProviders({ registry, dataDirectory }); managers.push(manager);
   await manager.apply(value);
   const company = registry.get(companyInstanceId(value, "openrouter"))!, events = recordEvents(company.adapter);
@@ -84,8 +124,8 @@ it("never discovers or injects personal local routes into an approved Company mo
   // The turn went to the company's own gateway, never to a personal route.
   const called = fetcher.mock.calls.map(([url]) => String(url));
   expect(called.some((url) => url.startsWith(`${value.portalOrigin}/api/desktop/gateway/openrouter`))).toBe(true);
-  expect(called.every((url) => !url.includes("ollama"))).toBe(true);
-  await expect(company.adapter.sendTurn({ threadId: "company-injected", text: "Do not route locally", model: "ollama::custom-company-model" })).rejects.toThrow("not enabled");
+  expect(called.every((url) => url.startsWith(`${value.portalOrigin}/api/desktop/gateway/openrouter`))).toBe(true);
+  await expect(company.adapter.sendTurn({ threadId: "company-injected", text: "Do not route locally", model: "omlx::custom-company-model" })).rejects.toThrow("not enabled");
 });
 
 it("does not restart any instance for an identical heartbeat and never substitutes personal billing", async () => {

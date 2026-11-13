@@ -6,7 +6,7 @@ import type { SetupDetection } from "../../shared/setup-import";
 import { detectSetupWithin, importOutcome, localSetupImport, skillsSummary, toolsSummary, type SetupImportClient } from "./setup-import";
 
 const FOUND: SetupDetection = {
-  skills: [{ name: "pdf", source: "claudeCode" }, { name: "review", source: "codex" }],
+  skills: [{ name: "pdf", source: "cursor" }, { name: "review", source: "cursor" }],
   tools: [{ name: "notion", source: "cursor" }],
 };
 
@@ -78,11 +78,11 @@ describe("looking for another AI tool's setup without holding up the welcome flo
 
 describe("what the step says", () => {
   it("counts each kind and names where it came from", () => {
-    expect(skillsSummary(FOUND)).toBe("2 from Claude Code and Codex");
+    expect(skillsSummary(FOUND)).toBe("2 from Cursor");
     expect(toolsSummary(FOUND)).toBe("1 MCP server from Cursor");
     expect(toolsSummary({ ...FOUND, tools: [
-      { name: "a", source: "claudeCode" }, { name: "b", source: "claudeCode" }, { name: "c", source: "claudeDesktop" }, { name: "d", source: "gemini" },
-    ] })).toBe("4 MCP servers from Claude Code, Claude Desktop, and Gemini CLI");
+      { name: "a", source: "cursor" }, { name: "b", source: "cursor" }, { name: "c", source: "gemini" },
+    ] })).toBe("3 MCP servers from Cursor and Gemini CLI");
   });
 
   it("sums up in one line, with a note only for what was left out", () => {

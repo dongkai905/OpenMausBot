@@ -11,7 +11,6 @@ export const ENGINE_KINDS: Record<string, { config: string; instance: string; ap
   openai: { config: "openai", instance: "openai", baseUrl: "no" },
   openrouter: { config: "openrouter", instance: "openrouter", baseUrl: "no" },
   "openai-compatible": { config: "openaiCompat", instance: "openaiCompat", baseUrl: "required" },
-  xai: { config: "xai", instance: "xaiApi", baseUrl: "allowed" },
   groq: { config: "groq", instance: "groq", baseUrl: "allowed" },
 };
 

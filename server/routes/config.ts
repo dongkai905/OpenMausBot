@@ -101,7 +101,6 @@ export interface ConfigRouteDeps {
   /** On a Team Cloud: the welcome's own hints (TEAM_PERSONAL_HINTS) go to this person's record, never the team's; false
    * for a caller with no team session. */
   ownHints?(auth: RequestAuth, hints: string[]): boolean;
-  resyncOpenCodeProviderKeys(): void;
   revokeEngineCapabilities(engines: ReadonlySet<string>): void;
   reloadProviders(before: Record<string, unknown>): Promise<void>;
   broadcast(payload: Record<string, unknown>): void;
@@ -117,7 +116,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy,
     providerConfigBusy, computerProviderConfigTransitions, managedBoatOwners, providerOperationConflict,
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
-    configForAccess, resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints, postiz,
+    configForAccess, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints, postiz,
   } = deps;
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     // API keys are never echoed back: booleans only.
@@ -126,7 +125,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
     }
     if ((method === "PUT" || method === "PATCH") && path === "/api/config") {
       const body = await readBody(req);
-      if (hostedModels && ["instances", "openai", "openrouter", "openaiCompat"].some(key => Object.hasOwn(body, key))) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
+      if (hostedModels && ["instances", "openai", "openrouter"].some(key => Object.hasOwn(body, key))) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
       const patch = parseConfigPatchForPerson(body);
       if (patch.profile && ownProfile) {
         // The address is the verified claim's; a profile names no other.
@@ -540,9 +539,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           const persisted = structuredClone(patch);
           if (persisted.openai?.key !== undefined) persisted.openai.key = "";
           if (persisted.openrouter?.key !== undefined) persisted.openrouter.key = "";
-          if (persisted.meta?.key !== undefined) persisted.meta.key = "";
-          if (persisted.deepseek?.key !== undefined) persisted.deepseek.key = "";
-          if (persisted.openaiCompat?.key !== undefined) persisted.openaiCompat.key = "";
           if (persisted.composio?.apiKey !== undefined) persisted.composio.apiKey = "";
           if (persisted.box?.token !== undefined) persisted.box.token = "";
           if (persisted.tts?.key !== undefined) persisted.tts.key = "";
@@ -587,10 +583,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         for (const idle of localVmIdles.values()) idle.setIdleMs(localVmIdleMs());
       }
       let browserReferenceCleanupError: unknown = null;
-      if (patch.signIn !== undefined) {
-        sessions.revalidateEmailSessions();
-        resyncOpenCodeProviderKeys();
-      }
+      if (patch.signIn !== undefined) sessions.revalidateEmailSessions();
       if (!lendingEnabled()) {
         sharedComputers.close();
         sharedComputerControl.close();

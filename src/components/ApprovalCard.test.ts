@@ -711,7 +711,7 @@ describe("ApprovalCard for a change that applied on its own", () => {
       tool: "update_model",
       modelRequest: {
         version: 1, requestId: "m", botId: "bot-1", threadId: "thread-1", targetBotId: "bot-1", targetName: "Scout",
-        createdAt: 1, reason: "asked", selection: { instanceId: "codex", model: "gpt-fixture" }, before: { instanceId: "claude", model: "sonnet" },
+        createdAt: 1, reason: "asked", selection: { instanceId: "agent-two", model: "gpt-fixture" }, before: { instanceId: "claude", model: "sonnet" },
       },
     }));
     expect(model).toContain("Scout changed its default model: gpt-fixture");

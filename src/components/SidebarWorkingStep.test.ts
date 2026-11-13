@@ -24,7 +24,7 @@ describe("sidebar working line", () => {
   });
 
   it("drops the command from the engine's live status too", () => {
-    noteTurnEvent({ eventId: "e1", provider: "claudeAgent", threadId: "t-side", createdAt: "2026-11-07T00:00:00.000Z", turnId: "turn-1",
+    noteTurnEvent({ eventId: "e1", provider: "customAcp", threadId: "t-side", createdAt: "2026-11-07T00:00:00.000Z", turnId: "turn-1",
       type: "turn.progress", activity: "command", itemId: "c1", target: "sleep 240" } as RuntimeEvent);
     act(() => root.render(createElement(SidebarWorkingStep, { bot })));
     expect(phrase()).toBe("Running a command");

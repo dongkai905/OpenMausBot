@@ -53,8 +53,6 @@ function fixture(language?: string, linked?: (vaultStore: VaultStore) => SecretC
 
 describe("the card a bot asks for a key or secret with", () => {
   it.each([
-    ["greenferenceApiKey", "secretCard.greenference.description"],
-    ["modelgoApiKey", "secretCard.modelgo.description"],
     ["geminiTtsKey", "secretCard.geminiTts.description"],
   ] as const)("keeps the fallback and structured description for %s", async (credentialId, baseCode) => {
     const { cards, lines, bot } = fixture();
@@ -66,7 +64,7 @@ describe("the card a bot asks for a key or secret with", () => {
     });
   });
 
-  it.each(["greenferenceApiKey", "geminiTtsKey"] as const)("scrubs the structured description data for %s", async (credentialId) => {
+  it.each(["geminiTtsKey"] as const)("scrubs the structured description data for %s", async (credentialId) => {
     const { cards, lines, bot } = fixture();
     const key = `sk-ant-api03-${"abcdefghijklmnopqrstuvwxyz0123456789"}`;
     const reason = `Use ${key} for this report.`;
@@ -83,13 +81,13 @@ describe("the card a bot asks for a key or secret with", () => {
 
   it("asks in the language of the conversation's person", async () => {
     const { cards, lines, bot } = fixture("de");
-    expect((await cards.requestCredential(bot, "ledger-main", { credentialId: "xaiApiKey" })).status).toBe(201);
+    expect((await cards.requestCredential(bot, "ledger-main", { credentialId: "openaiApiKey" })).status).toBe(201);
     expect((await cards.requestCredential(bot, "ledger-main", { label: "Stripe-Testschlüssel", reason: "Für Testzahlungen.", delivery: "file" })).status).toBe(201);
     expect(lines.map((line) => line.text)).toEqual([
-      "Gib xAI API key sicher in OpenMausBot auf deinem Telefon oder Computer ein. Es wird nie in den Chat übernommen.",
+      "Gib OpenAI API key sicher in OpenMausBot auf deinem Telefon oder Computer ein. Es wird nie in den Chat übernommen.",
       "Gib Stripe-Testschlüssel sicher in OpenMausBot auf deinem Telefon oder Computer ein. Es wird nie in den Chat übernommen.",
     ]);
-    expect(lines[0]!.secret!.description).toBe("Used by the built-in Grok provider. Ledger kann es verwenden, aber nie auslesen.");
+    expect(lines[0]!.secret!.description).toBe("Runs OpenAI models with your own key. Ledger kann es verwenden, aber nie auslesen.");
     expect(lines[1]!.secret!.description)
       .toBe("Für Testzahlungen. Die Befehle von Ledger können es 24 Stunden lang aus einer privaten Datei lesen; es wird nie in den Chat übernommen. OpenMausBot bewahrt es sicher auf, damit Ledger es wieder nutzen kann, ohne dich erneut zu fragen.");
   });

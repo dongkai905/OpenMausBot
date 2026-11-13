@@ -211,7 +211,7 @@ describe("an input method in the composer's menus", () => {
 
 describe("the send key in hints", () => {
   it("names the key on the send button and in the busy composer", () => {
-    fixture.instances = [{ instanceId: "test", driverKind: "codex", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo];
+    fixture.instances = [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo];
     render(createElement(Composer, { bot }));
     type(textarea(), "hi");
     expect(host.querySelector('button[aria-label="Send message"]')?.getAttribute("title")).toBe("Send (Enter)");
@@ -228,7 +228,7 @@ describe("the send key in hints", () => {
   });
 
   it("names the key in Japanese hints too", () => {
-    fixture.instances = [{ instanceId: "test", driverKind: "codex", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo];
+    fixture.instances = [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo];
     setSendKey("mod-enter");
     setLocale("ja");
     try {
@@ -257,7 +257,7 @@ describe("the send key in hints", () => {
 });
 
 describe("a message sent while a one-to-one bot works", () => {
-  const steers = { instanceId: "test", driverKind: "codex", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo;
+  const steers = { instanceId: "test", driverKind: "customAcp", displayName: "Test", capabilities: { queueing: true } } as unknown as InstanceInfo;
   const cannotSteer = { ...steers, capabilities: { queueing: false } } as unknown as InstanceInfo;
   const working = { ...bot, busy: true, tasks: [{ ...bot.tasks![0]!, busy: true }] };
   const followUps = () => sends().map((action) => action.followUp);

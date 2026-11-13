@@ -112,7 +112,7 @@ describe("live frames the store does not keep", () => {
   it("hand runtime events to listeners as they arrive", async () => {
     const heard: ServerFrame[] = [];
     const stop = listenLiveFrames({ onFrame: (frame) => heard.push(frame) });
-    const event: RuntimeEvent = { type: "item.started", eventId: "e1", provider: "codex", threadId: "thread", createdAt: "2026-10-04T00:00:00.000Z", itemId: "i1", itemType: "tool", title: "ls" };
+    const event: RuntimeEvent = { type: "item.started", eventId: "e1", provider: "agent-two", threadId: "thread", createdAt: "2026-10-04T00:00:00.000Z", itemId: "i1", itemType: "tool", title: "ls" };
     await send({ kind: "runtime", event });
     stop();
     expect(heard).toEqual([{ kind: "runtime", event }]);
@@ -146,7 +146,7 @@ describe("live frames the store does not keep", () => {
     const { spokenReplyStream } = await import("@/lib/spoken-reply-stream");
     const onRuntimeEvent = vi.spyOn(spokenReplyStream, "onRuntimeEvent").mockImplementation(() => {});
     const completeBotText = vi.spyOn(spokenReplyStream, "completeBotText").mockImplementation(() => {});
-    const delta: RuntimeEvent = { type: "content.delta", eventId: "d1", provider: "codex", threadId: "thread", turnId: "t1", createdAt: "2026-10-04T00:00:00.000Z", streamKind: "assistant_text", delta: "Hello there. " };
+    const delta: RuntimeEvent = { type: "content.delta", eventId: "d1", provider: "agent-two", threadId: "thread", turnId: "t1", createdAt: "2026-10-04T00:00:00.000Z", streamKind: "assistant_text", delta: "Hello there. " };
     await send({ kind: "runtime", event: delta });
     expect(onRuntimeEvent).lastCalledWith(delta, null);
     await send({ kind: "bot", bot: { ...bot, speakReplies: true, voice: "vo" } } as ServerFrame);

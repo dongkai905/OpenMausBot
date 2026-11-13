@@ -196,12 +196,12 @@ describe("My Cloud sets a bot's move-only fields", () => {
 describe("skill extras", () => {
   it("an imported skill arrives with every file and hashes the same as the copy this computer keeps", async () => {
     const input = { name: "invoice-check", skillMd: "---\nname: invoice-check\ndescription: Check.\n---\n\nCheck.\n", files: [{ path: "references/rules.md", content: "Add up.\n", executable: false }],
-      entry: { description: "Check.", source: "claudeCode" as const, root: "~/.claude/skills", origin: "~/.claude/skills/invoice-check", label: "Claude Code/invoice-check", sha256: "a".repeat(64), warnings: [] } };
+      entry: { description: "Check.", source: "customAcp" as const, root: "~/.claude/skills", origin: "~/.claude/skills/invoice-check", label: "Custom ACP/invoice-check", sha256: "a".repeat(64), warnings: [] } };
     const d = deps("/data", { claudeCodeSkills: () => [input] });
     const [listed] = moveItems(d, new Set()).filter((item) => item.kind === "imported-skill");
     expect(listed).toEqual({ key: itemKey.moved("imported-skill", "invoice-check"), kind: "imported-skill", label: "invoice-check", id: "invoice-check", parts: { files: importedSkillHash(input) } });
     expect((await take(deps("/data"), listed!.key, kindRecord(d, "imported-skill", "invoice-check")!.record)).status).toBe(200);
-    expect(readImportedSkills()["invoice-check"]).toMatchObject({ source: "claudeCode", label: "Claude Code/invoice-check" });
+    expect(readImportedSkills()["invoice-check"]).toMatchObject({ source: "customAcp", label: "Custom ACP/invoice-check" });
     const kept = moveItems(deps("/data"), new Set()).find((item) => item.key === listed!.key);
     expect(kept, "the copy kept here now hashes as the person's own folder did").toEqual(listed);
     expect((await take(deps("/data"), listed!.key, { ...input, files: [{ path: "../escape.md", content: "x", executable: false }] })).status).toBe(400);

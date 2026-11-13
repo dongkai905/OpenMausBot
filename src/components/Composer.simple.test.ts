@@ -26,7 +26,7 @@ vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
     state: { ...original.initialState, config: fixture.config ?? original.initialState.config, bots: [bot, peer], liveCall: fixture.liveCall, instances: [{
-      instanceId: ENGINE, driverKind: "claudeAgent", displayName: "Claude", capabilities: { agentsMcp: fixture.agentsMcp },
+      instanceId: ENGINE, driverKind: "customAcp", displayName: "Claude", capabilities: { agentsMcp: fixture.agentsMcp },
     }] },
     dispatch: fixture.dispatch,
   }) };

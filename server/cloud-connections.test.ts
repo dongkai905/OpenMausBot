@@ -56,7 +56,7 @@ describe("what GET /api/cloud-connections names", () => {
         notes: { type: "http", url: "http://127.0.0.1:9/mcp" },
         broken: { command: "" },
       },
-      openrouter: { key: "sk-or-fake" }, anthropic: { key: "sk-ant-fake", everyClaudeBot: true }, elevenlabs: { key: "voice-fake" },
+      openrouter: { key: "sk-or-fake" }, elevenlabs: { key: "voice-fake" },
     } as unknown as AppConfig;
     const listed = listConnections(sources(config, { mcpAuth: (name) => (name === "linear" ? "signed-in" : "none"),
       composio: { mode: "managed", account: "managed:abc", installationId: "11111111-2222-4333-8444-555555555555", shared: false },
@@ -66,17 +66,15 @@ describe("what GET /api/cloud-connections names", () => {
       { id: "mcp:linear", kind: "mcp", label: "linear", detail: "mcp.linear.app", signIn: true },
       { id: "mcp:notes", kind: "mcp", label: "notes", detail: "127.0.0.1:9", runsHere: true },
       { id: "key:openrouter", kind: "key", label: "OpenRouter", for: ["openrouter"] },
-      { id: "key:anthropic", kind: "key", label: "Anthropic", for: ["claudeApi"] },
       { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:abc", installationId: "11111111-2222-4333-8444-555555555555" },
       { id: "email", kind: "email", label: "Email" },
     ]);
     const text = JSON.stringify(listed);
-    for (const secret of ["dodo_live_fake", "sk-or-fake", "sk-ant-fake", "sk_live_fake", "linear_fake", "voice-fake"]) expect(text).not.toContain(secret);
+    for (const secret of ["dodo_live_fake", "sk-or-fake", "sk_live_fake", "linear_fake", "voice-fake"]) expect(text).not.toContain(secret);
   });
 
-  it("an Anthropic key serves Claude (API key) alone there, never Claude bots that sign in with an account", () => {
-    expect(KEY_PROVIDERS.find((provider) => provider.id === "anthropic")!.config({ anthropic: { key: "k", everyClaudeBot: true } } as AppConfig))
-      .toEqual({ anthropic: { key: "k", everyClaudeBot: false } });
+  it("names the providers whose key the person saved", () => {
+    expect(KEY_PROVIDERS.map((provider) => provider.id)).toEqual(["openai", "openrouter"]);
   });
 });
 

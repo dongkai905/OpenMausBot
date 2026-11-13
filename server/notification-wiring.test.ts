@@ -57,11 +57,11 @@ posixOnly("routine failure notification wiring", () => {
       join(home, ".openmausbot", "config.json"),
       JSON.stringify({
         instances: {
-          grok: {
-            driver: "grokAgent",
+          agent: {
+            driver: "customAcp",
             // a partial answer before failing: with a non-empty reply only the routine-failed/done dedup suppresses the generic done
             environment: { FAKE_ACP_MODE: "fail-after-text" },
-            config: { cli: FAKE_CLI, fullAuto: false },
+            config: { cli: FAKE_CLI },
           },
         },
       }),
@@ -110,7 +110,7 @@ posixOnly("routine failure notification wiring", () => {
           await api("PATCH", `/api/bots/${bot.id}`, {
             name: "Routine Scout",
             notifications: true,
-            modelSelection: { instanceId: "grok", model: "fake-model" },
+            modelSelection: { instanceId: "agent", model: "fake-model" },
           })
         ).status,
       ).toBe(200);

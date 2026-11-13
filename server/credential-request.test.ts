@@ -16,33 +16,23 @@ import {
 } from "../shared/credential-request.ts";
 
 const MAPPINGS: Array<[ConfigCredentialTargetId, CredentialConfig]> = [
-  ["xaiApiKey", { xai: { key: "secret" } }],
   ["boxToken", { box: { token: "secret" } }],
-  ["opencodeGoApiKey", { opencodeGo: { apiKey: "secret" } }],
   ["ttsKey", { tts: { key: "secret" } }],
   ["fishAudioKey", { tts: { fishKey: "secret" } }],
   ["geminiTtsKey", { tts: { geminiKey: "secret" } }],
   ["openaiImageApiKey", { imageGen: { key: "secret" } }],
   ["composioApiKey", { composio: { apiKey: "secret" } }],
   ["openaiApiKey", { openai: { key: "secret" } }],
-  ["anthropicApiKey", { anthropic: { key: "secret", everyClaudeBot: false } }],
   ["openrouterApiKey", { openrouter: { key: "secret" } }],
-  ["mistralApiKey", { mistral: { key: "secret" } }],
-  ["cerebrasApiKey", { cerebras: { key: "secret" } }],
-  ["groqApiKey", { groq: { key: "secret" } }],
-  ["greenferenceApiKey", { greenference: { key: "secret" } }],
-  ["modelgoApiKey", { modelgo: { key: "secret" } }],
-  ["metaApiKey", { meta: { key: "secret" } }],
-  ["deepseekApiKey", { deepseek: { key: "secret" } }],
 ];
 
 describe("credential request allowlist", () => {
   it("accepts only declared own ids", () => {
-    expect(isCredentialTargetId("xaiApiKey")).toBe(true);
+    expect(isCredentialTargetId("openaiApiKey")).toBe(true);
     expect(isCredentialTargetId("jevApiKey")).toBe(false);
     expect(isCredentialTargetId(CUSTOM_SECRET_TARGET)).toBe(false);
     expect(isCredentialTargetId("__proto__")).toBe(false);
-    expect(isCredentialTargetId({ toString: () => "xaiApiKey" })).toBe(false);
+    expect(isCredentialTargetId({ toString: () => "openaiApiKey" })).toBe(false);
   });
 
   it("maps each id to a fixed config location", () => {
@@ -68,13 +58,13 @@ describe("credential request allowlist", () => {
     expect(credentialIsConfigured({ tts: { key: "" } }, "ttsKey")).toBe(false);
     expect(credentialIsConfigured({ tts: { fishKey: "secret" } }, "fishAudioKey")).toBe(true);
     expect(credentialIsConfigured({ tts: { fishKey: "" } }, "fishAudioKey")).toBe(false);
-    expect(Object.keys(CREDENTIAL_TARGETS)).toHaveLength(19);
+    expect(Object.keys(CREDENTIAL_TARGETS)).toHaveLength(9);
   });
 
   it("names the desktop slot a key is saved in, and none for the 1Password token", () => {
     expect(Object.keys(CREDENTIAL_TARGETS).filter((id) => !desktopCredentialSlot(id as never))).toEqual(["onePasswordToken"]);
-    expect(desktopCredentialSlot("anthropicApiKey")).toBe("anthropicApiKey");
-    expect(desktopCredentialSlot("xaiApiKey")).toBe("xaiApiKey");
+    expect(desktopCredentialSlot("openrouterApiKey")).toBe("openrouterApiKey");
+    expect(desktopCredentialSlot("openaiApiKey")).toBe("openaiApiKey");
   });
 
   it("supersedes a bot's own pending custom secret of the same name only", () => {
@@ -83,27 +73,21 @@ describe("credential request allowlist", () => {
     expect(isPendingCustomSecretRequest(card, "Stripe webhook secret", "atlas", true)).toBe(false);
     expect(isPendingCustomSecretRequest(card, "Stripe secret key", "pixel", true)).toBe(false);
     expect(isPendingCustomSecretRequest({ ...card, secret: { ...card.secret, provided: true } }, "Stripe secret key", "atlas", true)).toBe(false);
-    expect(isPendingCustomSecretRequest({ ...card, secret: { ...card.secret, target: "xaiApiKey" } }, "Stripe secret key", "atlas", true)).toBe(false);
-  });
-
-  // The key becomes OPENCODE_API_KEY, which only OpenCode Zen and Go read: the
-  // card must not promise other providers a key it never reaches.
-  it("says the OpenCode key is for Zen and Go only", () => {
-    expect(CREDENTIAL_TARGETS.opencodeGoApiKey.description).toBe("Used for OpenCode Zen and Go.");
+    expect(isPendingCustomSecretRequest({ ...card, secret: { ...card.secret, target: "openaiApiKey" } }, "Stripe secret key", "atlas", true)).toBe(false);
   });
 
   it("supersedes open room cards only for the bot that requested them", () => {
     const card = {
       kind: "secret",
-      secret: { target: "xaiApiKey" },
+      secret: { target: "openaiApiKey" },
       from: { botId: "atlas" },
     };
-    expect(isPendingCredentialRequest(card, "xaiApiKey", "atlas", true)).toBe(true);
-    expect(isPendingCredentialRequest(card, "xaiApiKey", "pixel", true)).toBe(false);
-    expect(isPendingCredentialRequest(card, "xaiApiKey", "pixel", false)).toBe(true);
-    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, provided: true } }, "xaiApiKey", "atlas", true)).toBe(false);
-    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, dismissed: true } }, "xaiApiKey", "atlas", true)).toBe(false);
-    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, superseded: true } }, "xaiApiKey", "atlas", true)).toBe(false);
+    expect(isPendingCredentialRequest(card, "openaiApiKey", "atlas", true)).toBe(true);
+    expect(isPendingCredentialRequest(card, "openaiApiKey", "pixel", true)).toBe(false);
+    expect(isPendingCredentialRequest(card, "openaiApiKey", "pixel", false)).toBe(true);
+    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, provided: true } }, "openaiApiKey", "atlas", true)).toBe(false);
+    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, dismissed: true } }, "openaiApiKey", "atlas", true)).toBe(false);
+    expect(isPendingCredentialRequest({ ...card, secret: { ...card.secret, superseded: true } }, "openaiApiKey", "atlas", true)).toBe(false);
   });
 
   it("preserves the original save or decline outcome when retrying", () => {

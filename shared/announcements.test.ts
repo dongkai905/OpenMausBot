@@ -102,8 +102,8 @@ describe("a card", () => {
     const parsed = parseAnnouncementCard(card({ image: { url: "https://example.com/tracker.png" } }));
     expect(parsed.ok && parsed.card.image).toBeUndefined();
     expect(parseAnnouncementCard(card({ image: { url: "https://example.com/tracker.png" } }), { strict: true }).ok).toBe(false);
-    const mark = parseAnnouncementCard(card({ image: { mark: "modelgo" } }));
-    expect(mark.ok && mark.card.image).toEqual({ mark: "modelgo" });
+    const mark = parseAnnouncementCard(card({ image: { mark: "agent-thirteen" } }));
+    expect(mark.ok && mark.card.image).toEqual({ mark: "agent-thirteen" });
   });
 });
 

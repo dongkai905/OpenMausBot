@@ -174,8 +174,8 @@ describe("optional desktop Organisation settings", () => {
   it("switches only bots that cannot run, and disconnecting leaves personal selections untouched", async () => {
     const managed = { organizationId: "fixture-org", organizationName: "Fixture Company" };
     fixture.store.instances = [
-      { instanceId: "personal", driverKind: "codex", displayName: "Codex", snapshot: { state: "available", authenticated: true }, models: { default: "gpt", options: [] } },
-      { instanceId: "company.fixture.anthropic", driverKind: "claudeAgent", displayName: "Company · Fixture Company · Claude", readOnly: true, managed,
+      { instanceId: "personal", driverKind: "customAcp", displayName: "Codex", snapshot: { state: "available", authenticated: true }, models: { default: "gpt", options: [] } },
+      { instanceId: "company.fixture.anthropic", driverKind: "customAcp", displayName: "Company · Fixture Company · Claude", readOnly: true, managed,
         snapshot: { state: "available", authenticated: true }, models: { default: "model-a", options: [] } },
     ];
     const bot = (id: string, instanceId: string) => ({ id, threadId: `${id}-thread`, name: id, modelSelection: { instanceId, model: "saved" } });

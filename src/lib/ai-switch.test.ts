@@ -17,7 +17,7 @@ const { forgetStops, noteRuntimeTurn } = await import("./stop-turn");
 const asked: Message = { id: "ask-1", at: 1, role: "user", kind: "text", text: "Plan my week" };
 const bot = (busy: boolean, messages: Message[] = [asked]): Bot => ({
   id: "bot-1", threadId: "thread-1", name: "Maus", title: "", description: "", notifications: true, color: "green", unread: false, busy,
-  modelSelection: { instanceId: "opencodeGo", model: "free" }, messages,
+  modelSelection: { instanceId: "agent-three", model: "free" }, messages,
   tasks: [{ threadId: "thread-1", title: "Chat", createdAt: 1, busy }],
 } as unknown as Bot);
 const intent = { botId: "bot-1", threadId: "thread-1", turnId: "turn-1", requestMessageId: "ask-1", place: "header" as const };
@@ -273,7 +273,7 @@ describe("Switch AI", () => {
   it("drops a change to the same AI while the turn runs, and passes other actions through", () => {
     show(createElement(Picker, { bot: bot(true) }));
     act(() => requestAiSwitch(intent));
-    act(() => seen!.dispatch({ type: "setModel", botId: "bot-1", threadId: "thread-1", selection: { instanceId: "opencodeGo", model: "free", effort: "high" } }));
+    act(() => seen!.dispatch({ type: "setModel", botId: "bot-1", threadId: "thread-1", selection: { instanceId: "agent-three", model: "free", effort: "high" } }));
     act(() => seen!.dispatch({ type: "toggleAppSettings", open: true, section: "engines" }));
     expect(api).not.toHaveBeenCalled();
     expect(store.mock.calls).toEqual([[{ type: "toggleAppSettings", open: true, section: "engines" }]]);

@@ -5,9 +5,11 @@ import { assignmentLevel, type LevelInput } from "./level.ts";
 import type { Level, LevelSource } from "./types.ts";
 
 const input = (over: Partial<LevelInput>): LevelInput =>
-  ({ own: "ask", chief: "full", origin: "person", chiefLineage: true, driverKind: "claudeAgent", ...over });
+  ({ own: "ask", chief: "full", origin: "person", chiefLineage: true, driverKind: "customAcp", ...over });
 const level = (over: Partial<LevelInput>) => assignmentLevel(input(over));
 const TRAVELS: readonly Level[] = ["ask", "edits", "auto", "full"];
+/** An engine the registry does not know: it asks, and inherits nothing above Ask. */
+const UNKNOWN_ENGINE = undefined;
 
 describe("assignmentLevel", () => {
   it("is max(own, inherited) in the order ask < edits < auto < full", () => {
@@ -30,38 +32,28 @@ describe("assignmentLevel", () => {
   });
 
   it("never lets custom travel", () => {
-    expect(level({ own: "custom", chief: "full", driverKind: "codex" })).toEqual({ level: "custom", source: "own" });
-    expect(level({ own: "custom", chief: "ask", driverKind: "codex" })).toEqual({ level: "custom", source: "own" });
-    expect(level({ own: "custom", chief: undefined, driverKind: "codex" })).toEqual({ level: "custom", source: "own" });
-    expect(level({ own: "ask", chief: "custom", driverKind: "codex" })).toEqual({ level: "ask", source: "own" });
-    expect(level({ own: "auto", chief: "custom", driverKind: "codex" })).toEqual({ level: "auto", source: "own" });
+    expect(level({ own: "custom", chief: "full" })).toEqual({ level: "custom", source: "own" });
+    expect(level({ own: "custom", chief: "ask" })).toEqual({ level: "custom", source: "own" });
+    expect(level({ own: "custom", chief: undefined })).toEqual({ level: "custom", source: "own" });
+    expect(level({ own: "ask", chief: "custom" })).toEqual({ level: "ask", source: "own" });
+    expect(level({ own: "auto", chief: "custom" })).toEqual({ level: "auto", source: "own" });
   });
 
   describe("engine cap", () => {
     it("steps an inherited level down to the highest one the engine runs", () => {
-      expect(level({ chief: "full", driverKind: "claudeAgent" })).toEqual({ level: "full", source: "chief" });
-      expect(level({ chief: "auto", driverKind: "claudeAgent" })).toEqual({ level: "auto", source: "chief" });
-      expect(level({ chief: "edits", driverKind: "claudeAgent" })).toEqual({ level: "edits", source: "chief" });
-      // Codex: Ask already runs workspace-write, so an inherited Edits changes nothing.
-      expect(level({ chief: "full", driverKind: "codex" })).toEqual({ level: "full", source: "chief" });
-      expect(level({ chief: "auto", driverKind: "codex" })).toEqual({ level: "auto", source: "chief" });
-      expect(level({ chief: "edits", driverKind: "codex" })).toEqual({ level: "ask", source: "engine_cap" });
-      expect(level({ chief: "full", driverKind: "antigravityAgent" })).toEqual({ level: "full", source: "chief" });
-      expect(level({ chief: "auto", driverKind: "antigravityAgent" })).toEqual({ level: "edits", source: "engine_cap" });
-      expect(level({ chief: "edits", driverKind: "antigravityAgent" })).toEqual({ level: "edits", source: "chief" });
-      for (const driverKind of ["opencodeGo", "openai-compat", "groq", "kimiAgent", "piAgent", undefined]) {
-        expect(level({ chief: "full", driverKind })).toEqual({ level: "full", source: "chief" });
-        expect(level({ chief: "auto", driverKind })).toEqual({ level: "ask", source: "engine_cap" });
-        expect(level({ chief: "edits", driverKind })).toEqual({ level: "ask", source: "engine_cap" });
-      }
+      expect(level({ chief: "full" })).toEqual({ level: "full", source: "chief" });
+      expect(level({ chief: "auto" })).toEqual({ level: "auto", source: "chief" });
+      expect(level({ chief: "edits" })).toEqual({ level: "edits", source: "chief" });
+      // An engine that asks: an inherited Edits or Auto changes nothing, and Full still runs.
+      expect(level({ chief: "full", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "full", source: "chief" });
+      expect(level({ chief: "auto", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "ask", source: "engine_cap" });
+      expect(level({ chief: "edits", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "ask", source: "engine_cap" });
     });
 
     it("says engine_cap whenever the cap lowered the inherited level, down to own included", () => {
-      expect(level({ own: "edits", chief: "auto", driverKind: "antigravityAgent" })).toEqual({ level: "edits", source: "engine_cap" });
-      expect(level({ own: "edits", chief: "auto", driverKind: "kimiAgent" })).toEqual({ level: "edits", source: "engine_cap" });
-      expect(level({ own: "ask", chief: "auto", driverKind: "antigravityAgent" })).toEqual({ level: "edits", source: "engine_cap" });
-      expect(level({ own: "auto", chief: "full", driverKind: "antigravityAgent" })).toEqual({ level: "full", source: "chief" });
-      expect(level({ own: "auto", chief: "full", driverKind: "kimiAgent" })).toEqual({ level: "full", source: "chief" });
+      expect(level({ own: "edits", chief: "auto", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "edits", source: "engine_cap" });
+      expect(level({ own: "ask", chief: "auto", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "ask", source: "engine_cap" });
+      expect(level({ own: "auto", chief: "full", driverKind: UNKNOWN_ENGINE })).toEqual({ level: "full", source: "chief" });
     });
 
     it("agrees with the capability flags for every engine that has a row", () => {
@@ -87,8 +79,8 @@ describe("assignmentLevel", () => {
   });
 
   it("is pure: the same input gives the same answer and the input is untouched", () => {
-    const frozen = Object.freeze(input({ own: "edits", chief: "full", driverKind: "geminiAgent" }));
+    const frozen = Object.freeze(input({ own: "edits", chief: "full" }));
     expect(assignmentLevel(frozen)).toEqual(assignmentLevel(frozen));
-    expect(frozen).toEqual(input({ own: "edits", chief: "full", driverKind: "geminiAgent" }));
+    expect(frozen).toEqual(input({ own: "edits", chief: "full" }));
   });
 });

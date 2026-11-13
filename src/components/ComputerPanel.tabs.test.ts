@@ -44,7 +44,7 @@ const { requestPanelPage } = await import("@/lib/page-open");
 const { BotEditorStore, initialState } = await import("@/state/store");
 
 const engine = (instanceId: string) => ({
-  instanceId, driverKind: "claudeAgent", displayName: instanceId, access: "subscription",
+  instanceId, driverKind: "customAcp", displayName: instanceId, access: "subscription",
   snapshot: { state: "available", version: "1", authenticated: true },
   models: { default: "m", options: [{ id: "m", label: "M" }] },
   capabilities: { computerMcp: true, browserMcp: true },
@@ -59,7 +59,7 @@ const makeBot = (patch: Partial<Bot> = {}): Bot => ({
 
 let root: Root | null = null;
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { box: { configured: true },
+  state: { ...initialState, instances: [engine("claude"), engine("agent-two")], config: { box: { configured: true },
     ...(fixture.browser ? { features: { browser: true }, browserEngine: { kind: "engine" } } : {}) } as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
@@ -130,7 +130,7 @@ describe("Computer panel tab", () => {
     expect(selected()).toBe("Data");
     await vi.waitFor(() => expect(document.querySelector('[data-testid="data-panel"]')).not.toBeNull());
 
-    await open(makeBot({ modelSelection: { instanceId: "codex", model: "m" } }));
+    await open(makeBot({ modelSelection: { instanceId: "agent-two", model: "m" } }));
     expect(selected()).toBe("Data");
     expect(document.querySelector('[data-testid="data-panel"]')).not.toBeNull();
 

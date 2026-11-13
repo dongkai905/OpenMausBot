@@ -172,7 +172,6 @@ import {
   tidyHour,
   sharedComputersEnabled, ownerLendingEnabled,
   builtInBrowserEnabled,
-  persistableInstanceConfigs,
   type AppConfig,
   vpsSshAlias,
   DATA_DIR, EVENTS_DIR,
@@ -282,7 +281,7 @@ import { CloudCreditProvider } from "./cloud-credit-provider.ts";
 import { createCreditMoves } from "./cloud-credit-moves.ts"; import { createRoutineHoldsHost } from "./host/routine-holds-host.ts";
 import { TRIAL_CREDIT_OWN_AI, TRIAL_KEY_HELD } from "./trial-credit.ts"; import { createHeldKeys } from "./cloud-held-keys.ts";
 import type { ProviderInstance } from "./contracts.ts";
-import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceLook } from "./provider-icon.ts";
+import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceIcon } from "./provider-icon.ts";
 import { threadModelFallback, type ThreadEngine } from "./thread-model.ts";
 import { computerEngineMoveText, removedComputerInstanceIds, writeComputerEngineMoveLines } from "./computer-engine-removal.ts";
 import { peerDeliveryReceipt, type PeerDeliveryReceipt } from "./peer-delivery.ts";
@@ -1374,37 +1373,6 @@ const teamConnections = createTeamConnectionsHost({ team: CLOUD_TEAM, dataDir: D
   requester: (threadId, generation) => actingPeople.requester(threadId, generation), personName: (person) => teamHost.personName(person), roster: () => (teamOwners.people?.list() ?? []).map((member) => ({ person: personKey({ id: "", email: member.email }), email: member.email, role: member.role })),
   mint: (capability) => mintInternalCapability({ ...capability, depth: 0, kind: "connectors", skillAuthoring: false, createdBots: 0, openedThreads: 0 }), mcpOAuth, isOwnerLive: (owner) => sessions.isLive(owner) || isCardOwnerLive(store, owner), onSettled: (name, phase, owner) => mcpSignInCards.settled(name, phase, owner), onRefresh: (person, name, outcome) => connectionHealth.refreshed(person, name, outcome), onPersonChanged: (person, kind, id) => connectionHealth.connectedAgain({ kind, id, person }),
   botMcp: (bot) => mcpServersHost.mounted(bot), oauthClient: mcpKeys.oauthClient, brokerUrl: () => (CLOUD_TEAM ? cloudConnectedAppsBrokerUrl() || null : null), fullAccess: fullAccessForSource, composio }); teamConnections.primeApps(); const connectionHealth = createConnectionHealthHost({ dataDir: CLOUD_TEAM ? DATA_DIR : null, mcpServers: () => cfg.mcpServers ?? {}, mcpOAuth, connections: teamConnections, bots: () => store.bots, botServers: (bot) => Object.keys(mcpServersHost.mounted(bot)), roster: () => teamOwners.people?.list() ?? [], personKey: (email) => personKey({ id: "", email }), personName: (email) => teamHost.people.profile(personKey({ id: "", email })).name || null, test: (name, signal) => mcpConfig.test(name, { signal, person: () => null }), asleep: () => cloudPowerNow()?.sleeping() ?? false, wokeAt: () => cloudPowerNow()?.sleptUntil() ?? null }); if (CLOUD_TEAM) connectionHealth.start();
-// OpenCode reads provider keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, …) from its environment. Wired before the first catalog probe below.
-/** Provider keys come from the server's env only when it is the person's own shell: never on a Cloud
- * home, hosted team, managed desktop or open sign-in list, where every bot would bill the operator's key.
- * The engine that read them is gone, so the policy has no reader today; it is kept here because the rule
- * is about this machine's keys, not about any one engine. */
-function openCodeProviderKeysAllowed(state: {
-  cloudHome: boolean;
-  hostedWorkspace: boolean;
-  organisationManaged: boolean;
-  sharedSignIn: boolean;
-}): boolean {
-  return !state.cloudHome && !state.hostedWorkspace && !state.organisationManaged && !state.sharedSignIn;
-}
-let openCodeOrganisationManaged = (): boolean => false;
-const openCodeKeysAllowed = (): boolean => openCodeProviderKeysAllowed({
-  cloudHome: Boolean(CLOUD_HOME),
-  hostedWorkspace: HOSTED_WORKSPACE,
-  organisationManaged: openCodeOrganisationManaged(),
-  sharedSignIn: sharedSignIn(signInAllowList()),
-});
-let openCodeKeysLastAllowed = openCodeKeysAllowed();
-/** OpenCode lists a provider's models only while it may read that provider's key. */
-function resyncOpenCodeProviderKeys(): void {
-  const allowed = openCodeKeysAllowed();
-  if (allowed === openCodeKeysLastAllowed) return;
-  openCodeKeysLastAllowed = allowed;
-  for (const instance of registry.instances()) {
-    void registry.refreshModels(instance.instanceId)
-      .then(() => broadcast({ kind: "config", ...configStatus() }), () => {});
-  }
-}
 const firstEngineRead = holdUntilFirstEngineRead();
 await registry.load(providerConfigs(), decorateHostedProvider);
 const bundledSkills = loadBundledSkills();
@@ -1506,7 +1474,6 @@ let companyRuntimeReady!: () => void;
 const companyRuntimeStarted = new Promise<void>(resolve => { companyRuntimeReady = resolve; });
 const managedPolicy = new ManagedDesktopPolicy({ onChange: () => {
   registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() });
-  resyncOpenCodeProviderKeys();
 } });
 onKeyRejectionChange(() => { registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() }); });
 function computerPlaceRefusal(kind: ComputerKind): { message: string; code: "cloud_home" | "managed_policy" } | undefined {
@@ -1526,13 +1493,11 @@ const managedDesktop = new ManagedDesktopProviders({
   migrate: aliases => { store.renameInstances(new Map(aliases.map(({ from, to }) => [from, to]))); },
   onAvailability: () => {
     registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() });
-    resyncOpenCodeProviderKeys();
   },
   afterReplace: ids => {
     for (const id of providerInstancesChanging) if (managedDesktop.owns(id)) providerInstancesChanging.delete(id);
     bus.attach(ids.flatMap(id => { const instance = registry.get(id); return instance ? [instance] : []; }));
     broadcast({ kind: "config", ...configStatus() });
-    resyncOpenCodeProviderKeys();
   },
 });
 const cloudCredit = CLOUD_HOME ? new CloudCreditProvider({
@@ -1547,7 +1512,6 @@ const cloudCredit = CLOUD_HOME ? new CloudCreditProvider({
 const cloudCreditStarted = (cloudCredit?.start() ?? Promise.resolve()).catch((error) => {
   console.warn(`[trial credit] could not start: ${error instanceof Error ? error.message : String(error)}`);
 });
-openCodeOrganisationManaged = () => managedPolicy.current() !== null || managedDesktop.enrolled();
 utilityParentPort?.on("message", event => {
   const message = event.data as { type?: unknown; requestId?: unknown; identity?: unknown } | undefined;
   if (message?.type !== "openmausbot:managed-desktop-identity") return;
@@ -11724,10 +11688,8 @@ function configStatus() {
   const eventLogMaxBytes = threadEventLogMaxBytes(cfg);
   const eventLogRetentionDays = threadEventLogRetentionDays(cfg);
   return {
-    cloudStarter: cloudPlanTier.starter(), waitingForRoom: engineMemory.waiting(), planTurns: starterCaps.status(), awakeLimit: starterAwake.limit(), pausedBots: starterAwake.paused(), xai: keyStatus(cfg.xai?.key),
-    meta: keyStatus(cfg.meta?.key), deepseek: keyStatus(cfg.deepseek?.key),
+    cloudStarter: cloudPlanTier.starter(), waitingForRoom: engineMemory.waiting(), planTurns: starterCaps.status(), awakeLimit: starterAwake.limit(), pausedBots: starterAwake.paused(),
     xResearch: xResearchStatus(), treg: keyStatus(cfg.treg?.key), postiz: { ...keyStatus(cfg.postiz?.key), ...(cfg.postiz?.url ? { url: cfg.postiz.url } : {}) },
-    anthropic: { ...keyStatus(cfg.anthropic?.key), everyClaudeBot: cfg.anthropic?.everyClaudeBot !== false },
     openai: keyStatus(cfg.openai?.key),
     openrouter: keyStatus(cfg.openrouter?.key),
     fleet: { available: fleetAvailable(fleetSocketPath()) },
@@ -11739,7 +11701,6 @@ function configStatus() {
     billing: { currency: cfg.billing?.currency ?? "USD", prices: cfg.billing?.prices ?? {} },
     decisions: { retentionDays: decisionRetentionDays(cfg.decisions?.retentionDays) },
     safetyFloor: { enabled: safetyFloorOn() },
-    openaiCompat: { ...keyStatus(cfg.openaiCompat?.key), url: cfg.openaiCompat?.url ?? "" },
     composio: {
       ...(composio.connectionMode(cfg) === "self-hosted" ? keyHint(cfg.composio?.apiKey) : {}),
       configured: composio.configured(cfg), mode: composio.connectionMode(cfg),
@@ -11847,7 +11808,7 @@ async function describeInstances() {
     const entry = configs[instance.instanceId];
     const described = {
       ...instance, ...testedAi.info(instance), 
-      ...instanceLook(entry),
+      ...instanceIcon(entry),
       ...(entry?.access ? { access: entry.access } : {}), ...(entry?.driver === "openai-compat" && typeof (entry.config as { replyWaitMinutes?: unknown } | undefined)?.replyWaitMinutes === "number" ? { replyWaitMinutes: (entry.config as { replyWaitMinutes: number }).replyWaitMinutes } : {}), ...(heldKeys?.refusal(instance.instanceId) ? { snapshot: { state: "unavailable" as const, reason: TRIAL_KEY_HELD } } : {}),
     };
     if (hostedModels) return { ...described, readOnly: true,
@@ -12100,7 +12061,7 @@ const { react } = createReactions({
 });
 const publishedPages = createPublishedPages({ dataDir: DATA_DIR, cloudHome: CLOUD_HOME, selfHosted: !CLOUD_HOME && !HOSTED_WORKSPACE && utilityParentPort === undefined, patch: (threadId, messageId, text, publishedPage) => void store.patchMessage(threadId, messageId, { text, publishedPage }), liveRoots: (botId, threadId) => liveRoots(threadId, botId), paused: () => workspaceMaintenance.active || moveFreeze.frozen(), apps: { chat: chatApps, store } }); ROUTES.push(createReactionRoutes({ react, reactorFor, cloudGuestSendRefusal }), publishedPages.routes, savedSteps.routes, createPlacesElsewhereRoutes({ elsewhere: placesElsewhere, owner: (auth) => !sharedMembership() && !HOSTED_WORKSPACE && (auth.kind === "loopback" || ownHome.owner(auth) || (CLOUD_PERSONAL && cloudOwnerSession(auth))) }));
 // `let` slots are read per request.
-const keptAttachments = () => { const routineFiles = routines?.attachmentPaths(); return routineFiles && calendarCalls ? keptAttachmentNames([...store.bots.map((bot) => bot.avatarUrl), cfg.profile?.avatarUrl], [workspaceBannerStore.current()?.name, ...routineFiles, ...calendarCalls.list().flatMap((call) => call.attachments?.map((file) => file.path) ?? []), ...[...turnAttachmentsByTurn.values()].flat().map((file) => file.path)]) : null; }; createDeleteLeftovers({ dataDir: DATA_DIR, store, threadsReferencing, keptAttachments, deleteAttachment: (name) => deleteAttachment(join(ATTACHMENTS_DIR, name)), engineFolders: () => engineSessionFolders(DATA_DIR, [process.env, ...Object.values(providerConfigs()).map((instance) => instanceEnvironment(process.env, instance))].flatMap((env) => engineHomes.everyHome(env))), layers: memoryLayerRecords });
+const keptAttachments = () => { const routineFiles = routines?.attachmentPaths(); return routineFiles && calendarCalls ? keptAttachmentNames([...store.bots.map((bot) => bot.avatarUrl), cfg.profile?.avatarUrl], [workspaceBannerStore.current()?.name, ...routineFiles, ...calendarCalls.list().flatMap((call) => call.attachments?.map((file) => file.path) ?? []), ...[...turnAttachmentsByTurn.values()].flat().map((file) => file.path)]) : null; }; createDeleteLeftovers({ dataDir: DATA_DIR, store, threadsReferencing, keptAttachments, deleteAttachment: (name) => deleteAttachment(join(ATTACHMENTS_DIR, name)), engineFolders: () => engineSessionFolders([process.env, ...Object.values(providerConfigs()).map((instance) => instanceEnvironment(process.env, instance))].flatMap((env) => engineHomes.everyHome(env))), layers: memoryLayerRecords });
 ROUTES.push(createThreadRoutes({
   groupFor: personRooms.groupForAuth, ...(botOrders ? { botOrderFor: (auth: RequestAuth, bots: readonly BotRecord[]) => { const person = botOrders.personOf(auth); return person ? botOrders.ordered(person, bots) : bots; } } : {}),
   store, userName: userNameFor, sessions, groupUsageReader, lendingEnabled,
@@ -12348,7 +12309,7 @@ const postiz = createPostiz({ cfg: () => cfg, mcpOAuth, persistMcpServers: persi
   checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
   configForAccess: (status, auth) => configForAccess(status as ReturnType<typeof configStatus>, auth.scopes.includes("admin"), auth.kind === "session" ? auth.session : null),
   ...(CLOUD_TEAM ? { ownProfile: (auth: RequestAuth, profile: { name?: string; avatarUrl?: string; aboutMe?: string }) => auth.kind === "session" ? (teamHost.saveMemberProfile(auth.session, profile), true) : false, ownHints: (auth: RequestAuth, hints: string[]) => auth.kind === "session" ? (teamWelcome.save(personKey(auth.session), { hints }), true) : false } : {}),
-  resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, postiz,
+  revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, postiz,
 }));
 ROUTES.push(createInstanceRoutes({
   store, cfg, registry, sessions, providerAuthSessions,

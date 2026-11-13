@@ -52,7 +52,7 @@ const { chipAction, setupAction } = await import("./HelperSetup");
 const { SIMPLE_BOT_BUBBLE } = await import("./chat-bubble");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const claude = (ready: boolean): InstanceInfo => ({ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude",
+const claude = (ready: boolean): InstanceInfo => ({ instanceId: "claude", driverKind: "customAcp", displayName: "Claude",
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] } });
 const maus = (extra: Partial<Bot> = {}): Bot => ({ id: "maus", threadId: "t", name: "MausBot", title: "", description: "", notifications: true,
   color: "chrome", unread: false, modelSelection: { instanceId: "claude", model: "m" }, messages: [], defaultBot: {}, chiefOfStaff: true, ...extra });
@@ -185,7 +185,7 @@ describe("in the chat (Simple mode)", () => {
   });
 
   it("never counts OpenCode's free model as the person's own AI", async () => {
-    f.state = { ...f.state, instances: [{ instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode",
+    f.state = { ...f.state, instances: [{ instanceId: "agent-three", driverKind: "customAcp", displayName: "OpenCode",
       snapshot: { state: "available", authenticated: true, freeFallback: true }, models: { default: "m", options: [] } }] };
     await show();
     expect(lines()[3]).toContain("free backup model");

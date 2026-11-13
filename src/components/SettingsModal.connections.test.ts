@@ -42,7 +42,7 @@ describe("Settings → Connections", () => {
   it("offers keys for other OpenCode providers next to the OpenCode key", async () => {
     const { SettingsModal } = await import("./SettingsModal");
     const html = renderToStaticMarkup(createElement(SettingsModal));
-    const opencode = html.indexOf('data-api-key-row="opencodeGo"');
+    const opencode = html.indexOf('data-api-key-row="agent-three"');
     expect(opencode).toBeGreaterThan(0);
     expect(html.indexOf("data-opencode-provider-keys")).toBeGreaterThan(opencode);
     expect(html).toContain("Keys for other OpenCode providers");

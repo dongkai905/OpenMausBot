@@ -383,12 +383,12 @@ describe("connector MCP bridge", () => {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id: 4, result: { tools } }));
     });
-    const lines = start({ OMB_CONNECTOR_UPSTREAM_URL: upstream, [TOOL_SCHEMA_PROFILE_ENV]: "moonshot" });
+    const lines = start({ OMB_CONNECTOR_UPSTREAM_URL: upstream, [TOOL_SCHEMA_PROFILE_ENV]: "generic" });
     child!.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/list", params: {} })}\n`);
     const [search, page] = (await nextJson(lines)).result.tools;
     expect(search).toEqual(tools[0]);
     expect(schemaBytes(page.inputSchema)).toBeLessThanOrEqual(12_000);
-    expect(page.description).toContain("OpenMausBot shortened this tool's parameters to fit Kimi's size limit");
+    expect(page.description).toContain("OpenMausBot shortened this tool's parameters to fit the provider's size limit");
   });
 
   it("lists no more connected-app tools than its share of the model's tool limit", async () => {

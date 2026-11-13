@@ -42,7 +42,7 @@ async function draw(messages: Message[]) {
   const bot = pepper(messages);
   const state: AppState = {
     ...initialState, connected: true, selectedId: "pepper", bots: [bot],
-    instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+    instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
   };
   const value = { state, dispatch, flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {} };
   flushSync(() => root.render(createElement(BotEditorStore, { value, children: createElement(ChatView, { bot }) })));

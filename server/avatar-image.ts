@@ -32,7 +32,6 @@ export function avatarImageStatus(cfg: ImageCredentials) {
     customUrl: customImageUrl(cfg),
     customModel: [primary, fallback].find((slot) => slot?.provider === "custom")?.model ?? "",
     openaiConfigured: Boolean(cfg.imageGen?.key?.trim()),
-    xaiConfigured: Boolean(cfg.xai?.key?.trim()),
     customKeyConfigured: Boolean(cfg.imageGen?.customApiKey?.trim()),
     geminiConfigured: Boolean(cfg.imageGen?.geminiKey?.trim()),
     openrouterConfigured: Boolean(cfg.openrouter?.key?.trim()),

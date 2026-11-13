@@ -21,10 +21,6 @@ export function signedOutEngine(tool: ActivityTool, engine: InstanceInfo | undef
   return tool.setup && !tool.claudeUpdate && engineSignedOut(engine) ? engine : undefined;
 }
 
-export function claudeUpdateTarget(engine: InstanceInfo | undefined): InstanceInfo | undefined {
-  return engine?.driverKind === "claudeAgent" && !engine.readOnly ? engine : undefined;
-}
-
 export function botEngine(bot: Bot | undefined, instances: InstanceInfo[]): InstanceInfo | undefined {
   return bot && instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
 }

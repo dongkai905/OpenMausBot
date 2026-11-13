@@ -7,9 +7,9 @@ import { keyEntry, type KeyId } from "./key-catalog";
 import { saveKey } from "./key-save";
 
 const SLOTS: Array<[KeyId, string]> = [
-  ["openai", "openaiApiKey"], ["anthropic", "anthropicApiKey"], ["openrouter", "openrouterApiKey"], ["mistral", "mistralApiKey"], ["cerebras", "cerebrasApiKey"],
-  ["groq", "groqApiKey"], ["greenference", "greenferenceApiKey"], ["modelgo", "modelgoApiKey"], ["meta", "metaApiKey"], ["deepseek", "deepseekApiKey"], ["openaiCompat", "openaiCompatApiKey"],
+  ["openai", "openaiApiKey"], ["openrouter", "openrouterApiKey"],
 ];
+const SERVER_CONFIG_ONLY: KeyId[] = ["anthropic", "meta"];
 
 beforeEach(() => fixture.api.mockReset().mockResolvedValue({}));
 afterEach(() => vi.unstubAllGlobals());
@@ -24,14 +24,13 @@ describe("saving an AI provider key", () => {
     expect(fixture.api).not.toHaveBeenCalled();
   });
 
-  it("carries the first Anthropic key's choice to leave Claude sign-ins alone", async () => {
-    const setCredential = vi.fn().mockResolvedValue({});
-    vi.stubGlobal("window", { ogb: { setCredential } });
+  it("carries the first Anthropic key's choice to leave Claude sign-ins alone, in the server's config", async () => {
+    vi.stubGlobal("window", {});
     await saveKey(keyEntry("anthropic").target!, "fixture-key", true);
-    expect(setCredential).toHaveBeenCalledExactlyOnceWith("anthropicApiKey", "fixture-key", { everyClaudeBot: false });
+    expect(fixture.api).toHaveBeenCalledExactlyOnceWith("/api/config", { method: "PUT", body: JSON.stringify({ anthropic: { key: "fixture-key", everyClaudeBot: false } }) });
   });
 
-  it.each(SLOTS)("uses the server's config for %s with no desktop store, as a Cloud page or a browser has none", async (id) => {
+  it.each([...SLOTS.map(([id]) => id), ...SERVER_CONFIG_ONLY])("uses the server's config for %s with no desktop store, as a Cloud page or a browser has none", async (id) => {
     vi.stubGlobal("window", {});
     await saveKey(keyEntry(id).target!, "fixture-key", false);
     expect(fixture.api).toHaveBeenCalledExactlyOnceWith("/api/config", { method: "PUT", body: JSON.stringify(keyEntry(id).target!.patch("fixture-key", false)) });

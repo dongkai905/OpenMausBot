@@ -5,13 +5,13 @@ import { filterCustomModels, partitionCustomModels, suggestedModels } from "./cu
 const rows = [
   { id: "omlx::gemma-4-31b-it-bf16", label: "gemma-4-31b-it-bf16 (oMLX)", loaded: true },
   { id: "omlx::GLM-5.2-fp8", label: "GLM-5.2-fp8 (oMLX)" },
-  { id: "ollama::llama3.2:latest", label: "llama3.2:latest (Ollama)" },
+  { id: "local::llama3.2:latest", label: "llama3.2:latest (Ollama)" },
 ];
 
 describe("filterCustomModels", () => {
   it("matches the visible label or the encoded host id", () => {
     expect(filterCustomModels(rows, "gemma").map((row) => row.id)).toEqual(["omlx::gemma-4-31b-it-bf16"]);
-    expect(filterCustomModels(rows, "OLLAMA").map((row) => row.id)).toEqual(["ollama::llama3.2:latest"]);
+    expect(filterCustomModels(rows, "OLLAMA").map((row) => row.id)).toEqual(["local::llama3.2:latest"]);
     expect(filterCustomModels(rows, "omlx").map((row) => row.id)).toEqual([
       "omlx::gemma-4-31b-it-bf16",
       "omlx::GLM-5.2-fp8",

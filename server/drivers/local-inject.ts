@@ -1,11 +1,15 @@
-// Shared local-host inject: probe oMLX / Ollama / EXO / LM Studio / Unsloth, list what they serve
+// Shared local-host inject: probe oMLX / EXO / LM Studio / Unsloth, list what they serve
 // under Custom, and decode a pick into a host + API id.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { ModelCatalog, ProviderInstance } from "../contracts.ts";
-import { isContextName, pickedName, servedModel, serveWithWindow } from "./ollama-context.ts";
+import type { ModelCatalog } from "../contracts.ts";
+
+/** A model name that carries the window it runs with, as `-omb-<window>k`. */
+const CONTEXT_SUFFIX = /-omb-(\d+)k$/;
+const isContextName = (model: string) => CONTEXT_SUFFIX.test(model);
+const pickedName = (model: string) => model.replace(CONTEXT_SUFFIX, "");
 
 export interface LocalHost {
   id: string;
@@ -17,8 +21,6 @@ export interface LocalHost {
 
 export const LOCAL_HOSTS: LocalHost[] = [
   { id: "omlx", label: "oMLX", baseUrl: "http://127.0.0.1:8080/v1", apiKey: "omlx" },
-  { id: "ollama", label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", apiKey: "ollama" },
-  { id: "local_ollama", label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", apiKey: "ollama" },
   { id: "exo", label: "EXO", baseUrl: "http://127.0.0.1:52415/v1", apiKey: "exo" },
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", apiKey: "lm-studio" },
   { id: "unsloth", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
@@ -65,9 +67,6 @@ export function encodeInjectId(host: string, model: string): string {
   return `${host}${INJECT_SEP}${model}`;
 }
 
-const isOllamaHost = (host: string) => host === "ollama" || host === "local_ollama";
-const hostOrigin = (host: LocalHost) => host.baseUrl.replace(/\/v1\/?$/, "");
-
 export function decodeInjectId(id: string | null | undefined): { host: string; model: string } | null {
   if (!id) return null;
   const sep = id.indexOf(INJECT_SEP);
@@ -77,30 +76,7 @@ export function decodeInjectId(id: string | null | undefined): { host: string; m
   const known = HOST_BY_ID.get(host);
   if (!known || !MODEL_ID.test(model)) return null;
   // Every engine reads the model it sends from here, so all of them use the name that carries the window.
-  return { host, model: (isOllamaHost(host) ? servedModel(hostOrigin(known), model)?.model : undefined) ?? model };
-}
-
-/** The window a local pick will run with, once its turn has decided it. */
-export function injectedContextWindow(id: string | null | undefined): number | undefined {
-  const sep = id?.indexOf(INJECT_SEP) ?? -1;
-  if (sep <= 0) return undefined;
-  const known = HOST_BY_ID.get(id!.slice(0, sep));
-  return known && isOllamaHost(known.id) ? servedModel(hostOrigin(known), id!.slice(sep + INJECT_SEP.length))?.window : undefined;
-}
-
-/** Before a turn on an Ollama pick, settle the name that carries its window. */
-export function withLocalContext(instance: ProviderInstance): ProviderInstance {
-  const adapter = instance.adapter;
-  (instance as { adapter: ProviderInstance["adapter"] }).adapter = {
-    ...adapter,
-    sendTurn: async (input) => {
-      const sep = input.model?.indexOf(INJECT_SEP) ?? -1;
-      const host = sep > 0 ? HOST_BY_ID.get(input.model!.slice(0, sep)) : undefined;
-      if (host && isOllamaHost(host.id)) await serveWithWindow(hostOrigin(host), input.model!.slice(sep + INJECT_SEP.length));
-      return adapter.sendTurn(input);
-    },
-  };
-  return instance;
+  return { host, model };
 }
 
 export function localHost(id: string): LocalHost | undefined {
@@ -139,7 +115,7 @@ export function hostApiKey(host: LocalHost, env: Record<string, string | undefin
   return "local";
 }
 
-const CODEX_RESERVED_PROVIDERS = new Set(["openai", "ollama", "lmstudio"]);
+const CODEX_RESERVED_PROVIDERS = new Set(["openai", "lmstudio"]);
 
 /** Codex local providers without rewriting config.toml: secrets ride the child env, argv names the key only. */
 export function codexLocalProviderArgs(
@@ -314,7 +290,6 @@ export function loadedIdsFromPayloads(_host: LocalHost, catalog: unknown, extra:
 function loadedProbeUrl(host: LocalHost): string | null {
   const origin = anthropicBaseUrl(host);
   if (host.id === "omlx") return `${origin}/v1/models/status`;
-  if (host.id === "ollama" || host.id === "local_ollama") return `${origin}/api/ps`;
   if (host.id === "lmstudio") return `${origin}/api/v0/models`;
   return null;
 }
@@ -469,7 +444,5 @@ export function applyClaudeInject(
   env.ANTHROPIC_AUTH_TOKEN = key;
   env.ANTHROPIC_API_KEY = key;
   env.ANTHROPIC_MODEL = inject.model;
-  const window = injectedContextWindow(modelId);
-  if (window) env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(window);
   return { model: inject.model, injected: true };
 }

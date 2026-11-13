@@ -19,14 +19,14 @@ let host: HTMLDivElement;
 let root: Root;
 
 const opus = { instanceId: "claude", model: "claude-opus-5" };
-const codex = { instanceId: "codex", model: "gpt-5-codex" };
+const second = { instanceId: "agent-two", model: "gpt-5-second" };
 const task = (threadId: string, overrides: Partial<Task> = {}): Task => ({ threadId, title: threadId, createdAt: 1, ...overrides });
 const ada = (own: number): Bot => ({
   id: "ada", threadId: "first", name: "Ada", title: "", description: "", notifications: true, color: "green", unread: false,
   messages: [], modelSelection: opus,
   tasks: [
     task("first", { modelSelection: opus, followsBotModel: true }),
-    ...Array.from({ length: own }, (_, index) => task(`own-${index}`, { modelSelection: codex, followsBotModel: false })),
+    ...Array.from({ length: own }, (_, index) => task(`own-${index}`, { modelSelection: second, followsBotModel: false })),
   ],
 });
 

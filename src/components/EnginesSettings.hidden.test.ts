@@ -39,15 +39,15 @@ describe("hidden providers in Settings", () => {
   });
 
   it("lists hidden providers, folded, and unhides one with a click", async () => {
-    fixture.hidden = [{ instanceId: "hermes", displayName: "Hermes" }, { instanceId: "pi", displayName: "pi" }];
+    fixture.hidden = [{ instanceId: "agent-seven", displayName: "Hermes" }, { instanceId: "pi", displayName: "pi" }];
     flushSync(() => root.render(createElement(HiddenEngines)));
     await settle();
     const list = host.querySelector("[data-hidden-engines]")!;
     expect(list.querySelector("summary")!.textContent).toBe("Hidden (2)");
     expect(list.textContent).toContain("Hermes");
-    flushSync(() => host.querySelector<HTMLButtonElement>('[data-unhide-engine="hermes"]')!.click());
+    flushSync(() => host.querySelector<HTMLButtonElement>('[data-unhide-engine="agent-seven"]')!.click());
     await settle();
-    expect(fixture.calls).toContainEqual({ path: "/api/instances/hermes", body: { hidden: false } });
+    expect(fixture.calls).toContainEqual({ path: "/api/instances/agent-seven", body: { hidden: false } });
     expect(fixture.refresh).toHaveBeenCalled();
   });
 });

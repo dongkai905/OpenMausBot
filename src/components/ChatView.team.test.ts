@@ -34,7 +34,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const instances = [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
+const instances = [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
 const team = { id: "team-acme", name: "Acme" };
 const line = (id: string, sender: { name: string; id: string }, text: string): Message => ({ id, role: "user", kind: "text", at: 1, text, sender });
 const luna = (messages: Message[], extra: Partial<Bot> = {}): Bot => ({

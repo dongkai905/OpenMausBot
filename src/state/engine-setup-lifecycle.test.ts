@@ -15,7 +15,7 @@ it("recovers from offline, detects installation, and becomes ready on focus with
   let offline = false;
   const requests = vi.fn(async (path: string) => {
     if (path.split("?")[0] === "/api/instances") return new Response(JSON.stringify(offline ? { error: "Fixture offline" } : { instances: [{
-      instanceId: "kimi", driverKind: "kimiAgent", displayName: "Kimi", models: { default: "fixture", options: [] }, snapshot,
+      instanceId: "kimi", driverKind: "customAcp", displayName: "Kimi", models: { default: "fixture", options: [] }, snapshot,
       install: { platform: "linux", command: { linux: "fixture-install" }, signInCommand: "fixture-login" },
     }] }), { status: offline ? 503 : 200 });
     return new Response(JSON.stringify(path.startsWith("/api/bots?") ? { bots: [], groups: [] } : {}));

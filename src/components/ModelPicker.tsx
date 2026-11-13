@@ -6,9 +6,9 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, KeyRound, Loader2, R
 import { useStore, currentTaskBot, type Bot, type InstanceInfo, type ModelSelection } from "@/state/store"; import { sameFields, useStoreActions, useStoreSelector } from "@/state/store-select";
 import type { EffortLevel } from "../../shared/wire";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "@/lib/custom-models";
-import { configuredModelInstances, isClaudeAccount, isCustomOnly, modelsAwaitEngine, SIGN_IN_FAMILY_LABEL, signInFamily } from "@/lib/engine-rail";
+import { configuredModelInstances, isCustomOnly, modelsAwaitEngine } from "@/lib/engine-rail";
 import { modelName, simpleModelMenu, variantSuffix } from "@/lib/simple-model-menu";
-import { choiceIsSelected, modelChoices, modelSelectionForPick, takesTypedModels, withTypedModels, type ModelChoice } from "@/lib/model-choices";
+import { choiceIsSelected, modelChoices, modelSelectionForPick, type ModelChoice } from "@/lib/model-choices";
 export { modelSelectionForPick } from "@/lib/model-choices";
 import { pickerPlacement, type PickerPlacement } from "@/lib/picker-placement";
 import type { Typeahead } from "@/lib/menu-keys";
@@ -18,15 +18,14 @@ import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
 import { ApiKeyHint, EngineSetup, EngineUpdateNotice, InstanceAccountNotes, needsCli, needsSignIn, openKeysFor } from "./EngineSetup";
 import { offersLocalModels, probeLocalModels } from "./local-model-probe";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { ChatGptPlanStatus } from "./ChatGptPlanStatus";
 import { approvalModeFor, modelSwitchNeedsAsk } from "../../shared/approval-mode";
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";
 import { SimpleModelMenu, type SimpleThinking } from "./SimpleModelMenu";
-import { apiKeysLabel, ClaudeAccountSelect, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch } from "./ModelPickerFull";
+import { apiKeysLabel, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch } from "./ModelPickerFull";
 import { MENU_LABEL, MENU_LINE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING } from "./menu-recipe";
 import { modelMenuKey, modelMenuPointerMove } from "./model-menu-keys";
-import { lockedWhileBusy, offersReasoning, useRefocusAfterPick, variantChoices, variantLabel } from "./model-picker-reasoning";
+import { lockedWhileBusy, offersReasoning, useRefocusAfterPick, variantChoices } from "./model-picker-reasoning";
 import { BusyModelMenu } from "./ModelPickerBusyMenu";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
@@ -131,7 +130,7 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
   const selection = bot.modelSelection;
   const choices = variantChoices(state, selection, threadId ?? bot.threadId);
   if (!choices) return null;
-  const { instance, reported, options } = choices;
+  const { reported, options } = choices;
   const missing = selection.variant !== undefined && !options.some((option) => option.id === selection.variant);
   const unavailable = missing && reported !== undefined;
   const current = reported?.currentValue;
@@ -149,7 +148,7 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
           onChange={(event) => choose(options[Number(event.target.value)]?.id)}>
           <option value="unset">{t("model.variant.session")}</option>
           {missing && <option value="missing" disabled>{selection.variant} ({unavailable ? t("model.variant.unavailable") : t("model.variant.unverified")})</option>}
-          {options.map((option, index) => <option key={option.id} value={String(index)}>{variantLabel(option, instance.driverKind)}</option>)}
+          {options.map((option, index) => <option key={option.id} value={String(index)}>{option.label}</option>)}
         </Select>
       </label>
       {missing && <p className={cn("mt-1 text-ink-secondary", quiet ? "text-[12px] leading-4 text-ink-tertiary" : "text-[11px]")}>{unavailable ? t("model.variant.unavailableHelp") : t("model.variant.unverifiedHelp")}</p>}
@@ -162,7 +161,7 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
         <p className="mt-2 text-[12px] text-ink-secondary">
           {unavailable ? t("model.variant.unavailableChoice", { variant: selection.variant ?? "" })
             : missing ? t("model.variant.unverifiedChoice", { variant: selection.variant ?? "" }) : t("model.variant.none")}
-          {current !== undefined && ` ${t("model.variant.sessionValue", { variant: variantLabel(options.find((option) => option.id === current) ?? { id: current, label: current }, instance.driverKind) })}`}
+          {current !== undefined && ` ${t("model.variant.sessionValue", { variant: options.find((option) => option.id === current)?.label ?? current })}`}
         </p>
       )}
       {selection.variant !== undefined && (
@@ -179,14 +178,14 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
               key={option.id}
               type="button"
               aria-pressed={selection.variant === option.id}
-              title={t("model.variant.use", { variant: variantLabel(option, instance.driverKind) })}
+              title={t("model.variant.use", { variant: option.label })}
               onClick={() => choose(option.id)}
               className={cn(
                 "rounded-full border px-2.5 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
                 selection.variant === option.id ? "border-accent/60 bg-control text-ink" : "border-hairline/40 text-ink-secondary hover:bg-control/60 hover:text-ink",
               )}
             >
-              {variantLabel(option, instance.driverKind)}
+              {option.label}
             </button>
           ))}
         </div>
@@ -241,8 +240,6 @@ export function ModelPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const refreshingRef = useRef(false);
-  const lastClaudeIdRef = useRef<string | null>(null);
-  const lastOpenaiIdRef = useRef<string | null>(null);
   const focusOnPlace = useRef<string | null>(null);
   const typed = useRef<Typeahead | null>(null);
   const menuId = useId();
@@ -290,22 +287,13 @@ export function ModelPicker({
 
   const selection = bot.modelSelection;
   const refocusAfterPick = useRefocusAfterPick(menuRef, open, selection, query);
-  const instances = withTypedModels(state.instances, selection, query);
+  const instances = state.instances;
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
   const pickerInstances = configuredModelInstances(instances, selection.instanceId);
-  const selectedVariantLabel = selection.variant === undefined ? undefined : variantLabel(
+  const selectedVariantLabel = selection.variant === undefined ? undefined : (
     active?.models.options.find((option) => option.id === selection.model)?.variants?.find((option) => option.id === selection.variant)
-      ?? { id: selection.variant, label: selection.variant },
-    active?.driverKind,
-  );
-  const claudeAccounts = pickerInstances.filter(isClaudeAccount);
-  const openaiAccounts = pickerInstances.filter((instance) => signInFamily(instance) === "openai");
-  const openaiRailInstance = openaiAccounts.find((instance) => instance.instanceId === lastOpenaiIdRef.current)
-    ?? openaiAccounts.find((instance) => instance.instanceId === selection.instanceId) ?? openaiAccounts[0];
-  const multipleClaudeAccounts = state.instances.filter(isClaudeAccount).length > 1;
-  const showActiveAccount = (multipleClaudeAccounts && isClaudeAccount(active)) || Boolean(active?.snapshot.chatgptPlan);
-  const claudeRailInstance = claudeAccounts.find((instance) => instance.instanceId === lastClaudeIdRef.current)
-    ?? claudeAccounts.find((instance) => instance.instanceId === selection.instanceId) ?? claudeAccounts[0];
+      ?? { id: selection.variant, label: selection.variant }
+  ).label;
   const railInstance =
     pickerInstances.find((instance) => instance.instanceId === (railId ?? selection.instanceId)) ?? pickerInstances[0];
   const displayedInstanceId = railInstance?.instanceId;
@@ -401,8 +389,6 @@ export function ModelPicker({
   };
 
   const selectRail = (instance: InstanceInfo) => {
-    if (isClaudeAccount(instance)) lastClaudeIdRef.current = instance.instanceId;
-    if (signInFamily(instance) === "openai") lastOpenaiIdRef.current = instance.instanceId;
     setRailId(instance.instanceId);
     const official = instance.models.options.filter((option) => !option.custom);
     setPane(isCustomOnly(instance) || (official.length === 0 && !instance.snapshot.chatgptPlan) ? "custom" : "main");
@@ -411,8 +397,6 @@ export function ModelPicker({
 
   const openMenu = () => {
     if (locked) return;
-    if (active && isClaudeAccount(active)) lastClaudeIdRef.current = active.instanceId;
-    if (active && signInFamily(active) === "openai") lastOpenaiIdRef.current = active.instanceId;
     const initial = pickerInstances.find((instance) => instance.instanceId === selection.instanceId) ?? pickerInstances[0];
     setRailId(initial?.instanceId ?? null);
     setChangedBotModel(false);
@@ -496,7 +480,7 @@ export function ModelPicker({
     close(true);
   } : undefined;
 
-  const official = railInstance ? modelChoices(railInstance, railInstance.models.options.filter((option) => !option.custom)) : [];
+  const official = railInstance ? modelChoices(railInstance.models.options.filter((option) => !option.custom)) : [];
   const custom = railInstance?.models.options.filter((option) => option.custom) ?? [];
   const currentModel = selection.instanceId === railInstance?.instanceId
     ? official.find((option) => choiceIsSelected(option, selection))?.id : undefined;
@@ -569,7 +553,7 @@ export function ModelPicker({
   const attention = !active ? undefined
     : active.policy ? t("policy.managedBy", { organization: active.policy.organizationName })
       : needsCli(active) ? t("model.setupRequired")
-        : needsSignIn(active) && !isCustomOnly(active) && !currentOption?.custom ? t("model.signInRequired") : currentOption?.orgBlocked ? t("model.orgBlocked") : currentOption?.needsCliUpdate ? t("engines.updateClaude") : undefined;
+        : needsSignIn(active) && !isCustomOnly(active) && !currentOption?.custom ? t("model.signInRequired") : currentOption?.orgBlocked ? t("model.orgBlocked") : undefined;
   const summary = active
     ? `${engineDisplayName(active)} · ${modelLabel(active, selection.model)}${
         modelProvider(active, selection.model) ? ` · ${modelProvider(active, selection.model)}` : ""
@@ -610,20 +594,14 @@ export function ModelPicker({
         contained
           ? "hover:bg-ink/[0.06] aria-expanded:bg-ink/[0.08] disabled:opacity-50 disabled:hover:bg-transparent"
           : cn(ELEVATED_FLOAT, ELEVATED_HOVER, "disabled:text-ink-tertiary disabled:hover:bg-composer"),
-        !contained && active && !showActiveAccount && cn(COMPACT_SQUARE, USAGE_WARN_WIDENS),
+        !contained && active && cn(COMPACT_SQUARE, USAGE_WARN_WIDENS),
       )}
     >
       {active && (contained
         ? <InstanceProviderMark instance={active} size={14} subtle />
         : <span className="flex shrink-0 group-disabled:opacity-50"><InstanceProviderMark instance={active} size={14} subtle /></span>)}
-      {!contained && active && showActiveAccount && (
-        <span data-model-account-compact className="hidden max-w-20 truncate @max-4xl/chathead:inline">{engineDisplayName(active)}</span>
-      )}
       <span className={cn("flex min-w-0 items-center gap-1", !contained && active && "@max-4xl/chathead:hidden")}>
         <span className="max-w-[160px] truncate">
-          {active && showActiveAccount && (
-            <span data-model-account className="text-ink-secondary">{engineDisplayName(active)} · </span>
-          )}
           {modelLabel(active, selection.model)}
           {active && modelProvider(active, selection.model) && (
             <span className="text-ink-secondary"> · {modelProvider(active, selection.model)}</span>
@@ -697,7 +675,7 @@ export function ModelPicker({
         <FollowBotModelRow name={profile.name} model={botModelName} follows={follows} onPick={pickBotModel} />
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
-        {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail}
+        {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} onSelect={selectRail}
           onAddApiKeys={remote ? undefined : openApiKeys} />}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
@@ -721,7 +699,7 @@ export function ModelPicker({
             <>
               <div className="shrink-0 px-3.5 pb-2 pt-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="truncate text-[14px] font-semibold leading-5 text-ink">{signInFamily(railInstance) ? SIGN_IN_FAMILY_LABEL[signInFamily(railInstance)!] : engineDisplayName(railInstance)}</div>
+                  <div className="truncate text-[14px] font-semibold leading-5 text-ink">{engineDisplayName(railInstance)}</div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
@@ -752,16 +730,7 @@ export function ModelPicker({
                     </span>
                   </div>
                 </div>
-                {isClaudeAccount(railInstance) && claudeAccounts.length > 1 && (
-                  <ClaudeAccountSelect accounts={claudeAccounts} selectedId={railInstance.instanceId} onSelect={selectRail} />
-                )}
-                {signInFamily(railInstance) === "openai" && openaiAccounts.length > 1 && (
-                  <ClaudeAccountSelect accounts={openaiAccounts} selectedId={railInstance.instanceId} onSelect={selectRail} />
-                )}
                 <InstanceAccountNotes instance={railInstance} listsModels={pane === "main"} />
-                {railInstance.snapshot.chatgptPlan && railInstance.snapshot.authenticated && (
-                  <ChatGptPlanStatus key={railInstance.instanceId} instanceId={railInstance.instanceId} />
-                )}
                 {railInstance.access === "api"
                   ? <ApiKeyHint instance={railInstance} />
                   : pane === "custom" && <div className="mt-0.5 text-[12px] leading-4 text-ink-tertiary">{t("model.localHint")}</div>}
@@ -808,7 +777,7 @@ export function ModelPicker({
                 </div>
               ) : (
                 <>
-                  {((pane === "main" && (official.length > COMPACT_MODEL_COUNT || takesTypedModels(railInstance))) ||
+                  {((pane === "main" && official.length > COMPACT_MODEL_COUNT) ||
                     (pane === "custom" && custom.length > COMPACT_MODEL_COUNT)) && (
                     <ModelSearch
                       value={query}

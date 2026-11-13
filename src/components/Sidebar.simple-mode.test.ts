@@ -149,14 +149,16 @@ describe("bot-first sidebar", () => {
 
   it("ends a Simple row's preview line with its engine's faded mark, puts the unread dot at the name line's top right where ⋯ shows, and never moves the name", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [], unread: true, messages: [{ id: "m", role: "bot", kind: "text", text: "Done.", at: 1 }] } as Bot;
     let tree: ReactNode;
     function Capture() { tree = botRow(rowProps("comfortable", candidate)); return tree; }
     const markup = renderToStaticMarkup(createElement(Capture));
     const line = markup.slice(markup.indexOf(">Done.<"));
-    expect(line).toMatch(/^>Done\.<\/span><\/span><span data-testid="model-badge" role="img" aria-label="Model: [^"]+ \(Claude\)" class="[^"]*\bms-auto\b[^"]*"><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
-    expect(line).toMatch(/^>Done\.<\/span><\/span><span data-testid="model-badge"[^>]*><span data-provider-mark="brand"[^>]*><svg[\s\S]*?<\/svg><\/span><\/span><\/div><span class="sr-only">Unread<\/span>/);
+    expect(line).toMatch(/^>Done\.<\/span><\/span><span data-testid="model-badge" role="img" aria-label="Model: [^"]+ \(Claude\)" class="[^"]*\bms-auto\b[^"]*"><span data-provider-mark="mono"/);
+    expect(line).toMatch(/^>Done\.<\/span><\/span><span data-testid="model-badge"[^>]*><span data-provider-mark="mono"[^>]*><span[^>]*>C<\/span><\/span><\/span><\/div><span class="sr-only">Unread<\/span>/);
+    expect(line).toContain("[--color-ink:var(--color-ink-tertiary)]");
+    expect(line).toContain("group-hover:[--color-ink:inherit]");
     const name = markup.slice(markup.indexOf('class="flex items-baseline justify-between gap-2 pr-7"'), markup.indexOf(">Done.<"));
     expect(name).toMatch(/<span aria-hidden="true" data-row-dot="" class="pointer-events-none absolute right-2 top-1 flex size-7 items-center justify-center transition-opacity group-hover:opacity-0 group-focus-within:opacity-0 touch:opacity-0 max-md:hidden"><span data-testid="unread-dot" title="Unread" class="size-2 shrink-0 rounded-full bg-accent"><\/span><\/span>/);
     expect(name).toContain('<span aria-hidden="true" title="Unread" class="size-2 shrink-0 rounded-full bg-accent hidden self-center max-md:block touch:block"></span>');
@@ -169,13 +171,17 @@ describe("bot-first sidebar", () => {
 
   it("fades the collapsed rail's engine badge in both modes", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [] };
     const rail = renderToStaticMarkup(createElement(BotListItem, rowProps("icons", candidate)));
-    expect(rail).toMatch(/<span data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
+    expect(rail).toContain('<span data-provider-mark="mono"');
+    expect(rail).toContain("[--color-ink:var(--color-ink-tertiary)]");
+    expect(rail).toContain("group-hover:[--color-ink:inherit]");
     fixture.advanced = true;
     const advanced = renderToStaticMarkup(createElement(BotListItem, rowProps("icons", candidate)));
-    expect(advanced).toMatch(/<span data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
+    expect(advanced).toContain('<span data-provider-mark="mono"');
+    expect(advanced).toContain("[--color-ink:var(--color-ink-tertiary)]");
+    expect(advanced).toContain("group-hover:[--color-ink:inherit]");
   });
 
   it("shows a waiting Simple row as an amber dot and preview, and a working one as a ring-cut dot on the avatar, with no badge or live region", () => {
@@ -200,7 +206,7 @@ describe("bot-first sidebar", () => {
     const said: Bot["messages"] = [{ id: "hi", role: "bot", kind: "text", at: 1, text: "Here are the leads from Monday." }];
     const leads = { threadId: "leads", title: "Leads", createdAt: 1 };
     const candidate: Bot = { ...bot, threadId: "leads", messages: said, unread: false, projects: [], tasks: [{ ...leads, busy: true, activity: "working" }], busy: true };
-    noteTurnEvent({ eventId: "e1", provider: "claudeAgent", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
+    noteTurnEvent({ eventId: "e1", provider: "customAcp", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
       type: "turn.progress", activity: "command", itemId: "c1", target: "scrape.py", quiet: { kind: "busy" } } as RuntimeEvent);
     const working = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)));
     expect(working).toContain('<span dir="auto" data-sidebar-working-phrase="" class="truncate">Running a command</span>');
@@ -220,7 +226,7 @@ describe("bot-first sidebar", () => {
     resetTurnLive();
     const candidate: Bot = { ...bot, threadId: "open", messages: [], unread: false, projects: [], busy: true,
       tasks: [{ threadId: "open", title: "Open", createdAt: 1 }, { threadId: "leads", title: "Leads", createdAt: 2, busy: true, activity: "working" }] };
-    noteTurnEvent({ eventId: "e2", provider: "codex", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
+    noteTurnEvent({ eventId: "e2", provider: "agent-two", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
       type: "turn.progress", activity: "web", itemId: "w1", target: "Acme construction leads" } as RuntimeEvent);
     expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)))).toContain(">Searching the web</span>");
     resetTurnLive();
@@ -261,14 +267,15 @@ describe("bot-first sidebar", () => {
 
   it("draws no engine mark for a bot with no AI yet or in a group chat, and a faded one in Advanced mode", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [] };
     expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", { ...candidate, modelSelection: { instanceId: "none", model: "m" } })))).not.toContain("data-provider-mark");
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
     expect(renderToStaticMarkup(createElement(GroupListItem, { group, density: "comfortable", onMenu: vi.fn() }))).not.toContain("data-provider-mark");
     fixture.advanced = true;
     const advanced = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)));
-    expect(advanced).toMatch(/data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
+    expect(advanced).toMatch(/data-testid="model-badge"[^>]*><span data-provider-mark="mono"/);
+    expect(advanced).toContain("group-hover:[--color-ink:inherit]");
   });
 
   it("keeps a Simple row to its name, preview and one faded engine mark, naming role, Chief and engine in its tooltip", () => {

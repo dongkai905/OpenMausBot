@@ -1,17 +1,13 @@
 // Pins each workaround the "Other model providers" docs page gives to the code it depends on: when one fails, update the page.
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PROVIDER_CREDENTIAL_ENV, WORKSPACE_CREDENTIAL_ENV, stripWorkspaceCredentialEnv } from "./config.ts";
-import { OPENROUTER_FAILURES, freeLabel } from "./drivers/openrouter-free.ts";
-import { removeTempDir } from "./testing/cleanup.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PAGE = readFileSync(join(ROOT, "apps", "docs", "content", "docs", "providers", "model-providers.mdx"), "utf8");
-const EN = JSON.parse(readFileSync(join(ROOT, "src", "locales", "en.json"), "utf8")) as Record<string, string>;
 
 function section(heading: string): string {
   const lines = PAGE.split(/\r?\n/u);
@@ -23,20 +19,6 @@ function section(heading: string): string {
 }
 
 const flat = (text: string) => text.replace(/\s+/gu, " ");
-
-const scratchDirs: string[] = [];
-const scratch = (prefix: string) => {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-};
-
-afterEach(async () => {
-  for (const dir of scratchDirs.splice(0)) await removeTempDir(dir);
-});
-
-
-
 
 describe("Keys exported on a server", () => {
   const exported = ["OPENROUTER_API_KEY", "FIREWORKS_API_KEY", "TOGETHER_API_KEY"];
@@ -54,16 +36,4 @@ describe("Keys exported on a server", () => {
     expect(text).toContain("Keys exported this way reach every engine on that server, and any bot that can run commands can read them.");
   });
 
-});
-
-describe("Free OpenRouter models section", () => {
-  it("quotes the turn errors and the picker mark the chat engine shows", () => {
-    const text = section("### Free OpenRouter models");
-    expect(OPENROUTER_FAILURES.credits).toMatch(/^This model needs OpenRouter credit\b/u);
-    expect(text).toContain('"This model needs OpenRouter credit"');
-    expect(OPENROUTER_FAILURES.privacy).toMatch(/^OpenRouter's privacy settings block this free model\b/u);
-    expect(text).toContain(`"OpenRouter's privacy settings block this free model"`);
-    expect(freeLabel("Gemma 4 31B", { id: "google/gemma-4-31b-it:free" })).toBe("Gemma 4 31B (free)");
-    expect(text).toContain("**(free)**");
-  });
 });

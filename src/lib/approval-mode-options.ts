@@ -29,10 +29,9 @@ const SIMPLE_NAME_KEYS: Record<ApprovalMode, LocaleKey> = {
   custom: "botSettings.simple.custom",
 };
 
-/** Simple mode's name for a level, the one the bot panel uses. Antigravity's full-access grant shows as Auto, as it
- * does in Advanced. */
-export function simpleApprovalName(mode: ApprovalMode, driverKind?: string): string {
-  return t(SIMPLE_NAME_KEYS[driverKind === "antigravityAgent" && mode === "full" ? "auto" : mode]);
+/** Simple mode's name for a level, the one the bot panel uses. */
+export function simpleApprovalName(mode: ApprovalMode): string {
+  return t(SIMPLE_NAME_KEYS[mode]);
 }
 
 export interface ApprovalModeOption {
@@ -56,23 +55,10 @@ export function approvalModeOptions(): ApprovalModeOption[] {
 export function approvalModeOptionsFor(driverKind: string, trustedModesAvailable = true) {
   return approvalModeOptions()
     .filter((option) => supportsApprovalMode(driverKind, option.mode)
-      // Antigravity has no native reviewer: its full-access grant is shown as Auto below, and the real Auto, which
-      // behaves as Ask, is not offered.
-      && (driverKind !== "antigravityAgent" || option.mode !== "auto")
       && (trustedModesAvailable || option.mode !== "custom"))
-    .map((option) => {
-      if (driverKind === "antigravityAgent" && option.mode === "full") {
-        return {
-          ...option,
-          label: t("approvalMode.antigravity.label"),
-          chip: t("approvalMode.auto.chip"),
-          description: t("approvalMode.antigravity.desc"),
-        };
-      }
-      return option.mode === "auto" && !hasNativeAutoReview(driverKind)
-        ? { ...option, description: t("approvalMode.noNativeReview") }
-        : option;
-    });
+    .map((option) => option.mode === "auto" && !hasNativeAutoReview(driverKind)
+      ? { ...option, description: t("approvalMode.noNativeReview") }
+      : option);
 }
 
 export function approvalModeSelectionRequiresLocalDesktop(
@@ -83,7 +69,7 @@ export function approvalModeSelectionRequiresLocalDesktop(
   return currentMode === "custom" && !trustedModesAvailable;
 }
 
-/** The mode to show as chosen. Security: old Antigravity Auto settings still ask; never display or silently grant the new Auto until it is chosen. */
-export function shownApprovalMode(driverKind: string, savedMode: ApprovalMode): ApprovalMode {
-  return driverKind === "antigravityAgent" && savedMode === "auto" ? "ask" : savedMode;
+/** The mode to show as chosen. */
+export function shownApprovalMode(savedMode: ApprovalMode): ApprovalMode {
+  return savedMode;
 }

@@ -1,10 +1,6 @@
 import { rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-
-const FAKE_ACP = join(dirname(fileURLToPath(import.meta.url)), "..", "testing", "fake-acp-cli.ts");
 import {
   applyClaudeInject,
   applyOpenAIInject,
@@ -95,7 +91,6 @@ describe("resolveInjectId", () => {
 
 describe("loadedIdsFromPayloads", () => {
   const omlx = LOCAL_HOSTS.find((host) => host.id === "omlx")!;
-  const ollama = LOCAL_HOSTS.find((host) => host.id === "ollama")!;
   const lmstudio = LOCAL_HOSTS.find((host) => host.id === "lmstudio")!;
 
   it("uses oMLX /health default_model when no per-model loaded flags exist", () => {
@@ -128,25 +123,6 @@ describe("loadedIdsFromPayloads", () => {
       },
     );
     expect([...loaded].sort()).toEqual(["GLM-5.2-fp8", "gemma-4-31b-it-bf16"]);
-  });
-
-  it("uses Ollama /api/ps running models", () => {
-    const loaded = loadedIdsFromPayloads(
-      ollama,
-      { data: [{ id: "llama3.2:latest" }, { id: "mistral:latest" }] },
-      { models: [{ name: "llama3.2:latest", size: 1 }] },
-    );
-    expect([...loaded]).toEqual(["llama3.2:latest"]);
-  });
-
-  it("pins the catalog id when /api/ps reports a tagged name", () => {
-    const loaded = loadedIdsFromPayloads(
-      ollama,
-      { data: [{ id: "llama3.2" }, { id: "mistral" }] },
-      { models: [{ name: "llama3.2:latest", size: 1 }] },
-    );
-    expect(loaded.has("llama3.2")).toBe(true);
-    expect(loaded.has("llama3.2:latest")).toBe(true);
   });
 
   it("uses LM Studio state=loaded and skips not-loaded", () => {

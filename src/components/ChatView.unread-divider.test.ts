@@ -70,7 +70,7 @@ beforeAll(async () => {
     connected: true,
     selectedId: "scout",
     bots: [profile("pepper", [...read, ...away], true), profile("scout", [line("s1", "user", 1)], false)],
-    instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+    instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
   };
   await draw();
 });

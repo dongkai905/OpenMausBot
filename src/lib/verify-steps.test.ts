@@ -21,7 +21,7 @@ import type { Message } from "@/state/store";
 let seq = 0;
 const claude = (command: string, ok?: boolean): Message =>
   ({ id: `c${++seq}`, at: seq, role: "bot", kind: "activity", tool: { name: "Bash", summary: command, ...(ok === undefined ? {} : { ok }) } });
-const codex = (command: string, ok?: boolean): Message =>
+const second = (command: string, ok?: boolean): Message =>
   ({ id: `x${++seq}`, at: seq, role: "bot", kind: "activity", tool: { name: command, summary: command, ...(ok === undefined ? {} : { ok }) } });
 const acp = (command: string, ok?: boolean): Message =>
   ({ id: `a${++seq}`, at: seq, role: "bot", kind: "activity", tool: { name: command.slice(0, 80), summary: command, ...(ok === undefined ? {} : { ok }) } });
@@ -144,7 +144,7 @@ describe("parseRunCommand", () => {
 describe("commandOf", () => {
   it("reads the summary and only the summary", () => {
     expect(commandOf(claude(DOCTOR))).toBe(DOCTOR);
-    expect(commandOf(codex("ls -la"))).toBe("ls -la");
+    expect(commandOf(second("ls -la"))).toBe("ls -la");
     expect(commandOf({ ...claude("x"), tool: { name: "Read", ok: true } })).toBeUndefined();
     expect(commandOf(text(DOCTOR))).toBeUndefined();
   });
@@ -174,7 +174,7 @@ describe("runSteps", () => {
       text("Checking the fixture"),
       claude("pnpm typecheck", true),
       claude(DOCTOR, true),
-      codex(SEND, false),
+      second(SEND, false),
       acp(PRESS),
       claude("git status", true),
       claude("cat scripts/control-omb.ts", true),
@@ -239,7 +239,7 @@ describe("showRun", () => {
 
 describe("runSummary", () => {
   it("counts the steps first, then only the non-zero verified, failed and running counts", () => {
-    const steps = runSteps([claude(DOCTOR, true), claude(DOCTOR, true), codex(SEND, false), acp(PRESS), claude(PUSH, true)]);
+    const steps = runSteps([claude(DOCTOR, true), claude(DOCTOR, true), second(SEND, false), acp(PRESS), claude(PUSH, true)]);
     expect(runSummary(steps)).toEqual({
       total: 5, verified: 4, passed: 3, failed: 1, running: 0, unverified: 1, dryRuns: 0, label: "5 steps · 4 verified · 1 failed · 1 with no result",
     });
@@ -270,7 +270,7 @@ describe("runSummary", () => {
 
 describe("runSkill", () => {
   it("follows the last skill card after the run's first step", () => {
-    const run = [claude(DOCTOR, true), codex(SEND, false)];
+    const run = [claude(DOCTOR, true), second(SEND, false)];
     const steps = runSteps(run);
     expect(runSkill([text("hi"), ...run], steps)).toBeNull();
     expect(runSkill([text("hi"), ...run, stagedSkill()], steps)).toBe("pending");
@@ -284,7 +284,7 @@ describe("runSkill", () => {
 
 describe("skillPrompt", () => {
   describe("for a run with a verified step", () => {
-    const steps = runSteps([claude(DOCTOR, true), codex(SEND, false), acp(PRESS), claude(`${DOCTOR} --dry-run`, true), claude(PUSH, true)]);
+    const steps = runSteps([claude(DOCTOR, true), second(SEND, false), acp(PRESS), claude(`${DOCTOR} --dry-run`, true), claude(PUSH, true)]);
     const prompt = skillPrompt(steps, "verify the fixture");
 
     it("mounts the bundled skill by opening with one of its trigger phrases", () => {

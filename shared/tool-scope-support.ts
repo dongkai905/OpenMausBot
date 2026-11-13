@@ -10,7 +10,7 @@ export function assertToolScopeSupported(engine: string, value: unknown): ToolSc
   if (!parsed.ok) throw new Error(parsed.error);
   const support: (typeof TOOL_SCOPE_SUPPORT)[keyof typeof TOOL_SCOPE_SUPPORT] | undefined =
     TOOL_SCOPE_SUPPORT[engine as keyof typeof TOOL_SCOPE_SUPPORT];
-  if (parsed.scope !== undefined && support !== "native-and-mcp") {
+  if (parsed.scope !== undefined) {
     if (support === undefined) {
       if (parsed.scope.allow !== undefined || parsed.scope.deny?.length) throw new Error(`${engine}: tool selection is not supported by this engine. Choose a supported engine.`);
     } else if (narrowsNativeTools(parsed.scope)) {

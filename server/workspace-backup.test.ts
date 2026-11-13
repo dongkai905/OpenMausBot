@@ -174,7 +174,7 @@ describe("encrypted full workspace backups", () => {
       expect(readFileSync(join(source, "messages.db"))).toEqual(originalDb);
       expect(readFileSync(join(source, "runtime.db"))).toEqual(originalRuntimeDb);
       const target = directory();
-      const connections = { xai: { key: "destination-key", url: "https://destination.example" }, instances: { local: { driver: "claudeAgent", config: { configDir: join(target, "providers", "local") } } } };
+      const connections = { postiz: { key: "destination-key", url: "https://destination.example" }, instances: { local: { driver: "claudeAgent", config: { configDir: join(target, "providers", "local") } } } };
       json(join(target, "config.json"), { ...connections, language: "en" });
       json(join(target, "bots.json"), [{ id: "old" }]);
       json(join(target, "sessions.json"), { identity: "target-session" });
@@ -385,9 +385,9 @@ describe("encrypted full workspace backups", () => {
     mkdirSync(join(source, "attachments"));
     writeFileSync(join(source, "attachments", "user-note.txt"), "A user-pasted secret is not silently redacted.");
     writeFileSync(join(source, "vm-home", "project.txt"), "ordinary managed VM file");
-    json(join(source, "config.json"), { xai: { key: "SOURCE_SAVED_SECRET", url: "https://source.example" }, language: "ja" });
+    json(join(source, "config.json"), { postiz: { key: "SOURCE_SAVED_SECRET", url: "https://source.example" }, language: "ja" });
     json(join(source, "webhooks.json"), { webhooks: [{ id: "same", endpointId: "same-endpoint", secretHash: "a".repeat(64), sealedSecret: "SOURCE_SAVED_SECRET", enabled: true, verificationPending: true }] });
-    json(join(target, "config.json"), { xai: { key: "DESTINATION_SAVED_SECRET", url: "https://destination.example" }, language: "en" });
+    json(join(target, "config.json"), { postiz: { key: "DESTINATION_SAVED_SECRET", url: "https://destination.example" }, language: "en" });
     json(join(target, "webhooks.json"), { webhooks: [{ id: "same", endpointId: "same-endpoint", secretHash: "b".repeat(64), sealedSecret: "DESTINATION_SEALED" }] });
     const exported = await createWorkspaceBackup(source, { password: PASSWORD });
     const staged = await stageWorkspaceBackup(target, exported.path, { password: PASSWORD });
@@ -402,7 +402,7 @@ describe("encrypted full workspace backups", () => {
     for (const path of authPaths) expect(readFileSync(join(target, path), "utf8")).toBe("DESTINATION_SAVED_SECRET");
     expect(readFileSync(join(target, "vm-home", "project.txt"), "utf8")).toBe("ordinary managed VM file");
     expect(readFileSync(join(target, "attachments", "user-note.txt"), "utf8")).toBe("A user-pasted secret is not silently redacted.");
-    expect(readJson(join(target, "config.json"))).toEqual({ xai: { key: "DESTINATION_SAVED_SECRET", url: "https://destination.example" }, language: "ja" });
+    expect(readJson(join(target, "config.json"))).toEqual({ postiz: { key: "DESTINATION_SAVED_SECRET", url: "https://destination.example" }, language: "ja" });
     expect(readJson(join(target, "webhooks.json")).webhooks[0]).toMatchObject({ secretHash: "b".repeat(64), sealedSecret: "DESTINATION_SEALED", enabled: false, verificationPending: false });
     for (const path of authPaths) expect(readFileSync(join(source, path), "utf8")).toBe("SOURCE_SAVED_SECRET");
     expect(readJson(join(source, "webhooks.json")).webhooks[0].secretHash).toBe("a".repeat(64));
@@ -520,7 +520,7 @@ describe("encrypted full workspace backups", () => {
     const staged = await stageWorkspaceBackup(source, exported.path, { password: PASSWORD });
     const base = readJson(join(source, ".backups", staged.id, "staged", "manifest.json"));
     for (const variant of [
-      { credentials: { xaiApiKey: "secret" } },
+      { credentials: { openaiApiKey: "secret" } },
       { summary: { ...base.summary, includesCredentials: false } },
     ]) {
       const path = encryptedPayload(source, Buffer.concat([tarEntry("manifest.json", "File", JSON.stringify({ ...base, ...variant })), tarEntry("data", "Directory"), Buffer.alloc(1024)]));
@@ -528,7 +528,7 @@ describe("encrypted full workspace backups", () => {
     }
     for (const [name, content] of [
       ["team-computers.json", '{"computers":[{"id":"foreign-computer","section":"Design"}]}'],
-      ["workspace-credentials.json", '{"xaiApiKey":"secret"}'],
+      ["workspace-credentials.json", '{"openaiApiKey":"secret"}'],
       ["external-runtimes.json", '{"bot-id":"external-runtime-secret"}'],
       ["External-Runtimes.json", "external-runtime-secret"],
       ["Sessions.json", "secret"],
@@ -537,10 +537,10 @@ describe("encrypted full workspace backups", () => {
       ["Browser-Engine-Key", "secret"],
       ["vm-home/.Browser-Profiles", "secret"],
       ["vm-homes/bot/.BROWSER-PROFILES", "secret"],
-      ["Config.json", '{"xai":{"key":"secret"}}'],
+      ["Config.json", '{"postiz":{"key":"secret"}}'],
       ["Webhooks.json", '{"webhooks":[{"secretHash":"secret"}]}'],
       ["browser-engine-key", "secret"],
-      ["config.json", '{"xai":{"key":"secret","url":"https://source.example"}}'],
+      ["config.json", '{"postiz":{"key":"secret","url":"https://source.example"}}'],
       ["config.json", '{"futureAuth":{"field":"secret"}}'],
       ["webhooks.json", '{"webhooks":[{"secretHash":"secret"}]}'],
       ["webhooks.json", '{"webhooks":[{"sealedSecret":"secret"}]}'],

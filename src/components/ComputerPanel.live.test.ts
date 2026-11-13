@@ -52,7 +52,7 @@ const bot = {
   tasks: [{ threadId: "thread", title: "Thread", createdAt: 1, approvalMode: "ask" }],
 } as unknown as Bot;
 const engine = {
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
   snapshot: { state: "available", version: "1", authenticated: true },
   models: { default: "m", options: [{ id: "m", label: "M" }] },
   capabilities: { computerMcp: true, browserMcp: true },

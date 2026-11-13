@@ -372,12 +372,12 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   it("fits each listed schema to the engine's provider profile, and lists tools as they came without one", async () => {
     const catalog = { tools: [{ name: "small", inputSchema: { type: "object", properties: { q: { type: "string" } } } },
       { name: "create_page", description: "Create a page.", inputSchema: createPageSchema() }] };
-    start(catalog, { OMB_GATE_BUDGET: "0", [TOOL_SCHEMA_PROFILE_ENV]: "moonshot" }, LISTING_UPSTREAM);
+    start(catalog, { OMB_GATE_BUDGET: "0", [TOOL_SCHEMA_PROFILE_ENV]: "generic" }, LISTING_UPSTREAM);
     send({ jsonrpc: "2.0", id: 1, method: "tools/list" });
     const [small, page] = JSON.parse(await nextLine()).result.tools;
     expect(small).toEqual(catalog.tools[0]);
     expect(schemaBytes(page.inputSchema)).toBeLessThanOrEqual(12_000);
-    expect(page.description).toMatch(/^Create a page\.\n\n\(OpenMausBot shortened this tool's parameters to fit Kimi's size limit/);
+    expect(page.description).toMatch(/^Create a page\.\n\n\(OpenMausBot shortened this tool's parameters to fit the provider's size limit/);
     gate!.kill();
     await once(gate!, "close");
 

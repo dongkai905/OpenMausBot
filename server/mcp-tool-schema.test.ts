@@ -4,7 +4,7 @@ import { createToolListNormalizer, fitToolList, fitToolListResult, providerSafeI
 import { createPageSchema, wideSchema } from "./testing/oversized-tool-schema.ts";
 import { schemaBytes, toolSchemaProfile } from "./tool-schema-profile.ts";
 
-const MOONSHOT = toolSchemaProfile("moonshot")!;
+const GENERIC = toolSchemaProfile("generic")!;
 
 // Verbatim from `cua-driver describe browser_prepare`, cua-driver 0.22.1: strict providers reject its root anyOf.
 const BROWSER_PREPARE_0_22_1 = {
@@ -175,23 +175,23 @@ describe("a tool list under a provider's schema profile", () => {
     const lines: string[] = [];
     const tools = [small, { name: "create_page", description: "Create a page.", inputSchema: createPageSchema() },
       { name: "configure_everything", inputSchema: wideSchema(400) }, { name: "rooted", inputSchema: BROWSER_PREPARE_0_22_1 }];
-    const fitted = fitToolList(tools, MOONSHOT, (line) => lines.push(line)) as Array<Record<string, any>>;
+    const fitted = fitToolList(tools, GENERIC, (line) => lines.push(line)) as Array<Record<string, any>>;
 
     expect(fitted.map((tool) => tool.name)).toEqual(["search", "create_page", "rooted"]);
     expect(fitted[0]).toBe(small);
     expect(schemaBytes(fitted[1]!.inputSchema)).toBeLessThanOrEqual(12_000);
-    expect(fitted[1]!.description).toBe(`Create a page.\n\n${shortenedToolNote("Kimi")}`);
+    expect(fitted[1]!.description).toBe(`Create a page.\n\n${shortenedToolNote("the provider")}`);
     expect(fitted[2]!.inputSchema).not.toHaveProperty("anyOf");
     expect(lines).toEqual([
-      expect.stringMatching(/^left nested fields out of tool "create_page"'s parameters \(\d+ to \d+ bytes\) to fit Kimi's 12000-byte limit for one tool$/),
-      expect.stringMatching(/^left out tool "configure_everything": its parameters are \d+ bytes and still \d+ at their shortest, over Kimi's 12000-byte limit for one tool$/),
+      expect.stringMatching(/^left nested fields out of tool "create_page"'s parameters \(\d+ to \d+ bytes\) to fit the provider's 12000-byte limit for one tool$/),
+      expect.stringMatching(/^left out tool "configure_everything": its parameters are \d+ bytes and still \d+ at their shortest, over the provider's 12000-byte limit for one tool$/),
     ]);
   });
 
   it("adds no note when only words were dropped", () => {
     const wordy = { type: "object", properties: Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`f${index}`,
       { type: "object", properties: { v: { type: "string", description: "Words. ".repeat(120) } } }])) };
-    const [tool] = fitToolList([{ name: "wordy", description: "Wordy.", inputSchema: wordy }], MOONSHOT) as Array<Record<string, unknown>>;
+    const [tool] = fitToolList([{ name: "wordy", description: "Wordy.", inputSchema: wordy }], GENERIC) as Array<Record<string, unknown>>;
     expect(tool!.description).toBe("Wordy.");
     expect(schemaBytes(tool!.inputSchema)).toBeLessThanOrEqual(12_000);
   });
@@ -199,7 +199,7 @@ describe("a tool list under a provider's schema profile", () => {
   it("leaves a result without a profile, or without a tools array, as it came", () => {
     const result = { tools: [{ name: "create_page", inputSchema: createPageSchema() }] };
     expect(fitToolListResult(result, undefined)).toBe(result);
-    expect(fitToolListResult({ content: [] }, MOONSHOT)).toEqual({ content: [] });
+    expect(fitToolListResult({ content: [] }, GENERIC)).toEqual({ content: [] });
   });
 
   it("fits the response a bridge relays under a profile, and only roots it without one", () => {
@@ -211,7 +211,7 @@ describe("a tool list under a provider's schema profile", () => {
     expect(plain.rewriteResponse(list)).toBe(list);
 
     const lines: string[] = [];
-    const profiled = createToolListNormalizer(MOONSHOT, (line) => lines.push(line));
+    const profiled = createToolListNormalizer(GENERIC, (line) => lines.push(line));
     profiled.observeRequest(request);
     const tools = JSON.parse(profiled.rewriteResponse(list)).result.tools;
     expect(tools[0]).toEqual(small);

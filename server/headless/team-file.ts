@@ -26,7 +26,6 @@ const enginesSchema = z.object({
   claude: z.object({ key: secret, baseUrl: z.union([url, secret]).optional(), everyClaudeBot: z.boolean().optional(), install: z.boolean().optional() }).strict().optional(),
   openai: keyOnly.optional(),
   openrouter: keyOnly.optional(),
-  xai: keyOnly.optional(),
   groq: keyOnly.optional(),
   openaiCompatible: z.object({ key: secret, baseUrl: z.union([url, secret]) }).strict().optional(),
 }).strict();

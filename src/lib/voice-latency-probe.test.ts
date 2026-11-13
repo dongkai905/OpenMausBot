@@ -4,12 +4,12 @@ import type { VoiceProbeSample } from "../../shared/voice-latency-probe";
 import { recordBotTextMessage, recordRuntimeEvent } from "./voice-latency-probe";
 
 const delta = (threadId: string): RuntimeEvent => ({
-  eventId: `${threadId}-delta`, provider: "claudeAgent", threadId, createdAt: "2026-01-01T00:00:00.000Z",
+  eventId: `${threadId}-delta`, provider: "customAcp", threadId, createdAt: "2026-01-01T00:00:00.000Z",
   type: "content.delta", streamKind: "assistant_text", delta: "chunk",
 });
 
 const turnStarted = (threadId: string): RuntimeEvent => ({
-  eventId: `${threadId}-turn`, provider: "claudeAgent", threadId, createdAt: "2026-01-01T00:00:00.000Z",
+  eventId: `${threadId}-turn`, provider: "customAcp", threadId, createdAt: "2026-01-01T00:00:00.000Z",
   type: "turn.started",
 });
 

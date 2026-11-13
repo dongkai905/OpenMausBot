@@ -329,7 +329,7 @@ beforeAll(async () => {
       req.on("end", () => {
         lastCredentialBody = JSON.parse(data);
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ messageId: "msg-key", label: "OpenCode API key" }));
+        res.end(JSON.stringify({ messageId: "msg-key", label: "Example API key" }));
       });
       return;
     }
@@ -1149,17 +1149,17 @@ describe("agents-proxy MCP surface", () => {
 
   it("requests an allowlisted credential without putting a secret in the request", async () => {
     const res = await callTool("request_credential", {
-      credential_id: "opencodeGoApiKey",
+      credential_id: "openaiApiKey",
       reason: "The selected model needs it.",
     });
-    expect(res.result.content[0].text).toContain("secure OpenCode API key request");
+    expect(res.result.content[0].text).toContain("secure Example API key request");
     expect(res.result.content[0].text).toContain("freshly QR-paired mobile app show its secure entry card");
     expect(res.result.content[0].text).toContain("older mobile pairings explain how to pair again");
     expect(res.result.content[0].text).toContain("End this turn");
     expect(lastCredentialBody).toEqual({
       fromBotId: "bot-asker",
       fromThreadId: "thread-asker-routine",
-      credentialId: "opencodeGoApiKey",
+      credentialId: "openaiApiKey",
       reason: "The selected model needs it.",
     });
     expect(JSON.stringify(lastCredentialBody)).not.toContain("secret");
@@ -1203,7 +1203,7 @@ describe("agents-proxy MCP surface", () => {
   it("asks for any other secret by its name, reason and delivery, never its value", async () => {
     const res = await callTool("request_credential", { label: "Stripe secret key", reason: "To create test charges.", placeholder: "sk_test_…", delivery: "file" });
     expect(res.result.isError).toBeFalsy();
-    expect(res.result.content[0].text).toMatch(/^A secure card for OpenCode API key is now in this conversation, in the app and on a QR-paired phone, and the person was notified\. If they can't find it, tell them it is in this conversation, and the notification opens it\. End this turn now/u);
+    expect(res.result.content[0].text).toMatch(/^A secure card for Example API key is now in this conversation, in the app and on a QR-paired phone, and the person was notified\. If they can't find it, tell them it is in this conversation, and the notification opens it\. End this turn now/u);
     expect(lastCredentialBody).toEqual({
       fromBotId: "bot-asker",
       fromThreadId: "thread-asker-routine",

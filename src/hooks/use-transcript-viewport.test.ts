@@ -655,7 +655,7 @@ describe("following a reply and coming back to a conversation", () => {
     grow();
     expect(scroller.calls.at(-1)).toEqual({ top: scroller.scrollHeight });
 
-    noteLiveReplyEvent({ eventId: "d1", provider: "claudeAgent", threadId: "thread", createdAt: "", turnId: "t", type: "content.delta", streamKind: "assistant_text", delta: "Streaming words " } as RuntimeEvent);
+    noteLiveReplyEvent({ eventId: "d1", provider: "customAcp", threadId: "thread", createdAt: "", turnId: "t", type: "content.delta", streamKind: "assistant_text", delta: "Streaming words " } as RuntimeEvent);
     grow();
     expect(scroller.calls.at(-1)).toEqual({ top: scroller.scrollHeight, behavior: "smooth" });
 

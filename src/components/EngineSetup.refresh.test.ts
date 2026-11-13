@@ -13,7 +13,7 @@ const refresh = vi.fn();
 const dispatch = vi.fn();
 const refreshModels = vi.fn().mockResolvedValue(undefined);
 const engine: InstanceInfo = {
-  instanceId: "kimi", driverKind: "kimiAgent", displayName: "Kimi",
+  instanceId: "kimi", driverKind: "customAcp", displayName: "Kimi",
   snapshot: { state: "unavailable", reason: "Fixture missing CLI" }, models: { default: "", options: [] },
   install: { platform: "linux", command: { linux: "fixture-install" }, signInCommand: "kimi login", server: { package: "kimi-fixture" } },
 };
@@ -80,7 +80,7 @@ it("never opens a local terminal to install on a paired remote server", () => {
 
 it("says plainly when the engine now runs the copy the app installed", async () => {
   const opencode: InstanceInfo = {
-    ...engine, instanceId: "opencode", driverKind: "opencodeGo", displayName: "OpenCode",
+    ...engine, instanceId: "opencode", driverKind: "customAcp", displayName: "OpenCode",
     install: { platform: "linux", command: { linux: "npm install -g opencode-ai" }, server: { standalone: { version: "1.19.4", downloadBytes: 79_667_571 } } },
   };
   const ready: InstanceInfo = { ...opencode, snapshot: { state: "available", authenticated: true } };

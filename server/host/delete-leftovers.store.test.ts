@@ -30,7 +30,7 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
     threadsReferencing: mdb.threadsReferencing,
     keptAttachments: () => new Set(),
     deleteAttachment: (name) => rmSync(join(DATA_DIR, "attachments", name)),
-    engineFolders: () => engineSessionFolders(DATA_DIR, [{ HOME }]),
+    engineFolders: () => engineSessionFolders([{ HOME }]),
     layers: memoryLayerRecords,
     defer: () => {},
     warn: (line) => { warnings.push(line); },

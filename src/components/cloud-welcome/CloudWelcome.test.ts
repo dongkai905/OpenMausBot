@@ -39,9 +39,9 @@ import { resetCloudWelcome, useCloudWelcome } from "@/lib/cloud-welcome";
 
 const CLOUD = { name: "Studio Cloud", origin: "https://omb-u-1a2b3c4d5e6f.fly.dev" };
 const quiet: CloudSendNotice = { ready: true, bots: [], updatedBots: [], skills: 0, logins: 0, onePassword: false, settings: 0, signature: "", dismissed: false, running: false, last: null, whole: null };
-const claude = { instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription", authentication: { method: "paste-code" }, snapshot: { state: "available", authenticated: false }, models: { default: "", options: [] } };
-const codex = { ...claude, instanceId: "codex", driverKind: "codex", displayName: "Codex" };
-const credit = { instanceId: "trial", driverKind: "openai-compat", displayName: "Trial credit · Claude", readOnly: true, trialCredit: "active", snapshot: { state: "available" }, models: { default: "", options: [] } };
+const claude = { instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription", authentication: { method: "paste-code" }, snapshot: { state: "available", authenticated: false }, models: { default: "", options: [] } };
+const second = { ...claude, instanceId: "agent-two", driverKind: "customAcp", displayName: "Codex" };
+const credit = { instanceId: "trial", driverKind: "customAcp", displayName: "Trial credit · Claude", readOnly: true, trialCredit: "active", snapshot: { state: "available" }, models: { default: "", options: [] } };
 
 let host: HTMLDivElement;
 let root: Root;
@@ -74,7 +74,7 @@ beforeEach(() => {
   fixture.state = {
     connected: true, selectedId: "b1", activeView: "chat", routines: [], groups: [],
     bots: [{ id: "b1", threadId: "t1", name: "Maus" }, { id: "b2", threadId: "t2", name: "Ada", chiefOfStaff: true }],
-    instances: [claude, codex],
+    instances: [claude, second],
     config: { cloudHome: true, onboarding: { ...EMPTY_ONBOARDING }, profile: { name: "", email: "", aboutMe: "" } },
   };
   fixture.api.mockImplementation(async (path: string, init?: RequestInit) => {
@@ -246,7 +246,7 @@ describe("CloudWelcome", () => {
 
   it("resumes where it was left, and with the trial's credit goes straight past the AI step", async () => {
     fixture.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [welcomeStepHint("bring")] };
-    fixture.state.instances = [claude, codex, credit];
+    fixture.state.instances = [claude, second, credit];
     fixture.plan = { status: "paid", credit: { grantedUsd: 5, remainingUsd: 5, state: "active" } };
     render();
     await vi.waitFor(() => expect(host.querySelector('[data-welcome-step="files"]')).not.toBeNull());
@@ -257,7 +257,7 @@ describe("CloudWelcome", () => {
 
   it("uses an AI already signed in here as it is: the AI step finishes itself", async () => {
     fixture.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [welcomeStepHint("bring")] };
-    fixture.state.instances = [{ ...claude, snapshot: { state: "available", authenticated: true } }, codex];
+    fixture.state.instances = [{ ...claude, snapshot: { state: "available", authenticated: true } }, second];
     render();
     await vi.waitFor(() => expect(host.querySelector('[data-welcome-step="files"]')).not.toBeNull());
     expect(hintsPut().at(-1)).toEqual(expect.arrayContaining([welcomeStepHint("engine")]));
@@ -270,12 +270,12 @@ describe("CloudWelcome", () => {
     expect(host.querySelector('[data-welcome-recommended="claude"] [data-engine-setup="claude"]')?.getAttribute("data-description"), "one plain line, not the setup's own")
       .toBe("Use the Claude account you already have. You sign in on their own website, so your password stays with them.");
     expect(host.querySelector("[data-cloud-choice]")).toBeNull();
-    fixture.state.instances = [{ ...claude, authentication: undefined }, codex];
+    fixture.state.instances = [{ ...claude, authentication: undefined }, second];
     render();
     expect(host.querySelector('[data-welcome-recommended="claude"] [data-engine-setup="claude"]')?.hasAttribute("data-description"), "a sign-in finished in Terminal keeps its own instructions")
       .toBe(false);
     click("Other ways");
-    expect(host.querySelector('[data-cloud-choice="codex"]')).not.toBeNull();
+    expect(host.querySelector('[data-cloud-choice="agent-two"]')).not.toBeNull();
     expect(host.querySelector('[data-cloud-choice="claude"]'), "the recommended way is not offered twice").toBeNull();
     expect(host.querySelector('[data-cloud-choice="api-key"]')).not.toBeNull();
     click("Skip for now");
@@ -284,7 +284,7 @@ describe("CloudWelcome", () => {
 
   it("right after an AI is connected here, checks it with one tiny real message and says it works, or what to fix", async () => {
     fixture.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [welcomeStepHint("bring")] };
-    fixture.state.instances = [claude, codex];
+    fixture.state.instances = [claude, second];
     const checks: string[] = [];
     let answer: Record<string, unknown> = { ok: true };
     const config = fixture.api.getMockImplementation()!;
@@ -298,20 +298,20 @@ describe("CloudWelcome", () => {
     click("Other ways");
     // Already connected or not, nothing is checked until one is connected here.
     expect(checks).toEqual([]);
-    fixture.state = { ...fixture.state, instances: [{ ...claude, snapshot: { state: "available", authenticated: true } }, codex] };
+    fixture.state = { ...fixture.state, instances: [{ ...claude, snapshot: { state: "available", authenticated: true } }, second] };
     render();
     await vi.waitFor(() => expect(text()).toContain("Claude is working"));
     expect(checks).toEqual(["claude"]);
     expect(host.querySelector('[data-engine-check="working"]')).not.toBeNull();
     answer = { ok: false, error: "ChatGPT isn't signed in on this computer anymore. Sign in again, then check again." };
-    fixture.state = { ...fixture.state, instances: [{ ...claude, snapshot: { state: "available", authenticated: true } }, { ...codex, snapshot: { state: "available", authenticated: true } }] };
+    fixture.state = { ...fixture.state, instances: [{ ...claude, snapshot: { state: "available", authenticated: true } }, { ...second, snapshot: { state: "available", authenticated: true } }] };
     render();
     await vi.waitFor(() => expect(host.querySelector('[data-engine-check="failed"]')).not.toBeNull());
     expect(text()).toContain("ChatGPT is connected but didn't answer a test message. ChatGPT isn't signed in on this computer anymore. Sign in again, then check again.");
     answer = { ok: true };
     click("Test again");
     await vi.waitFor(() => expect(host.querySelectorAll('[data-engine-check="working"]')).toHaveLength(2));
-    expect(checks).toEqual(["claude", "codex", "codex"]);
+    expect(checks).toEqual(["claude", "agent-two", "agent-two"]);
   });
 
   it("in the app on a Cloud of the person's own, the folders card says this computer's files are used by themselves, with nothing to press", async () => {

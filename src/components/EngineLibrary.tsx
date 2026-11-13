@@ -8,22 +8,8 @@ import { t } from "@/lib/i18n";
 import { InstanceProviderMark } from "./ProviderIcons";
 
 export function engineReady(instance: InstanceInfo): boolean {
-  if (instance.driverKind === "clineAgent") {
-    return instance.snapshot.state === "available" && instance.snapshot.authenticated === true;
-  }
   return instance.snapshot.state === "available" &&
     (instance.access === "custom" || instance.snapshot.authenticated !== false);
-}
-
-const providers: Record<string, string> = {
-  claudeAgent: "Anthropic", codex: "OpenAI", grok: "xAI", grokAgent: "xAI",
-  kimiAgent: "Moonshot AI", droidAgent: "Factory", cursorAgent: "Cursor",
-  antigravityAgent: "Google", opencodeGo: "OpenCode", qwenAgent: "Qwen",
-  hermesAgent: "Nous Research", clineAgent: "Cline", copilotAgent: "GitHub", commandCodeAgent: "Command Code", kiroAgent: "Amazon Web Services", piAgent: "pi.dev", mistral: "Mistral AI", cerebras: "Cerebras", groq: "Groq", greenference: "Greenference", modelgo: "ModelGo", meta: "Meta", museCode: "Meta", deepseekAgent: "DeepSeek",
-};
-
-export function providerName(instance: InstanceInfo): string {
-  return providers[instance.driverKind] ?? instance.driverKind;
 }
 
 /** What a card that stands for several accounts says about all of them. */
@@ -37,7 +23,7 @@ export function EngineCard({ instance, children, summary, bare = false }: { inst
   const title = summary?.title ?? instance.displayName;
   const subtitle = summary?.subtitle ?? email ?? (instance.access === "custom"
     ? t("engines.library.custom")
-    : providerName(instance));
+    : instance.driverKind);
   // Some CLIs return their executable name rather than a version.
   const version = instance.snapshot.version?.match(/\d+\.\d+(?:\.\d+)?(?:[-+][\w.-]+)?/)?.[0];
   const updatedTo = useUpdatedOnce(instance);

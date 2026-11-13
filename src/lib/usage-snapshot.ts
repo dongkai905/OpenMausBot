@@ -9,7 +9,6 @@ import {
 } from "@/lib/analytics-allowlist";
 import { trialRunning } from "@/lib/cloud-plan";
 import { hasActiveConnection, type ConnectorStatus } from "@/lib/connector-status";
-import { addedServers } from "@/lib/openai-compat-endpoints";
 import type { Routine } from "@/lib/routines";
 import type { AppState, Bot, ConfigStatus, Group, InstanceInfo } from "@/state/store";
 
@@ -48,17 +47,9 @@ function keyProviders(config: ConfigStatus): KeyProvider[] {
     [config.anthropic?.configured, "anthropic"],
     [config.openai?.configured, "openai"],
     [config.openrouter?.configured, "openrouter"],
-    [config.openaiCompat?.configured, "openai_compat"],
-    [config.xai?.configured, "xai"],
-    [config.mistral?.configured, "mistral"],
-    [config.cerebras?.configured, "cerebras"],
-    [config.groq?.configured, "groq"],
-    [config.greenference?.configured, "greenference"],
-    [config.modelgo?.configured, "modelgo"],
     [config.meta?.configured, "meta"],
     [config.box?.configured && config.box.included !== true, "boat"],
     [config.composio?.configured && config.composio.mode === "self-hosted", "composio"],
-    [config.opencodeGo?.configured, "opencode_go"],
     [ownVoice && config.tts?.provider === "elevenlabs", "elevenlabs"],
     [ownVoice && config.tts?.provider === "fish", "fish_audio"],
     [ownDecider && config.decider?.provider === "jev", "jev"],
@@ -134,7 +125,6 @@ export function buildUsageSnapshot(input: UsageInput): EventProps {
     webhooks: count(input.webhooks),
     engines: [...new Set(ready.map((instance) => engineForDriver(instance.driverKind)))].sort(),
     engine_count: ready.length,
-    custom_endpoints: addedServers(instances).length,
     trial_credit: allow(instances.find((instance) => instance.trialCredit !== undefined)?.trialCredit ?? "none", TRIAL_CREDIT),
     ...appFacts(input.apps),
     connectors_mode: allow(config.composio?.mode?.replace("-", "_"), CONNECTORS_MODE),

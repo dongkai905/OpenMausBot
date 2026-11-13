@@ -1,5 +1,5 @@
 export const PROVIDER_ICON_PRESETS = [
-  "openai", "anthropic", "google", "azure", "aws", "openrouter", "ollama",
+  "openai", "anthropic", "google", "azure", "aws", "openrouter",
 ] as const;
 
 export type ProviderIconPreset = typeof PROVIDER_ICON_PRESETS[number];
@@ -18,15 +18,7 @@ export const PROVIDER_ICON_LABELS: Record<ProviderIconPreset, string> = {
   google: "Google Gemini",
   azure: "Microsoft Azure",
   aws: "Amazon Bedrock (AWS)",
-  xai: "xAI",
-  deepseek: "DeepSeek",
-  meta: "Meta",
-  mistral: "Mistral AI",
-  qwen: "Qwen",
-  moonshot: "Moonshot AI",
-  cohere: "Cohere",
   openrouter: "OpenRouter",
-  ollama: "Ollama",
 };
 
 function decodedBase64Bytes(value: string): number {

@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { instanceConfigs, type AppConfig } from "../config.ts";
+import type { AppConfig } from "../config.ts";
 import type { ProviderAuthenticationStart, ProviderAuthenticationStatus } from "../contracts.ts";
 import { ENGINE_LIST_REUSE_MS, ProviderRegistry } from "../harness/registry.ts";
 import { json, readBody } from "../harness/http.ts";
@@ -198,111 +198,6 @@ describe("installing an engine's own build from Settings", () => {
   });
 });
 
-describe("an added server's model IDs", () => {
-  it("replaces the list, goes back to detecting models with an empty list, and refuses other servers", async () => {
-    const persisted: Array<Record<string, { driver: string; config?: Record<string, unknown> }>> = [];
-    const cfg = { instances: {
-      a: { driver: "fake" },
-      openaiCompat: { driver: "openai-compat", config: { url: "http://127.0.0.1:11434/v1" } },
-      "openai-compat-1": { driver: "openai-compat", config: { url: "https://api.example.com/v1", key: "k", managedModels: ["glm-4.6"] } },
-    } };
-    const { call, base } = await serve({
-      cfg: cfg as unknown as AppConfig,
-      persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => {
-        persisted.push(structuredClone(instances));
-        (cfg as { instances: unknown }).instances = instances;
-      },
-    });
-    await call("PATCH", "/api/instances/openai-compat-1", { models: ["glm-5", " qwen3 ", "glm-5"] });
-    expect(persisted.at(-1)!["openai-compat-1"]!.config).toEqual({ url: "https://api.example.com/v1", key: "k", managedModels: ["glm-5", "qwen3"] });
-    await call("PATCH", "/api/instances/openai-compat-1", { models: [] });
-    expect(persisted.at(-1)!["openai-compat-1"]!.config).toEqual({ url: "https://api.example.com/v1", key: "k" });
-    const status = async (id: string, body: unknown) => (await fetch(`${base}/api/instances/${id}`, {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-    })).status;
-    expect(await status("openaiCompat", { models: ["m"] })).toBe(400);
-    expect(await status("a", { models: ["m"] })).toBe(400);
-    for (const bad of [[""], ["x".repeat(201)], "glm-5", Array.from({ length: 65 }, (_, i) => `m${i}`)]) {
-      expect(await status("openai-compat-1", { models: bad })).toBe(400);
-    }
-    expect(persisted).toHaveLength(2);
-  });
-
-  it("refuses to drop the default model from the list, and allows going back to detecting models", async () => {
-    const persisted: unknown[] = [];
-    const cfg = {
-      defaultModelSelection: { instanceId: "openai-compat-1", model: "glm-4.6" },
-      instances: { "openai-compat-1": { driver: "openai-compat", config: { url: "https://api.example.com/v1", key: "k", managedModels: ["glm-4.6"] } } },
-    };
-    const { base } = await serve({
-      cfg: cfg as unknown as AppConfig,
-      persistProviderInstance: async (_id: string, instances: unknown) => { persisted.push(structuredClone(instances)); },
-    });
-    const patch = (models: string[]) => fetch(`${base}/api/instances/openai-compat-1`, {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ models }),
-    });
-    const refused = await patch(["glm-5"]);
-    expect(refused.status).toBe(409);
-    expect(await refused.json()).toMatchObject({ errorKey: "serverError.instance.defaultModelRemoved", errorParams: { model: "glm-4.6" } });
-    expect(persisted).toHaveLength(0);
-    expect((await patch(["glm-5", "glm-4.6"])).status).toBe(200);
-    expect((await patch([])).status).toBe(200);
-    expect(persisted).toHaveLength(2);
-  });
-
-  it("lists the IDs entered for an added server so they can be edited", async () => {
-    const cfg = { instances: { "openai-compat-1": { driver: "openai-compat", config: { url: "https://api.example.com/v1", key: "k", managedModels: ["glm-4.6", "glm-5"] } } } };
-    const { base } = await serve({
-      cfg: cfg as unknown as AppConfig,
-      describeInstances: async () => [{ instanceId: "openai-compat-1", driverKind: "openai-compat" }, { instanceId: "a", driverKind: "fake" }],
-    });
-    const body = await (await fetch(`${base}/api/instances`)).json() as { instances: Array<Record<string, unknown>> };
-    expect(body.instances).toEqual([
-      { instanceId: "openai-compat-1", driverKind: "openai-compat", url: "https://api.example.com/v1", managedModels: ["glm-4.6", "glm-5"] },
-      { instanceId: "a", driverKind: "fake" },
-    ]);
-  });
-});
-
-describe("a server's reply wait", () => {
-  it("saves minutes for an OpenAI-compatible server, clears them with null, and refuses other engines or bad values", async () => {
-    const persisted: Array<Record<string, { driver: string; config?: Record<string, unknown> }>> = [];
-    const cfg = { instances: { a: { driver: "fake" }, "openai-compat-1": { driver: "openai-compat", config: { url: "http://127.0.0.1:11434/v1", key: "k" } } } };
-    const { call, base } = await serve({
-      cfg: cfg as unknown as AppConfig,
-      persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => {
-        persisted.push(structuredClone(instances));
-        (cfg as { instances: unknown }).instances = instances;
-      },
-    });
-    await call("PATCH", "/api/instances/openai-compat-1", { replyWaitMinutes: 20 });
-    expect(persisted.at(-1)!["openai-compat-1"]!.config).toEqual({ url: "http://127.0.0.1:11434/v1", key: "k", replyWaitMinutes: 20 });
-    await call("PATCH", "/api/instances/openai-compat-1", { replyWaitMinutes: null });
-    expect(persisted.at(-1)!["openai-compat-1"]!.config).toEqual({ url: "http://127.0.0.1:11434/v1", key: "k" });
-    const status = async (id: string, body: unknown) => (await fetch(`${base}/api/instances/${id}`, {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-    })).status;
-    expect(await status("a", { replyWaitMinutes: 20 })).toBe(400);
-    for (const bad of [0, 61, 2.5, "10"]) expect(await status("openai-compat-1", { replyWaitMinutes: bad })).toBe(400);
-    expect(persisted).toHaveLength(2);
-  });
-
-  it("saves minutes for the built-in OpenAI-compatible server, such as a local Ollama set by its base URL", async () => {
-    const persisted: Array<Record<string, { driver: string; config?: Record<string, unknown> }>> = [];
-    const cfg = { openaiCompat: { url: "http://127.0.0.1:11434/v1" } };
-    const { call } = await serve({
-      cfg: cfg as unknown as AppConfig,
-      persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => {
-        persisted.push(structuredClone(instances));
-        (cfg as { instances?: unknown }).instances = instances;
-      },
-    });
-    await call("PATCH", "/api/instances/openaiCompat", { replyWaitMinutes: 30 });
-    expect(persisted.at(-1)!.openaiCompat).toEqual({ driver: "openai-compat", config: { replyWaitMinutes: 30 } });
-    expect(instanceConfigs(cfg as unknown as AppConfig).openaiCompat!.config).toMatchObject({ url: "http://127.0.0.1:11434/v1", replyWaitMinutes: 30 });
-  });
-});
-
 describe("hiding a provider", () => {
   it("hides a built-in provider, lists it apart, refuses while a bot uses it, and unhides", async () => {
     const persisted: Array<Record<string, { driver: string; hidden?: boolean }>> = [];
@@ -326,35 +221,5 @@ describe("hiding a provider", () => {
     await call("PATCH", "/api/instances/hermes", { hidden: false });
     expect(persisted.at(-1)!.hermes).not.toHaveProperty("hidden");
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
-  });
-});
-
-
-describe("looking for Ollama", () => {
-  it("answers what one address said, and refuses an address that is not one", async () => {
-    const ollama = createServer((request, response) => {
-      response.setHeader("content-type", "application/json");
-      if (request.url === "/api/tags") return response.end(JSON.stringify({ models: [{ name: "qwen3:4b", size: 2_500_000_000, details: { parameter_size: "4.0B" } }] }));
-      if (request.url === "/api/version") return response.end(JSON.stringify({ version: "0.12.6" }));
-      response.statusCode = 404;
-      response.end("{}");
-    });
-    servers.push(ollama);
-    await new Promise<void>((ready) => ollama.listen(0, "127.0.0.1", ready));
-    const address = `http://127.0.0.1:${(ollama.address() as AddressInfo).port}`;
-    const { call, base } = await serve();
-    expect(await call("GET", `/api/instances/ollama?url=${encodeURIComponent(`${address}/v1`)}`)).toEqual({
-      status: { state: "ready", url: address, version: "0.12.6", models: [{ name: "qwen3:4b", bytes: 2_500_000_000, parameters: "4.0B" }] },
-    });
-    const refused = await fetch(`${base}/api/instances/ollama?url=${encodeURIComponent("ftp://127.0.0.1:11434")}`);
-    expect(refused.status).toBe(400);
-    expect(await refused.json()).toEqual({ error: "Enter an http or https address, such as http://127.0.0.1:11434." });
-  });
-
-  it("is only for the owner: a shared server's bot shell or a hosted workspace can't make this server ask an address", async () => {
-    const shell = await serve({}, { kind: "loopback", scopes: ["admin"], trust: "service" });
-    expect((await fetch(`${shell.base}/api/instances/ollama?url=${encodeURIComponent("http://127.0.0.1:9")}`)).status).toBe(403);
-    const hosted = await serve({ hostedModels: true });
-    expect((await fetch(`${hosted.base}/api/instances/ollama`)).status).toBe(403);
   });
 });

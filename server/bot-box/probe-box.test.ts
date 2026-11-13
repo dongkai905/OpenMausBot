@@ -26,14 +26,6 @@ describe.skipIf(!posix)("the server's own engine reads ask for the bot box", () 
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** A stand-in CLI that answers nothing useful and exits. */
-  function cli(name: string): string {
-    const file = join(dir, name);
-    writeFileSync(file, "#!/bin/sh\nexit 0\n");
-    chmodSync(file, 0o755);
-    return file;
-  }
-
   const env = (extra: Record<string, string> = {}) => ({ PATH: "/usr/bin:/bin", HOME: dir, ...extra });
 
   it("execCliBoxed answers as execCli does: output, a failing exit and a timeout", async () => {

@@ -25,7 +25,7 @@ let root: Root;
 function render(bot: Bot, trustedModesAvailable = false, others: Bot[] = []) {
   const derived = {
     patch: (patch: object) => dispatch({ type: "updateBot", botId: bot.id, patch }),
-    engine: { instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude" },
+    engine: { instanceId: "claude", driverKind: "customAcp", displayName: "Claude" },
     canCoordinate: true, approvalMode: bot.approvalMode ?? "ask", trustedModesAvailable,
     sectionName: "General", currentChief: undefined,
   } as unknown as Derived;
@@ -104,7 +104,7 @@ describe("on a team", () => {
 describe("PermissionsSection parts", () => {
   it("leaves Chief of Staff out of a page that asks only for approvals", () => {
     const derived = {
-      patch: vi.fn(), engine: { instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude" },
+      patch: vi.fn(), engine: { instanceId: "claude", driverKind: "customAcp", displayName: "Claude" },
       canCoordinate: true, approvalMode: "ask", trustedModesAvailable: false, sectionName: "General", currentChief: undefined,
     } as unknown as Derived;
     flushSync(() => root.render(createElement(BotEditorStore, {

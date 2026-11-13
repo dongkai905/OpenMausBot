@@ -33,12 +33,11 @@ vi.mock("./whats-new/TeamPicture", () => ({ TeamPicture: () => null }));
 vi.mock("@/lib/default-bot", async original => ({ ...await original<typeof import("@/lib/default-bot")>(), useViewerEmail: () => f.viewerEmail }));
 vi.mock("@/lib/brand", () => ({ brandStatus: () => ({ brand: { name: "OpenMausBot" }, source: f.brand, file: "" }), productName: () => "MausBot" }));
 vi.mock("./Avatar", async original => ({ ...await original<typeof import("./Avatar")>(), MausAvatar: () => null }));
-vi.mock("./lazy-screens", async original => ({ ...await original<typeof import("./lazy-screens")>(), GrokMoveDialog: () => "THE MOVE DIALOG" }));
 vi.mock("@/components/EngineLibrary", () => ({ engineReady: (instance: { snapshot: { state: string; authenticated?: boolean } }) =>
   instance.snapshot.state === "available" && instance.snapshot.authenticated !== false }));
 import { AppNotices } from "./AppNotices";
 import { TwoPlacesCard } from "./TwoPlacesCard";
-import { BOAT_OFFER_NOTICE, CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, MODELGO_OFFER_NOTICE, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { BOAT_OFFER_NOTICE, CLOUD_INTRO, launchNotice, localDay, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { BOAT_OFFER, boatClaimMailto } from "@/lib/boat-offer";
 import { track } from "@/lib/analytics";
 import { ADVANCED_MODE_KEY, setAdvancedMode } from "@/lib/interface-mode";
@@ -137,7 +136,7 @@ const press = (label: string) => {
 const FIRST_REPLY = [{ tasks: [{ threadId: "first", usage: { turns: 1 } }] }];
 let session: Map<string, string>;
 const returning = () => { f.state.bots = [{ tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; };
-const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(MODELGO_OFFER_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); storage.set(BOAT_OFFER_NOTICE, "1"); };
+const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); storage.set(BOAT_OFFER_NOTICE, "1"); };
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
 
 beforeEach(() => {
@@ -969,144 +968,6 @@ describe("no Use my Mac popup", () => {
   });
 });
 
-describe("the Move from Grok Bot popup", () => {
-  const TITLE = "Move from Grok Bot", WHATS_NEW = "Meet the new MausBot Cloud", DIALOG = "THE MOVE DIALOG";
-  let modal: boolean;
-  const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "grok_move_popup").map(([, props]) => (props as { action: string }).action);
-  const reads = () => vi.mocked(api).mock.calls.map(([path]) => path).filter(path => path === "/api/setup-import/grok");
-  const keydown = (key: string) => {
-    const handler = vi.mocked(window.addEventListener).mock.calls.filter(([type]) => type === "keydown").at(-1)![1] as (event: unknown) => void;
-    handler({ key, preventDefault() {}, stopPropagation() {} });
-  };
-  const endedForGood = async () => {
-    expect(render()).toBe("");
-    expect(storage.get(GROK_MOVE_NOTICE)).toBe("1"); expect(hints()).toContain(GROK_MOVE_NOTICE); expect(desk.saved?.seen).toContain(GROK_MOVE_NOTICE);
-    expect(await launch(), "a reload is the same launch").not.toContain(TITLE);
-    expect(await relaunch(), "nor any later one").not.toContain(TITLE);
-  };
-
-  beforeEach(() => {
-    modal = false;
-    storage.delete(GROK_MOVE_NOTICE);
-    vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
-      querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null,
-      querySelectorAll: () => modal ? [{ closest: () => null, checkVisibility: () => true }] : [] });
-  });
-
-  it("someone already here sees it at their next launch, a modal with the two marks, and it reads nothing on this computer", async () => {
-    returning();
-    const html = await launch();
-    for (const text of [TITLE, "Bring your Bots here, with their skills, routines and memories.", "Let&#x27;s start", "Not now"]) expect(html).toContain(text);
-    for (const part of ['role="dialog"', 'aria-modal="true"', "data-grok-move-popup"]) expect(html).toContain(part);
-    expect(events()).toEqual(["shown"]);
-    expect(launchNotice()).toBe(GROK_MOVE_NOTICE);
-    expect(launchDialogShown(), "MausBot's card waits for a later launch").toBe("notices");
-    expect(await settle()).toContain(TITLE);
-    expect(events(), "shown is counted once").toHaveLength(1);
-    expect(reads(), "showing it looks at neither Downloads nor the Grok Bot app").toEqual([]);
-  });
-
-  it("goes first in the queue, one a launch: What's new, then the rest, wait for later launches", async () => {
-    returning(); desk.saved = null; storage.delete(SIMPLE_MODE_PROMPT_KEY); storage.delete(BOAT_OFFER_NOTICE); storage.delete(STAR_NOTICE);
-    const first = await launch();
-    expect(first).toContain(TITLE);
-    for (const other of ["data-simple-mode-prompt", WHATS_NEW, STAR]) expect(first).not.toContain(other);
-    press("Not now"); await flush();
-    expect(render(), "nothing else after it in this launch").toBe("");
-    expect(await launch(), "a reload is the same launch").toBe("");
-    const second = await relaunch();
-    expect(second).toContain("data-simple-mode-prompt"); expect(second).not.toContain(TITLE);
-    expect(launchNotice()).not.toBe(GROK_MOVE_NOTICE);
-  });
-
-  it("never during onboarding; after a new install's welcome it follows the first messages, while the other cards keep to the first chat's quiet", async () => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
-    storage.delete(STAR_NOTICE);
-    f.state.bots = [{ tasks: [{ threadId: "first" }] }];
-    f.state.config.onboarding = { ...EMPTY_ONBOARDING };
-    expect(await launch(), "the welcome is due").toBe("");
-    f.state.welcomeOpen = true;
-    f.state.config.onboarding = { ...EMPTY_ONBOARDING, completedAt: "2026-11-01", version: 1, hintsSeen: [MET_CHIEF_HINT] };
-    expect(await launch(), "the welcome is open").toBe("");
-    f.state.welcomeOpen = false; markWelcomeFinished();
-    expect(await settle(), "its first messages are still arriving").toBe("");
-    expect(events()).toEqual([]);
-    vi.advanceTimersByTime(6_000);
-    const html = await settle();
-    expect(html).toContain(TITLE); expect(html).not.toContain(STAR);
-    press("Let&#x27;s start"); await flush();
-    expect(render()).toContain(DIALOG);
-    expect(events()).toEqual(["shown", "start"]);
-    expect(storage.get(GROK_MOVE_NOTICE)).toBe("1");
-  });
-
-  it("Not now, the X and Escape end it for good, on this computer and in the workspace", async () => {
-    for (const how of ["Not now", "Close", "Escape"] as const) {
-      session.clear(); storage.delete(GROK_MOVE_NOTICE); desk = desktopMachine(); desk.saved = { seen: [WHATS_NEW_NOTICE] }; f.state.config.onboarding.hintsSeen = withTourFinished(undefined);
-      returning();
-      expect(await launch(), how).toContain(TITLE);
-      if (how === "Escape") keydown("Escape"); else press(how);
-      await flush();
-      await endedForGood();
-    }
-    expect(events().filter(action => action !== "shown")).toEqual(["not_now", "close", "close"]);
-  });
-
-  it("Let's start opens the same dialog, ends the popup for good, and only the dialog looks on this computer", async () => {
-    returning();
-    await launch();
-    press("Let&#x27;s start"); await flush();
-    expect(render()).toContain(DIALOG);
-    expect(events()).toEqual(["shown", "start"]);
-    expect(storage.get(GROK_MOVE_NOTICE)).toBe("1"); expect(hints()).toContain(GROK_MOVE_NOTICE); expect(desk.saved?.seen).toContain(GROK_MOVE_NOTICE);
-    expect(reads()).toEqual([]);
-    expect(await relaunch()).not.toContain(TITLE);
-  });
-
-  it("never during a bot's turn, a dialog, a call or while a move is starting up; it comes when they end", async () => {
-    returning();
-    f.state.bots = [{ busy: true, tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }];
-    expect(await launch(), "a turn").toBe("");
-    returning();
-    modal = true;
-    expect(await launch(), "another dialog").toBe("");
-    modal = false;
-    f.state.liveCall = { status: "connected" };
-    expect(await launch(), "a call").toBe("");
-    f.state.liveCall = null;
-    expect(await launch()).toContain(TITLE);
-  });
-
-  it("seen on this desktop from another page, it doesn't come back", async () => {
-    returning(); desk.saved = { seen: [WHATS_NEW_NOTICE, GROK_MOVE_NOTICE] };
-    expect(await launch()).not.toContain(TITLE);
-  });
-
-  it("a page newer than its desktop: main ignores the new id, and the workspace and this browser still end it for good", async () => {
-    returning();
-    desk.handlers.set("desktop-notices:seen", async () => undefined);
-    desk.handlers.set("desktop-notices:state", async () => ({ seen: [WHATS_NEW_NOTICE], cloud: false }));
-    expect(await launch()).toContain(TITLE);
-    press("Not now"); await flush();
-    expect(storage.get(GROK_MOVE_NOTICE)).toBe("1"); expect(hints()).toContain(GROK_MOVE_NOTICE);
-    expect(await relaunch()).not.toContain(TITLE);
-    storage.delete(GROK_MOVE_NOTICE);
-    expect(await relaunch(), "in another browser, the workspace remembers").not.toContain(TITLE);
-  });
-
-  it("stays away from those who can't add a bot and from what isn't ours to promote: a member, a Team Cloud, a branded build", async () => {
-    returning();
-    viewer = { hosted: true, canSave: false };
-    expect(await launch(), "a member").not.toContain(TITLE);
-    viewer = LOCAL_VIEWER;
-    f.state.config.team = { id: "t", name: "Acme" };
-    expect(await relaunch(), "a Team Cloud").not.toContain(TITLE);
-    delete f.state.config.team;
-    f.brand = "file";
-    expect(await relaunch(), "a branded build").not.toContain(TITLE);
-  });
-});
-
 describe("the Simple mode popup after the update", () => {
   const TITLE = "Try the new Simple mode", ON = "You&#x27;re on Simple mode", POPUP = "Meet the new MausBot Cloud";
   let modal: boolean;
@@ -1360,198 +1221,6 @@ describe("bots in two places", () => {
   });
 });
 
-describe("ModelGo's sponsor card", () => {
-  const TITLE = "ModelGo is now in MausBot", LINE = "One API key, every model.";
-  const URL_EXACT = "https://modelgo.ai/?utm_source=openmausbot&utm_medium=sponsorship&utm_content=app&campaign_id=openmausbot&ad_group_id=app";
-  const due = () => { storage.delete(MODELGO_OFFER_NOTICE); };
-  const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
-  const escape = () => tree().find(node => node.type === "aside")!.props.onKeyDown({ key: "Escape", preventDefault() {}, stopPropagation() {} });
-  const gone = async () => {
-    expect(render()).toBe("");
-    expect(storage.get(MODELGO_OFFER_NOTICE)).toBe("1"); expect(hints()).toContain(MODELGO_OFFER_NOTICE); expect(desk.saved?.seen).toContain(MODELGO_OFFER_NOTICE);
-    expect(await relaunch()).not.toContain(TITLE);
-  };
-  beforeEach(due);
-
-  it("is one corner card: its mark, the title, the one line, a sponsor label, one primary button, Not now and close, and no key button", async () => {
-    const shown = await launch();
-    for (const text of [TITLE, LINE, "Sponsor", "Get a ModelGo key", "Not now"]) expect(shown).toContain(text);
-    expect(shown).toContain('data-notice="modelgo-offer"'); expect(shown).not.toContain('aria-modal="true"'); expect(shown).toContain("<svg");
-    const buttons = tree().filter(node => node.type === "button");
-    expect(buttons).toHaveLength(3);
-    expect(render()).not.toMatch(/add my key|Settings/i);
-    expect(events()).toEqual([{ action: "shown", place: "popup" }]);
-    expect(await settle()).toContain(TITLE);
-    expect(events()).toHaveLength(1);
-  });
-
-  it("opens exactly the sponsor's address, and is gone for good", async () => {
-    await launch(); press("Get a ModelGo key"); await flush();
-    expect(window.ogb!.openExternal).toHaveBeenCalledWith(URL_EXACT);
-    expect(events().at(-1)).toEqual({ action: "get_key", place: "popup" });
-    await gone();
-  });
-
-  it("Not now records its action and ends it for good, on the desktop too", async () => {
-    await launch(); press("Not now"); await flush();
-    expect(events().at(-1)).toEqual({ action: "not_now", place: "popup" });
-    await gone();
-  });
-
-  it("close (the X or Escape) records its action and ends it for good", async () => {
-    await launch(); escape(); await flush();
-    expect(events().at(-1)).toEqual({ action: "close", place: "popup" });
-    await gone();
-  });
-
-  it("stays until acted on: no timer ends it", async () => {
-    await launch();
-    now += 2 * DAY;
-    expect(await settle()).toContain(TITLE);
-  });
-
-  it("goes to someone who never used a bot, once the welcome and any first chat are out of the way", async () => {
-    f.state.bots = [];
-    expect(await launch(), "no chat started, no welcome met: no gate on a bot having answered").toContain(TITLE);
-    session.clear(); f.values = [];
-    f.state.config.onboarding.hintsSeen = [...f.state.config.onboarding.hintsSeen, MET_CHIEF_HINT];
-    expect(await relaunch(), "the Chief's first conversation stays quiet until its first reply").not.toContain(TITLE);
-    f.state.bots = structuredClone(FIRST_REPLY);
-    expect(await relaunch(), "then it comes").toContain(TITLE);
-  });
-
-  it("never in the launch the welcome took or over a live call, and waits for the bots to load", async () => {
-    f.state.liveCall = { status: "active" };
-    expect(await launch(), "a live call").not.toContain(TITLE);
-    f.state.liveCall = undefined; f.state.hydrated = false;
-    expect(await relaunch(), "until the bots load").not.toContain(TITLE);
-    f.state.hydrated = true; session.clear(); markWelcomeFinished();
-    expect(await launch(), "the welcome's own launch").not.toContain(TITLE);
-    expect(launchNotice()).not.toBe(MODELGO_OFFER_NOTICE);
-  });
-
-  it("is on every page: the desktop, My Cloud, a Team Cloud's Member and a browser", async () => {
-    expect(await launch()).toContain(TITLE);
-    due(); session.clear(); viewer = { hosted: false, canSave: true, cloudHome: true }; f.state.config.cloudHome = true; snapshot = { status: "none" };
-    f.state.config.onboarding.hintsSeen = [...withTourFinished(undefined), "cloud-setup-hidden"]; showWindow(MY_CLOUD);
-    expect(await relaunch(), "My Cloud").toContain(TITLE);
-    due(); session.clear(); viewer = { hosted: true, canSave: false }; f.state.config.cloudHome = false; showWindow(VPS);
-    expect(await relaunch(), "a Member").toContain(TITLE);
-    expect(render(), "no key button for anyone").not.toMatch(/add my key/i);
-    due(); session.clear(); viewer = { hosted: false, canSave: true }; vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
-    expect(await relaunch(), "a plain browser").toContain(TITLE);
-  });
-
-  it("shares seen across desktop and Cloud, as Boat's offer does", async () => {
-    desk.saved = { seen: [WHATS_NEW_NOTICE, MODELGO_OFFER_NOTICE] };
-    expect(await launch(), "the desktop's record").not.toContain(TITLE);
-    desk.saved = { seen: [WHATS_NEW_NOTICE] };
-    f.state.config.onboarding.hintsSeen = [...f.state.config.onboarding.hintsSeen, MODELGO_OFFER_NOTICE];
-    expect(await relaunch(), "the server's record").not.toContain(TITLE);
-  });
-
-  it("the only two exceptions: a white-label build, and a desktop whose organization refuses ModelGo", async () => {
-    f.brand = "file";
-    expect(await launch(), "white-label").not.toContain(TITLE);
-    f.brand = "default";
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["claudeAgent"] };
-    expect(await relaunch(), "a list without ModelGo").not.toContain(TITLE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: true, allowedEngines: "all" };
-    expect(await relaunch(), "company models only").not.toContain(TITLE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["modelgo"] };
-    expect(await relaunch(), "listed").toContain(TITLE);
-    due(); session.clear();
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: "all" };
-    expect(await relaunch(), "an organization that allows everything still sees it").toContain(TITLE);
-    due(); session.clear();
-    f.state.config.managedPolicy = { organizationName: "Team", team: true, companyModelsOnly: false, allowedEngines: ["codex"] };
-    expect(await relaunch(), "a Team Cloud's rules are no organization-managed desktop").toContain(TITLE);
-  });
-
-  it("never reaches a Team Cloud's member; its Owner and Admins, who choose its providers, still see it", async () => {
-    f.state.config.team = { id: "team-acme", name: "Acme" };
-    viewer = { hosted: false, canSave: false };
-    expect(await launch(), "a member").not.toContain(TITLE);
-    viewer = { hosted: false, canSave: true };
-    expect(await relaunch(), "an admin").toContain(TITLE);
-  });
-
-  it("after an update, What's new takes the launch and the card follows it in that same launch once it closes, then never again", async () => {
-    returning(); desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    const first = await launch();
-    expect(first).toContain("Meet the new MausBot Cloud"); expect(first, "never two at once").not.toContain(TITLE);
-    expect(events()).toEqual([]);
-    press("Not now"); await flush();
-    const after = await settle();
-    expect(after, "right after What's new closes").toContain(TITLE); expect(after).not.toContain("Meet the new MausBot Cloud");
-    expect(events()).toEqual([{ action: "shown", place: "popup" }]);
-    expect(launchNotice(), "What's new keeps the launch").toBe(WHATS_NEW_NOTICE);
-    expect(await launch(), "a reload in the same launch").toContain(TITLE);
-    press("Not now"); await flush();
-    await gone();
-  });
-
-  it("follows the product-updates question when that follows What's new", async () => {
-    desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    const prefs = createDesktopPrefs({ read: () => null, write: () => {} });
-    const client = { state: vi.fn(() => account), updatesConsent: vi.fn(async () => ({ cloudContractVersion: 1, consent: null })), recordUpdatesConsent: vi.fn(async () => {}),
-      updatesConsentByEmail: vi.fn(async () => "R".repeat(43)), withdrawUpdatesConsent: vi.fn(async () => {}) };
-    registerUpdatesConsent({ ipcMain: { handle: (channel, handler) => void desk.handlers.set(channel, handler as Handler) }, page: event => (event as { page: Page }).page,
-      consent: createUpdatesConsent({ prefs, account: () => client as never, available: async () => true, now: () => now }) });
-    await launch(); press("Not now"); await flush();
-    const question = await settle();
-    expect(question).toContain("Get MausBot updates?"); expect(question).not.toContain(TITLE);
-    press("No thanks"); await flush();
-    expect(await settle(), "then the card, in the same launch").toContain(TITLE);
-  });
-
-  it("a notice to act on keeps its place: the move popup or a trial's notice comes first, and the card follows it once closed", async () => {
-    storage.delete(GROK_MOVE_NOTICE); returning();
-    vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
-      querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null, querySelectorAll: () => [] });
-    const grok = await launch();
-    expect(grok).toContain("data-grok-move-popup"); expect(grok).not.toContain(TITLE);
-    press("Not now"); await flush();
-    expect(await settle(), "after the move's popup").toContain(TITLE);
-    due(); session.clear(); f.values = [];
-    const running = trial("active");
-    account = paid({ trial: running }); snapshot = { status: "paid", tier: "pro", trial: running, notice: "active" }; offer = { ...PLAIN_OFFER };
-    const notice = await relaunch();
-    expect(notice).toContain("Your free trial ends on"); expect(notice).not.toContain(TITLE);
-    expect(await settle(), "it stays up alone").not.toContain(TITLE);
-    press("Manage subscription"); await flush();
-    expect(await settle(), "after the trial's notice").toContain(TITLE);
-  });
-
-  it("a card left up keeps the corner: the card waits for it to close", async () => {
-    returning(); storage.delete(STAR_NOTICE); storage.set(CLOUD_INTRO, "1"); storage.set(MODELGO_OFFER_NOTICE, "1");
-    expect(await launch()).toContain("Enjoying MausBot?");
-    due();
-    expect(await settle(), "the star took the launch and is still up").not.toContain(TITLE);
-    press("Not now"); await flush();
-    expect(await settle()).toContain(TITLE);
-  });
-
-  it("follows a closed notice only where it may show at all: not on a branded build, an organization that refuses it, a move to My Cloud or a call", async () => {
-    returning(); desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: true, allowedEngines: "all" };
-    await launch(); press("Not now"); await flush();
-    expect(await settle(), "an organization that refuses it").toBe("");
-    f.state.config.managedPolicy = undefined; f.brand = "file";
-    expect(await launch(), "a branded build").toBe("");
-    f.brand = "default"; f.state.liveCall = { status: "active" };
-    expect(await launch(), "a live call").toBe("");
-    f.state.liveCall = undefined;
-    const line = (move: unknown) => desk.handlers.set("cloud-send:notice", () => ({ ready: true, bots: [], move }));
-    line({ phase: "copy", chats: { done: 1, total: 5 } });
-    expect(await launch(), "while the bots move to My Cloud").toBe("");
-    line(undefined); now += DAY;
-    expect(await launch(), "then, still in the launch What's new took").toContain(TITLE);
-    expect(launchNotice()).toBe(WHATS_NEW_NOTICE);
-  });
-
-});
-
 describe("cards from the announcements file", () => {
   const card = (id: string, extra: Record<string, unknown> = {}) => ({ id, kind: "product", label: "New", title: `Title of ${id}`, body: `Body of ${id}.`,
     primary: { label: `Open ${id}`, action: { open_url: `https://example.com/${id}` } }, ends: new Date(NOW + 30 * DAY).toISOString(), ...extra });
@@ -1599,16 +1268,6 @@ describe("cards from the announcements file", () => {
     expect(await relaunch()).toContain("Title of second-card");
   });
 
-  it("follows the built-in sponsor card in its launch once that closes, never beside it", async () => {
-    storage.delete(MODELGO_OFFER_NOTICE);
-    const first = await launch();
-    expect(first).toContain("ModelGo"); expect(first).not.toContain("Title of phone-app");
-    press("Not now"); await flush();
-    const after = await settle();
-    expect(after).toContain("Title of phone-app"); expect(after).not.toContain("ModelGo");
-    expect(launchNotice()).toBe(MODELGO_OFFER_NOTICE);
-  });
-
   it("follows a closed What's new in the same launch, then no other remote card that launch", async () => {
     feed = [card("first-card"), card("second-card")];
     returning(); desk.saved = null; storage.delete(WHATS_NEW_NOTICE); storage.set(CLOUD_INTRO, "1");
@@ -1624,17 +1283,6 @@ describe("cards from the announcements file", () => {
     expect(await settle(), "one remote card a launch").toBe("");
     expect(await launch(), "nor after a reload").toBe("");
     expect(await relaunch()).toContain("Title of second-card");
-  });
-
-  it("never over a notice to act on: the move popup keeps the corner, and the card follows it once closed", async () => {
-    storage.delete(GROK_MOVE_NOTICE); returning();
-    vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
-      querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null, querySelectorAll: () => [] });
-    const grok = await launch();
-    expect(grok).toContain("data-grok-move-popup"); expect(grok).not.toContain("Title of phone-app");
-    expect(await settle(), "it stays up alone").not.toContain("Title of phone-app");
-    press("Not now"); await flush();
-    expect(await settle(), "after the move's popup").toContain("Title of phone-app");
   });
 
   it("a card left up keeps the corner: a card that arrives meanwhile waits for it to close", async () => {
@@ -1699,7 +1347,7 @@ describe("cards from the announcements file", () => {
 
     it("never where an organization restricts providers, nor to a Team Cloud's members who are not its owner or an admin", async () => {
       feed = [sponsor("sponsor-one"), card("product-news")];
-      f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["claudeAgent"] };
+      f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["customAcp"] };
       expect(await launch()).toContain("Title of product-news");
       f.state.config.managedPolicy = undefined; storage.set(seenKey("product-news"), "1");
       viewer = { hosted: true, canSave: false, cloudHome: true }; f.state.config.cloudHome = true; f.state.config.team = { id: "t", name: "Team" };
@@ -1712,7 +1360,7 @@ describe("cards from the announcements file", () => {
 });
 
 describe("Update MausBot on your phone", () => {
-  const TITLE = "Update MausBot on your phone", MODELGO = "ModelGo is now in MausBot";
+  const TITLE = "Update MausBot on your phone";
   const OLD = { id: "0f8c2a41-1111-4222-8333-444455556666", name: "Ada's iPhone", createdAt: 1, lastSeenAt: 1, cloudDesktopAccess: false };
   const NEW = { id: "5b5b5b5b-1111-4222-8333-444455556666", name: "Work phone", createdAt: 1, lastSeenAt: 1, cloudDesktopAccess: false, e2eAt: 2 };
   const OTHER = { ...OLD, id: "7c7c7c7c-1111-4222-8333-444455556666", name: "Old Android" };
@@ -1787,21 +1435,16 @@ describe("Update MausBot on your phone", () => {
     expect(await launch()).toContain(TITLE);
   });
 
-  it("is a notice to act on: ahead of the sponsor's card, which follows once it is closed, and behind the Grok Bot popup", async () => {
-    storage.delete(MODELGO_OFFER_NOTICE);
+  it("is a notice to act on: it takes the launch, and nothing lower shows while it is up", async () => {
     expect(await launch()).toContain(TITLE);
+    expect(launchNotice()).toBe("phone-app-update");
     press("Not now"); await flush();
-    expect(await settle(), "then the sponsor's card, in the same launch").toContain(MODELGO);
-    storage.delete(GROK_MOVE_NOTICE); session.clear(); f.state.config.onboarding.hintsSeen = withTourFinished(undefined); storage.delete("phone-app-update:0f8c2a41");
-    const first = await launch();
-    expect(first, "the Grok Bot popup goes first").not.toContain(TITLE);
-    expect(launchNotice()).toBe(GROK_MOVE_NOTICE);
+    expect(await settle(), "the notice ends and leaves the corner").toBe("");
   });
 
   it("waits while it can't tell yet, and over a live call", async () => {
     let answer = (_value: unknown) => {};
     companion.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
-    storage.delete(MODELGO_OFFER_NOTICE);
     expect(await launch(), "nothing lower shows meanwhile").toBe("");
     answer({ enabled: true, devices, pairing: null }); await flush();
     expect(await settle()).toContain(TITLE);

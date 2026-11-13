@@ -8,14 +8,13 @@ import {
 } from "../../shared/announcements";
 import { openKeySettings } from "./keys/key-focus";
 import { LinkButton, NoticeCard, NotNowButton, PRIMARY_BUTTON } from "./NoticeCard";
-import { ClaudeMark, CodexMark, CopilotMark, DeepSeekMark, GreenferenceMark, GrokMark, KimiMark, KiroMark, ModelgoMark, type IconProps } from "./ProviderIcons";
+import { ProviderMark, type IconProps } from "./ProviderIcons";
 
 export type AnnouncementButton = "primary" | "secondary";
 
 const KIND_ICON: Record<AnnouncementKind, ComponentType<IconProps>> = { sponsor: Sparkles, product: Megaphone, tip: Lightbulb };
 const MARK: Record<AnnouncementMark, ComponentType<IconProps>> = {
-  claude: ClaudeMark, codex: CodexMark, grok: GrokMark, kimi: KimiMark, modelgo: ModelgoMark, greenference: GreenferenceMark,
-  deepseek: DeepSeekMark, copilot: CopilotMark, kiro: KiroMark,
+  customAcp: (props) => <ProviderMark driverKind="customAcp" {...props} />,
 };
 
 /** Each place is one the app already opens from its own menus; nothing here navigates the window anywhere. */

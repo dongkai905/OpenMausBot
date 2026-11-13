@@ -1,13 +1,12 @@
 import { Check, KeyRound, Plus, Search } from "lucide-react";
 import type { InstanceInfo } from "@/state/store";
-import { engineDisplayName, isClaudeAccount, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail, type SignInFamily } from "@/lib/engine-rail";
+import { engineDisplayName, splitEngineRail } from "@/lib/engine-rail";
 import { modelOptionLabel } from "@/lib/model-label";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { hasSavedApiKey, needsCli, needsSignIn } from "./EngineSetup";
 import { MENU_META, MENU_ROW, MENU_STROKE } from "./menu-recipe";
-import { Select } from "./Select";
 
 type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -28,10 +27,9 @@ export function ModelRow({ option, current, defaultId, botModel = false, onPick 
   botModel?: boolean;
   onPick: () => void;
 }) {
-  const needsUpdate = option.needsCliUpdate !== undefined;
-  const blocked = option.orgBlocked === true || needsUpdate;
-  const reason = needsUpdate ? t("chat.claudeUpdate.offer") : t("model.orgBlocked");
-  const meta = needsUpdate ? t("engines.updateClaude") : blocked ? reason : [option.provider, option.id === defaultId ? t("model.effort.default") : undefined].filter(Boolean).join(" · ");
+  const blocked = option.orgBlocked === true;
+  const reason = t("model.orgBlocked");
+  const meta = blocked ? reason : [option.provider, option.id === defaultId ? t("model.effort.default") : undefined].filter(Boolean).join(" · ");
   return (
     <button
       type="button"
@@ -101,42 +99,26 @@ export type RailProvider = {
   selected: boolean;
 };
 
-export function railProviders(instances: InstanceInfo[], selectedInstance: InstanceInfo | undefined,
-  claudeInstance: InstanceInfo | undefined, openaiInstance: InstanceInfo | undefined) {
-  const firstOf: Record<SignInFamily, InstanceInfo | undefined> = {
-    claude: instances.find((instance) => isClaudeAccount(instance) && instance.claudeAccount?.isDefault)
-      ?? instances.find(isClaudeAccount),
-    openai: instances.find((instance) => signInFamily(instance) === "openai"),
-  };
-  const opensOn: Record<SignInFamily, InstanceInfo | undefined> = { claude: claudeInstance, openai: openaiInstance };
-  const providers = instances.filter((instance) => {
-    const family = signInFamily(instance);
-    return !family || instance === firstOf[family];
+export function railProviders(instances: InstanceInfo[], selectedInstance: InstanceInfo | undefined) {
+  const entry = (instance: InstanceInfo): RailProvider => ({
+    instance,
+    target: instance,
+    label: engineDisplayName(instance),
+    selected: instance.instanceId === selectedInstance?.instanceId,
   });
-  const entry = (instance: InstanceInfo): RailProvider => {
-    const family = signInFamily(instance);
-    return {
-      instance,
-      target: family ? opensOn[family] ?? instance : instance,
-      label: family ? SIGN_IN_FAMILY_LABEL[family] : engineDisplayName(instance),
-      selected: family ? signInFamily(selectedInstance) === family : instance.instanceId === selectedInstance?.instanceId,
-    };
-  };
-  const { subscription, api, custom } = splitEngineRail(providers);
+  const { subscription, api, custom } = splitEngineRail(instances);
   return { subscription: subscription.map(entry), api: api.map(entry), custom: custom.map(entry) };
 }
 
 const RAIL_LABEL = "pb-0.5 text-center text-[11px] leading-[14px] text-ink-tertiary";
 
-export function ModelEngineRail({ instances, selectedInstance, claudeInstance, openaiInstance, onSelect, onAddApiKeys }: {
+export function ModelEngineRail({ instances, selectedInstance, onSelect, onAddApiKeys }: {
   instances: InstanceInfo[];
   selectedInstance?: InstanceInfo;
-  claudeInstance?: InstanceInfo;
-  openaiInstance?: InstanceInfo;
   onSelect: (instance: InstanceInfo) => void;
   onAddApiKeys?: () => void;
 }) {
-  const { subscription, api, custom: local } = railProviders(instances, selectedInstance, claudeInstance, openaiInstance);
+  const { subscription, api, custom: local } = railProviders(instances, selectedInstance);
   const railButton = ({ instance, target, selected, label }: RailProvider) => {
     const attention = needsCli(target) || needsSignIn(target) || Boolean(target.snapshot.update);
     const managedBy = target.policy ? t("policy.managedBy", { organization: target.policy.organizationName }) : undefined;
@@ -188,24 +170,3 @@ export function ModelEngineRail({ instances, selectedInstance, claudeInstance, o
   );
 }
 
-export function ClaudeAccountSelect({ accounts, selectedId, onSelect }: {
-  accounts: InstanceInfo[];
-  selectedId: string;
-  onSelect: (instance: InstanceInfo) => void;
-}) {
-  return (
-    <label className="mt-2 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-ink-secondary">
-      <span>{t("model.account")}:</span>
-      <Select size="sm" variant="quiet" className="flex-1"
-        aria-label={t("model.account")}
-        value={selectedId}
-        onChange={(event) => {
-          const account = accounts.find((instance) => instance.instanceId === event.target.value);
-          if (account) onSelect(account);
-        }}
-      >
-        {accounts.map((account) => <option key={account.instanceId} value={account.instanceId}>{engineDisplayName(account)}</option>)}
-      </Select>
-    </label>
-  );
-}

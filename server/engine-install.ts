@@ -147,7 +147,7 @@ export function npmEnvironment(base: NodeJS.ProcessEnv = process.env, path: stri
     npm_config_fund: "false",
     npm_config_audit: "false",
   };
-  // Workspace credentials (xai/box/voice keys) are not npm's to see.
+  // Workspace credentials (provider, box and voice keys) are not npm's to see.
   stripWorkspaceCredentialEnv(env as Record<string, string | undefined>);
   if (boxed) {
     const own = npmServerHome(baseDir);

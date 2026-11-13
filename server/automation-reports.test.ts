@@ -377,12 +377,12 @@ describe("automation reports", () => {
     const run = f.finished(null, "Dashboard check", { status: "running" });
     const signIn = f.store.appendMessage(run.threadId!, { role: "bot", kind: "signin", text: "Sign in", signIn: { url: "https://example.com", site: "example.com", place: "browser", reason: "the dashboard is behind a login" } });
     const connect = f.store.appendMessage(run.threadId!, { role: "bot", kind: "connector", connector: { slug: "gmail", label: "Gmail", description: "", status: "required", resumeKey: "resume-key-1" } });
-    f.store.appendMessage(run.threadId!, { role: "bot", kind: "secret", secret: { target: "xaiApiKey", label: "xAI API key", description: "", placeholder: "", helpUrl: "", requestKey: "secret-1" } });
+    f.store.appendMessage(run.threadId!, { role: "bot", kind: "secret", secret: { target: "openaiApiKey", label: "OpenAI API key", description: "", placeholder: "", helpUrl: "", requestKey: "secret-1" } });
     f.store.appendMessage(run.threadId!, { role: "bot", kind: "signin", text: "Sign in", signIn: { url: "https://done.example", site: "done.example", place: "browser", done: true } });
     expect(f.lines().map((line) => [line.text, line.automation?.needsYou, line.automation?.copyOf])).toEqual([
       ["I need you to sign in to example.com: the dashboard is behind a login.", true, signIn.id],
       ["I need you to connect Gmail.", true, connect.id],
-      ["I need your xAI API key.", true, expect.any(String)],
+      ["I need your OpenAI API key.", true, expect.any(String)],
     ]);
     expect(f.wrote).toEqual([f.main, f.main, f.main]);
     f.store.patchMessage(run.threadId!, signIn.id, { signIn: { ...signIn.signIn!, done: true } });
@@ -402,11 +402,11 @@ describe("automation reports", () => {
     const run = f.finished(null, "Dashboard check", { status: "running" });
     f.store.appendMessage(run.threadId!, { role: "bot", kind: "signin", text: "Sign in", signIn: { url: "https://example.com", site: "example.com", place: "browser", reason: "das Dashboard braucht eine Anmeldung" } });
     f.store.appendMessage(run.threadId!, { role: "bot", kind: "connector", connector: { slug: "clarity", label: "Microsoft Clarity", description: "", status: "required", resumeKey: "resume-key-1" } });
-    f.store.appendMessage(run.threadId!, { role: "bot", kind: "secret", secret: { target: "xaiApiKey", label: "xAI API key", description: "", placeholder: "", helpUrl: "", requestKey: "secret-1" } });
+    f.store.appendMessage(run.threadId!, { role: "bot", kind: "secret", secret: { target: "openaiApiKey", label: "OpenAI API key", description: "", placeholder: "", helpUrl: "", requestKey: "secret-1" } });
     expect(f.lines().map((line) => line.text)).toEqual([
       "Bitte melde dich bei example.com an: das Dashboard braucht eine Anmeldung.",
       "Bitte verbinde Microsoft Clarity.",
-      "Bitte hinterlege xAI API key.",
+      "Bitte hinterlege OpenAI API key.",
     ]);
   });
 

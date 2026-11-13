@@ -42,15 +42,15 @@ const buttons = () => render().nodes.filter((node) => node.type === "button");
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
 const managed = { organizationId: "fixture-org", organizationName: "Fixture Company" };
-const companyClaude: InstanceInfo = { instanceId: "company.fixture.anthropic", driverKind: "claudeAgent", displayName: "Company · Fixture Company · Claude",
+const companyClaude: InstanceInfo = { instanceId: "company.fixture.anthropic", driverKind: "customAcp", displayName: "Company · Fixture Company · Claude",
   readOnly: true, managed, snapshot: { state: "available", authenticated: true }, models: { default: "company-claude", options: [{ id: "company-claude", label: "company-claude (Company)" }] } };
-const companyCodex: InstanceInfo = { instanceId: "company.fixture.openai", driverKind: "codex", displayName: "Company · Fixture Company · Codex",
-  readOnly: true, managed, snapshot: { state: "unavailable", reason: "codex CLI not found" }, models: { default: "company-gpt", options: [] } };
-const personalClaude: InstanceInfo = { instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude",
+const companyCodex: InstanceInfo = { instanceId: "company.fixture.openai", driverKind: "customAcp", displayName: "Company · Fixture Company · Codex",
+  readOnly: true, managed, snapshot: { state: "unavailable", reason: "second CLI not found" }, models: { default: "company-gpt", options: [] } };
+const personalClaude: InstanceInfo = { instanceId: "claude", driverKind: "customAcp", displayName: "Claude",
   snapshot: { state: "available", authenticated: false }, models: { default: "sonnet", options: [{ id: "sonnet", label: "Sonnet" }] } };
-const personalCodex: InstanceInfo = { instanceId: "codex", driverKind: "codex", displayName: "Codex",
-  snapshot: { state: "unavailable", reason: "codex CLI not found" }, models: { default: "gpt", options: [] }, install: { command: { darwin: "npm i -g @openai/codex", linux: "npm i -g @openai/codex", win32: "npm i -g @openai/codex" } } };
-const workingGrok: InstanceInfo = { instanceId: "grok", driverKind: "grokAgent", displayName: "Grok",
+const personalCodex: InstanceInfo = { instanceId: "agent-two", driverKind: "customAcp", displayName: "Codex",
+  snapshot: { state: "unavailable", reason: "second CLI not found" }, models: { default: "gpt", options: [] }, install: { command: { darwin: "npm i -g @openai/second", linux: "npm i -g @openai/second", win32: "npm i -g @openai/second" } } };
+const workingGrok: InstanceInfo = { instanceId: "grok", driverKind: "customAcp", displayName: "Grok",
   snapshot: { state: "available", authenticated: true }, models: { default: "grok-4", options: [{ id: "grok-4", label: "Grok 4" }] } };
 function bot(id: string, name: string, instanceId: string): Bot {
   return { id, threadId: `${id}-thread`, name, title: "", description: "", notifications: true, color: "green", unread: false, messages: [],
@@ -74,7 +74,7 @@ describe("Company models in the connected Organisation panel", () => {
     expect(html).toContain("Approved models: 1");
     expect(html).toContain("Ready on this computer");
     expect(html).toContain("Set up Codex");
-    expect(html).toContain("npm i -g @openai/codex");
+    expect(html).toContain("npm i -g @openai/second");
     expect(html).toContain("run through the Codex app on this computer");
     expect(html).toContain("you don’t need to sign in to a personal account");
     expect(html).not.toMatch(/Sign in to Codex/);
@@ -120,7 +120,7 @@ describe("Company models in the connected Organisation panel", () => {
 
   it("follows a company-models-only policy: personal bots count and the target is never a refused engine", async () => {
     const refused = { organizationName: "Fixture Company", reason: "Fixture Company allows only company models on this computer. Choose a Company model for this bot." };
-    const router: InstanceInfo = { ...companyClaude, instanceId: "company.fixture.openrouter", driverKind: "openai-compat", displayName: "Company · Fixture Company · OpenRouter", models: { default: "fixture/router", options: [] } };
+    const router: InstanceInfo = { ...companyClaude, instanceId: "company.fixture.openrouter", driverKind: "customAcp", displayName: "Company · Fixture Company · OpenRouter", models: { default: "fixture/router", options: [] } };
     fixture.instances = [{ ...workingGrok, policy: refused }, { ...companyClaude, policy: { ...refused, reason: "Fixture Company does not allow the Claude engine on this computer." } }, router];
     fixture.bots = [bot("b2", "Writer", "grok")];
     const view = render();

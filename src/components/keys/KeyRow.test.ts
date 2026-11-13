@@ -57,8 +57,8 @@ describe("a saved key", () => {
   });
 
   it("says Saved, not Connected, for a key nothing can test", () => {
-    fixture.config = { deepseek: { configured: true, last4: "9z9z" } };
-    const html = render({ id: "deepseek" });
+    fixture.config = { savedKeys: { geminiTtsKey: { configured: true, last4: "9z9z" } } };
+    const html = render({ id: "geminiTts" });
     expect(html).toContain(">Saved<");
     expect(html).not.toContain(">Connected<");
     expect(html).toContain("••••••••9z9z");
@@ -80,7 +80,7 @@ describe("a saved key", () => {
 
   it("marks a key its provider has since rejected as not working, keeping it in view to replace", () => {
     fixture.config = { openai: { configured: true, last4: "a1b2" } };
-    fixture.instances = [{ instanceId: "openai", driverKind: "openai-compat", displayName: "OpenAI", access: "api",
+    fixture.instances = [{ instanceId: "openai", driverKind: "customAcp", displayName: "OpenAI", access: "api",
       snapshot: { state: "available", authenticated: false }, models: { default: "m", options: [] } } as unknown as InstanceInfo];
     const html = render({ id: "openai" });
     expect(html).toContain(">Didn&#x27;t work<");
@@ -90,38 +90,29 @@ describe("a saved key", () => {
   });
 
   it("says a saved key waits on its engine's own CLI and shows how to install it", () => {
-    fixture.config = { deepseek: { configured: true, last4: "9z9z" } };
-    const deepseek = (state: "available" | "unavailable") => ({ instanceId: "deepseek", driverKind: "deepseekAgent", displayName: "DeepSeek Harness",
-      snapshot: { state }, install: { platform: "linux", command: { linux: "npm install -g @deepseek-ai/dsh" } }, models: { default: "m", options: [] } }) as unknown as InstanceInfo;
-    fixture.instances = [deepseek("unavailable")];
-    const html = render({ id: "deepseek" });
+    fixture.config = { meta: { configured: true, last4: "9z9z" } };
+    const engine = (state: "available" | "unavailable") => ({ instanceId: "meta", driverKind: "customAcp", displayName: "Meta",
+      snapshot: { state }, install: { platform: "linux", command: { linux: "npm install -g @example/meta-cli" } }, models: { default: "m", options: [] } }) as unknown as InstanceInfo;
+    fixture.instances = [engine("unavailable")];
+    const html = render({ id: "meta" });
     expect(html).toContain("data-key-engine-missing");
-    expect(html).toContain("Saved, but DeepSeek Harness can&#x27;t run on this computer yet");
-    expect(html).toContain("npm install -g @deepseek-ai/dsh");
+    expect(html).toContain("Saved, but Meta can&#x27;t run on this computer yet");
+    expect(html).toContain("npm install -g @example/meta-cli");
     expect(html).toContain("data-key-engine-check");
     expect(html).toContain("••••••••9z9z");
 
     // Without the server's platform, the command for this computer's platform is used.
-    fixture.instances = [{ ...deepseek("unavailable"), install: { command: { linux: "npm install -g @deepseek-ai/dsh" } } } as InstanceInfo];
-    expect(render({ id: "deepseek" })).toContain("data-key-engine-missing");
-    fixture.instances = [deepseek("available")];
-    expect(render({ id: "deepseek" })).not.toContain("data-key-engine-missing");
-    // The Grok CLI drops XAI_API_KEY (it uses a grok.com sign-in), so its install never makes the xAI key usable.
-    const grokCli = { ...deepseek("unavailable"), instanceId: "grok", driverKind: "grokAgent", displayName: "Grok" } as InstanceInfo;
-    fixture.config = { xai: { configured: true, last4: "8y8y" } };
-    fixture.instances = [grokCli, { ...deepseek("available"), instanceId: "xaiApi", install: undefined }];
-    expect(render({ id: "xai" })).not.toContain("data-key-engine-missing");
-    fixture.instances = [grokCli];
-    expect(render({ id: "xai" })).not.toContain("data-key-engine-missing");
-    fixture.instances = [{ ...deepseek("unavailable"), instanceId: "xaiApi", displayName: "xAI API", install: undefined }, grokCli];
-    expect(render({ id: "xai" })).not.toContain("data-key-engine-missing");
+    fixture.instances = [{ ...engine("unavailable"), install: { command: { linux: "npm install -g @example/meta-cli" } } } as InstanceInfo];
+    expect(render({ id: "meta" })).toContain("data-key-engine-missing");
+    fixture.instances = [engine("available")];
+    expect(render({ id: "meta" })).not.toContain("data-key-engine-missing");
     // An unavailable engine with nothing to install doesn't hide one that has a command.
-    fixture.config = { deepseek: { configured: true, last4: "9z9z" } };
-    fixture.instances = [{ ...deepseek("unavailable"), displayName: "Other", install: undefined }, deepseek("unavailable")];
-    expect(render({ id: "deepseek" })).toContain("Saved, but DeepSeek Harness can&#x27;t run on this computer yet");
+    fixture.config = { meta: { configured: true, last4: "9z9z" } };
+    fixture.instances = [{ ...engine("unavailable"), displayName: "Other", install: undefined }, engine("unavailable")];
+    expect(render({ id: "meta" })).toContain("Saved, but Meta can&#x27;t run on this computer yet");
     fixture.config = {};
-    fixture.instances = [deepseek("unavailable")];
-    expect(render({ id: "deepseek" })).not.toContain("data-key-engine-missing");
+    fixture.instances = [engine("unavailable")];
+    expect(render({ id: "meta" })).not.toContain("data-key-engine-missing");
   });
 });
 

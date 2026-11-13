@@ -5,8 +5,11 @@ import { generateImage, imageGenerationReady, imageSlots } from "./image-generat
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const BOTH = {
-  imageGen: { key: "openai-secret", primary: { provider: "openai" as const }, fallback: { provider: "xai" as const } },
-  xai: { key: "xai-secret" },
+  imageGen: {
+    key: "openai-secret",
+    customUrl: "http://127.0.0.1:4711/v1", customApiKey: "custom-secret", customModel: "vendor/image-model",
+    primary: { provider: "openai" as const }, fallback: { provider: "custom" as const },
+  },
 };
 
 function imageResponse(): Response {
@@ -26,14 +29,14 @@ describe("image slots", () => {
   });
 
   it("prefers the saved base over the older provider field and fills each provider's default model", () => {
-    expect(imageSlots({ imageGen: { provider: "custom", primary: { provider: "xai" }, fallback: { provider: "openai", model: "gpt-image-1" } } })).toEqual({
-      primary: { provider: "xai", model: "grok-imagine-image-2.0" },
+    expect(imageSlots({ imageGen: { provider: "custom", primary: { provider: "openrouter" }, fallback: { provider: "openai", model: "gpt-image-1" } } })).toEqual({
+      primary: { provider: "openrouter", model: "google/gemini-2.5-flash-image" },
       fallback: { provider: "openai", model: "gpt-image-1" },
     });
   });
 
   it("ignores a backup identical to the base", () => {
-    expect(imageSlots({ imageGen: { primary: { provider: "xai" }, fallback: { provider: "xai" } } }).fallback).toBeNull();
+    expect(imageSlots({ imageGen: { primary: { provider: "openrouter" }, fallback: { provider: "openrouter" } } }).fallback).toBeNull();
   });
 });
 
@@ -45,7 +48,7 @@ describe("provider requests", () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/images/generations");
     expect(init?.headers).toMatchObject({ authorization: "Bearer gemini-secret" });
-    expect(JSON.stringify(init)).not.toMatch(/openai-secret|xai-secret/);
+    expect(JSON.stringify(init)).not.toMatch(/openai-secret|custom-secret/);
     expect(JSON.parse(String(init?.body))).toEqual({ model: "gemini-2.5-flash-image", prompt: "owl", response_format: "b64_json", size: "1024x1024", n: 1 });
   });
 
@@ -82,7 +85,7 @@ describe("provider requests", () => {
   it.each(["gemini", "openrouter"] as const)("treats %s without its key as not set up, so the backup takes over", async (provider) => {
     const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
     const cfg = { ...BOTH, imageGen: { ...BOTH.imageGen, primary: { provider } } };
-    await expect(generateImage(cfg, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai", usedFallback: true });
+    await expect(generateImage(cfg, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom", usedFallback: true });
   });
 });
 
@@ -98,16 +101,16 @@ describe("generateImage with a backup", () => {
   it("moves to the backup when the base has no key, without calling the base", async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
     const cfg = { ...BOTH, imageGen: { ...BOTH.imageGen, key: "" } };
-    await expect(generateImage(cfg, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai", usedFallback: true });
-    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.x.ai"]);
+    await expect(generateImage(cfg, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom", usedFallback: true });
+    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["127.0.0.1:4711"]);
   });
 
   it.each([401, 402, 403, 429])("moves to the backup when the base answers HTTP %s", async (status) => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status }))
       .mockResolvedValueOnce(imageResponse());
-    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai", usedFallback: true });
-    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.openai.com", "api.x.ai"]);
+    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom", usedFallback: true });
+    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.openai.com", "127.0.0.1:4711"]);
   });
 
   it("moves to the backup when the base refuses with a body that breaks mid-stream", async () => {
@@ -115,13 +118,13 @@ describe("generateImage with a backup", () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(broken, { status: 429 }))
       .mockResolvedValueOnce(imageResponse());
-    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai", usedFallback: true });
+    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom", usedFallback: true });
   });
 
   it("moves to the backup when the base refuses the connection", async () => {
     const refused = Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("connect"), { code: "ECONNREFUSED" }) });
     const fetchMock = vi.fn<typeof fetch>().mockRejectedValueOnce(refused).mockResolvedValueOnce(imageResponse());
-    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai" });
+    await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom" });
   });
 
   it.each([
@@ -149,8 +152,8 @@ describe("generateImage with a backup", () => {
 
   it("uses only the backup when the caller asks for it", async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
-    await expect(generateImage(BOTH, { prompt: "owl" }, { slot: "fallback", fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "xai", usedFallback: true });
-    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.x.ai"]);
+    await expect(generateImage(BOTH, { prompt: "owl" }, { slot: "fallback", fetchImpl: fetchMock })).resolves.toMatchObject({ provider: "custom", usedFallback: true });
+    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["127.0.0.1:4711"]);
   });
 
   it("says so when the caller asks for a backup that is not set", async () => {
@@ -178,13 +181,13 @@ describe("what the person learns when a provider fails", () => {
   it("keeps the base's reason when the backup made the image", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input) => new URL(String(input)).host === "api.openai.com" ? new Response("{}", { status: 401 }) : imageResponse());
     const made = await generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock });
-    expect(made).toMatchObject({ provider: "xai", usedFallback: true, baseError: "OpenAI image generation failed (HTTP 401, model gpt-image-2)" });
+    expect(made).toMatchObject({ provider: "custom", usedFallback: true, baseError: "OpenAI image generation failed (HTTP 401, model gpt-image-2)" });
   });
 
   it("reports both reasons when the base and the backup fail", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input) => new Response("{}", { status: new URL(String(input)).host === "api.openai.com" ? 402 : 429 }));
     await expect(generateImage(BOTH, { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow(
-      "xAI image generation failed (HTTP 429, model grok-imagine-image-2.0); the base first failed: OpenAI image generation failed (HTTP 402, model gpt-image-2)",
+      "Custom image generation failed (HTTP 429, model vendor/image-model); the base first failed: OpenAI image generation failed (HTTP 402, model gpt-image-2)",
     );
   });
 

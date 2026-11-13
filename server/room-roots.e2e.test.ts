@@ -210,8 +210,8 @@ it("R2 a member's coordinate_bots reuses its turn's root, and a Chief's Full rea
 }), hostTimeout(120_000));
 
 const parkOnCredential = async (f: any, room: { id: string; threadId: string }, job: string) => {
-  f.script(f.clive.id, { key: "C0", match: [job], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: `${job} fixture model` } }], reply: `${job}-ASKED: waiting for the key.` });
-  await f.post(room, `${job}: set up the Grok model; ask me for the key you need.`);
+  f.script(f.clive.id, { key: "C0", match: [job], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: `${job} fixture model` } }], reply: `${job}-ASKED: waiting for the key.` });
+  await f.post(room, `${job}: set up the OpenAI model; ask me for the key you need.`);
   await f.final(room.threadId, `${job}-ASKED`);
   await expect.poll(() => f.roomRoots(room.threadId)[0]?.status, { timeout: 15_000 }).toBe("needs_input");
   const card = (await f.messages(room.threadId)).find((message: any) => message.kind === "secret");
@@ -237,7 +237,7 @@ it("R3 parks a member's root on its credential card, keeps the room taking messa
   await f.final(room.threadId, "R3-TYPED-DONE");
   await expect.poll(() => f.roomRoots(room.threadId).map((row: any) => row.status), { timeout: 15_000 }).toEqual(["needs_input", "completed"]);
   expect(f.roomRoots(room.threadId)[0]).toMatchObject({ id: parked.id, cards: [card.id], executions: 1 });
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${f.clive.id}/secret-cards/${card.id}/provided`, { threadId: room.threadId });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: true });
@@ -267,7 +267,7 @@ it("R4 Stop in the room cancels the parked root and stops the card; providing af
   expect(stopped).toMatchObject({ stopped: true });
   expect(stopped.resumed).toBeUndefined();
   expect(stopped.provided).toBeUndefined();
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${f.clive.id}/secret-cards/${card.id}/provided`, { threadId: room.threadId });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: false });
@@ -526,9 +526,9 @@ it("R7 does not rerun a cut goal step after a restart: its run ended with the re
 it("R7 a goal step the watchdog stops after it posted a credential card fails as stalled and stops the card", () => scenario(async (f) => {
   const mira = await f.bot("Mira", "Engineering");
   const room = await f.room("Engineering", [f.clive.id, mira.id], { kind: "member", botId: f.clive.id });
-  f.script(f.clive.id, { key: "C-STEP", match: ["R7S-GOAL"], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: "R7S fixture model" } }],
+  f.script(f.clive.id, { key: "C-STEP", match: ["R7S-GOAL"], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: "R7S fixture model" } }],
     gateFile: f.gate("step"), reply: "R7S-LATE: never shown." });
-  await f.post(room, "R7S-GOAL: set up the Grok model; ask me for the key you need.", { mode: "goal" });
+  await f.post(room, "R7S-GOAL: set up the OpenAI model; ask me for the key you need.", { mode: "goal" });
   const messages = (): Promise<Array<{ id: string; kind: string; secret?: { stopped?: boolean }; goalRun?: { status: string } }>> => f.messages(room.threadId);
   await expect.poll(async () => (await messages()).find((message) => message.kind === "secret")?.id, { timeout: 30_000 }).toBeTruthy();
   const card = (await messages()).find((message) => message.kind === "secret")!;

@@ -1,8 +1,7 @@
 // Every local host × every agent writer, with the model-id dialects those CLIs actually speak.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -18,8 +17,6 @@ import {
   localHost,
   mergeLocalInject,
 } from "./local-inject.ts";
-
-const FAKE_ACP = join(dirname(fileURLToPath(import.meta.url)), "..", "testing", "fake-acp-cli.ts");
 
 const scratchDirs: string[] = [];
 afterEach(() => {
@@ -107,7 +104,6 @@ describe("host credentials", () => {
 
   it("uses the declared placeholder key for oMLX / Ollama / EXO / LM Studio", () => {
     expect(hostApiKey(localHost("omlx")!, {})).toBe("omlx");
-    expect(hostApiKey(localHost("ollama")!, {})).toBe("ollama");
     expect(hostApiKey(localHost("exo")!, {})).toBe("exo");
     expect(hostApiKey(localHost("lmstudio")!, {})).toBe("lm-studio");
   });
@@ -268,14 +264,6 @@ describe("loaded host probes", () => {
             { status: 200 },
           );
         }
-        if (href.includes(":11434/v1/models")) {
-          return new Response(JSON.stringify({ data: [{ id: "llama3.2:latest" }, { id: "mistral:latest" }] }), {
-            status: 200,
-          });
-        }
-        if (href.includes(":11434/api/ps")) {
-          return new Response(JSON.stringify({ models: [{ name: "llama3.2:latest" }] }), { status: 200 });
-        }
         if (href.includes(":1234/v1/models")) {
           return new Response(JSON.stringify({ data: [{ id: "qwen" }, { id: "other" }] }), { status: 200 });
         }
@@ -291,8 +279,6 @@ describe("loaded host probes", () => {
     expect(catalog.options.find((o) => o.id === "omlx::gemma-4-31b-it-bf16")?.loaded).toBe(true);
     expect(catalog.options.find((o) => o.id === "omlx::GLM-5.2-fp8")?.loaded).toBe(true);
     expect(catalog.options.find((o) => o.id === "omlx::Qwen3.8-27B-Abliterated-MLX-BF16")?.loaded).toBeUndefined();
-    expect(catalog.options.find((o) => o.id === "ollama::llama3.2:latest")?.loaded).toBe(true);
-    expect(catalog.options.find((o) => o.id === "ollama::mistral:latest")?.loaded).toBeUndefined();
     expect(catalog.options.find((o) => o.id === "lmstudio::qwen")?.loaded).toBe(true);
     expect(catalog.options.find((o) => o.id === "lmstudio::other")?.loaded).toBeUndefined();
   });

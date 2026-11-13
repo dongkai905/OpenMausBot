@@ -59,9 +59,7 @@ function CompanyEngineReadiness({ instance, instances }: { instance: InstanceInf
   if (instanceCanRun(instance)) {
     return <p className="mt-1 flex items-center gap-1 text-[12px] text-ink-secondary"><Check size={12} className="text-success" aria-hidden="true" />{t("organization.engineReady")}</p>;
   }
-  const local = instance.driverKind === "claudeAgent" || instance.driverKind === "codex"
-    ? instances.find((candidate) => candidate.driverKind === instance.driverKind && !candidate.readOnly && candidate.install)
-    : undefined;
+  const local = instances.find((candidate) => candidate.driverKind === instance.driverKind && !candidate.readOnly && candidate.install);
   if (local && needsCli(local)) {
     return <EngineSetup instance={local} intent="inject" className="mt-2"
       description={t("organization.engineInstallHelp", { engine: local.displayName })} />;

@@ -5,7 +5,7 @@ import { noteTurnEvent, resetTurnLive, turnLive } from "./turn-status";
 
 let seq = 0;
 const note = (event: Partial<RuntimeEvent>, threadId = "t") =>
-  noteTurnEvent({ eventId: `e${++seq}`, provider: "claudeAgent", threadId, createdAt: "2026-10-23T12:00:00.000Z", turnId: "turn-1", ...event } as RuntimeEvent);
+  noteTurnEvent({ eventId: `e${++seq}`, provider: "customAcp", threadId, createdAt: "2026-10-23T12:00:00.000Z", turnId: "turn-1", ...event } as RuntimeEvent);
 
 afterEach(() => resetTurnLive());
 

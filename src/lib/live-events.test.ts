@@ -112,7 +112,7 @@ describe("the chat's status line", () => {
     const onFrame = vi.fn();
     const stop = openLiveEvents({ onFrame, onSnapshotRequired: async () => true }, test.platform);
     test.sources[0].open();
-    const event = { eventId: "e1", provider: "claudeAgent", threadId: "t1", createdAt: "2026-10-23T12:00:00.000Z", turnId: "u1" };
+    const event = { eventId: "e1", provider: "customAcp", threadId: "t1", createdAt: "2026-10-23T12:00:00.000Z", turnId: "u1" };
     test.sources[0].message({ kind: "runtime", event: { ...event, type: "turn.progress", activity: "write", itemId: "w", file: "index.html", bytes: 14_336 } }, "run00000:1");
     expect(turnLive("t1").status).toEqual({ activity: "write", itemId: "w", file: "index.html", bytes: 14_336 });
     test.sources[0].message({ kind: "runtime", event: { ...event, eventId: "e2", type: "turn.completed", ok: true } }, "run00000:2");

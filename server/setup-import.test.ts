@@ -276,12 +276,11 @@ describe("finding what another AI tool already set up on this computer", () => {
     expect(servers().github).toEqual(github);
   });
 
-  it("leaves Claude Code's own servers out while Claude bots already run them in place", () => {
+  it("offers the tools of the sources it still reads", () => {
     const home = fixtureHome();
     plantTools(home);
     const { machine } = machineFor(home);
-    const sources = new Set(detectSetup(machine, hostFor({ claudeUserMcp: true }).host).tools.map((tool) => tool.source));
-    expect(sources.has("claudeCode")).toBe(false);
+    const sources = new Set(detectSetup(machine, hostFor().host).tools.map((tool) => tool.source));
     expect(sources.has("cursor")).toBe(true);
   });
 

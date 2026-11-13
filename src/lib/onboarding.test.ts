@@ -105,7 +105,7 @@ describe("first run on an OMB Cloud home", () => {
   const connected = welcomeViewer({ kind: "session", scopes: ["admin", "client"], via: "cookie", cloudHome: true });
   const engine = (id: string, authenticated: boolean | undefined, state = "available") => ({ id, state, authenticated });
   const ready = (instance: ReturnType<typeof engine>) => instance.state === "available" && instance.authenticated !== false;
-  const signedOut = [engine("claude", false), engine("codex", false), engine("opencodeGo", undefined, "unavailable")];
+  const signedOut = [engine("claude", false), engine("agent-two", false), engine("agent-three", undefined, "unavailable")];
 
   it("routes the connected app to the engine sign-in, not the welcome flow", () => {
     expect(cloudSignInDue(connected, { connected: true, instances: signedOut }, ready)).toBe(true);
@@ -113,7 +113,7 @@ describe("first run on an OMB Cloud home", () => {
   });
 
   it("hands over to the chat once any engine can run", () => {
-    for (const signedIn of [engine("claude", true), engine("codex", true), engine("anthropic-key", undefined)]) {
+    for (const signedIn of [engine("claude", true), engine("agent-two", true), engine("anthropic-key", undefined)]) {
       expect(cloudSignInDue(connected, { connected: true, instances: [...signedOut, signedIn] }, ready)).toBe(false);
     }
   });
@@ -157,25 +157,23 @@ describe("connecting an AI in the welcome", () => {
   type Row = { id: string; driverKind: string; access?: string; readOnly?: boolean };
   const row = (id: string, driverKind: string, extra: Partial<Row> = {}): Row => ({ id, driverKind, ...extra });
 
-  it("recommends a Claude account first, then a ChatGPT plan, and folds every other way under it", () => {
-    const grok = row("grok", "grokAgent");
-    const codex = row("codex", "codex");
-    const claudeKey = row("claude-api", "claudeAgent", { access: "api" });
-    const claude = row("claude", "claudeAgent");
-    expect(aiChoices([grok, codex, claudeKey, claude])).toEqual({ recommended: claude, others: [grok, codex, claudeKey] });
-    expect(aiChoices([grok, claudeKey, codex]).recommended).toBe(codex);
-    expect(aiChoices([grok, claudeKey]).recommended).toBe(grok);
-    expect(aiChoices([row("company", "claudeAgent", { readOnly: true }), grok]).recommended, "an organization's model is not a sign-in").toBe(grok);
+  it("recommends the first AI the person can sign in to, and folds every other way under it", () => {
+    const first = row("first", "customAcp");
+    const second = row("second", "customAcp");
+    const keyed = row("keyed", "customAcp", { access: "api" });
+    expect(aiChoices([first, second, keyed])).toEqual({ recommended: first, others: [second, keyed] });
+    expect(aiChoices([keyed, second]).recommended).toBe(second);
+    expect(aiChoices([row("company", "customAcp", { readOnly: true }), first]).recommended, "an organization's model is not a sign-in").toBe(first);
     expect(aiChoices([])).toEqual({ recommended: undefined, others: [] });
   });
 
-  it("recommends in the same order the new-bot default uses: then Gemini, then Grok, then the rest as listed", () => {
-    const kimi = row("kimi", "kimiAgent");
-    const grok = row("grok", "grokAgent");
-    const antigravity = row("antigravity", "antigravityAgent");
-    expect(aiChoices([kimi, grok, antigravity]).recommended).toBe(antigravity);
-    expect(aiChoices([kimi, grok])).toEqual({ recommended: grok, others: [kimi] });
-    expect(aiChoices([kimi, row("droid", "droidAgent")]).recommended).toBe(kimi);
+  it("recommends in the order the engines are listed", () => {
+    const first = row("first", "customAcp");
+    const second = row("second", "customAcp");
+    const third = row("third", "customAcp");
+    expect(aiChoices([first, second, third]).recommended).toBe(first);
+    expect(aiChoices([first, second])).toEqual({ recommended: first, others: [second] });
+    expect(aiChoices([first, row("other", "customAcp")]).recommended).toBe(first);
   });
 });
 
@@ -187,28 +185,28 @@ describe("the AI the welcome stands on", () => {
     return found && { id: found.instance.id, state: found.state };
   };
 
-  it("is none while only OpenCode's free backup works, so the welcome still asks for the person's own AI", () => {
-    const backup = ai("opencodeGo", "opencodeGo", { snapshot: { freeFallback: true }, aiTest: "passed" });
-    expect(stand([backup, ai("claude", "claudeAgent", { ready: false })])).toBeNull();
+  it("is none while only a free backup works, so the welcome still asks for the person's own AI", () => {
+    const backup = ai("backup", "customAcp", { snapshot: { freeFallback: true }, aiTest: "passed" });
+    expect(stand([backup, ai("first", "customAcp", { ready: false })])).toBeNull();
     expect(stand([])).toBeNull();
   });
 
-  it("is the best ready AI, waiting on its test, and works once it answered", () => {
-    expect(stand([ai("grok", "grokAgent"), ai("claude", "claudeAgent")])).toEqual({ id: "claude", state: "testing" });
-    expect(stand([ai("grok", "grokAgent"), ai("claude", "claudeAgent", { aiTest: "testing" })])).toEqual({ id: "claude", state: "testing" });
-    expect(stand([ai("grok", "grokAgent"), ai("claude", "claudeAgent", { aiTest: "passed" })])).toEqual({ id: "claude", state: "passed" });
+  it("is the first ready AI, waiting on its test, and works once it answered", () => {
+    expect(stand([ai("first", "customAcp"), ai("second", "customAcp")])).toEqual({ id: "first", state: "testing" });
+    expect(stand([ai("first", "customAcp"), ai("second", "customAcp", { aiTest: "testing" })])).toEqual({ id: "first", state: "testing" });
+    expect(stand([ai("first", "customAcp", { aiTest: "passed" }), ai("second", "customAcp")])).toEqual({ id: "first", state: "passed" });
     // An AI with nothing to test it with is trusted, as before.
-    expect(stand([ai("muse", "museCode", { aiTest: "untestable" })])).toEqual({ id: "muse", state: "untestable" });
+    expect(stand([ai("third", "customAcp", { aiTest: "untestable" })])).toEqual({ id: "third", state: "untestable" });
     // Only those two let the welcome leave out its Connect an AI step.
     expect(["passed", "untestable", "testing", "failed"].map((state) => aiWorks({ state: state as Ai["aiTest"] & string }))).toEqual([true, true, false, false]);
     expect(aiWorks(null)).toBe(false);
   });
 
   it("walks past an AI that didn't answer to the next, and says so when none is left", () => {
-    expect(stand([ai("grok", "grokAgent", { aiTest: "passed" }), ai("claude", "claudeAgent", { aiTest: "failed" })])).toEqual({ id: "grok", state: "passed" });
-    expect(stand([ai("grok", "grokAgent"), ai("claude", "claudeAgent", { aiTest: "failed" })])).toEqual({ id: "grok", state: "testing" });
-    expect(stand([ai("claude", "claudeAgent", { aiTest: "failed" }), ai("opencodeGo", "opencodeGo", { snapshot: { freeFallback: true } })]))
-      .toEqual({ id: "claude", state: "failed" });
+    expect(stand([ai("first", "customAcp", { aiTest: "passed" }), ai("second", "customAcp", { aiTest: "failed" })])).toEqual({ id: "first", state: "passed" });
+    expect(stand([ai("first", "customAcp"), ai("second", "customAcp", { aiTest: "failed" })])).toEqual({ id: "first", state: "testing" });
+    expect(stand([ai("first", "customAcp", { aiTest: "failed" }), ai("backup", "customAcp", { snapshot: { freeFallback: true } })]))
+      .toEqual({ id: "first", state: "failed" });
   });
 });
 

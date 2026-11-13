@@ -1,10 +1,10 @@
-export type AvatarImageProvider = "openai" | "xai" | "custom";
-export const IMAGE_PROVIDERS = ["openai", "xai", "gemini", "openrouter", "custom"] as const;
+export type AvatarImageProvider = "openai" | "custom";
+export const IMAGE_PROVIDERS = ["openai", "gemini", "openrouter", "custom"] as const;
 export type ImageProvider = (typeof IMAGE_PROVIDERS)[number];
 
 export const IMAGE_MAX_PER_TURN_DEFAULT = 4;
 export const IMAGE_DEFAULT_MODELS: Record<ImageProvider, string> = {
-  openai: "gpt-image-2", xai: "grok-imagine-image-2.0", gemini: "gemini-2.5-flash-image", openrouter: "google/gemini-2.5-flash-image", custom: "",
+  openai: "gpt-image-2", gemini: "gemini-2.5-flash-image", openrouter: "google/gemini-2.5-flash-image", custom: "",
 };
 
 /** What Settings' Test learns about a provider; no image is made. */
@@ -25,7 +25,6 @@ export const IMAGE_MODEL_CHOICES: Record<ImageProvider, readonly ImageModelChoic
     { id: "gpt-image-1", name: "GPT Image 1" },
     { id: "gpt-image-1-mini", name: "GPT Image 1 Mini" },
   ],
-  xai: [{ id: "grok-imagine-image-2.0", name: "Grok Imagine Image 2.0" }],
   gemini: [{ id: "gemini-2.5-flash-image", name: "Nano Banana (Gemini 2.5 Flash Image)" }],
   openrouter: [
     { id: "google/gemini-2.5-flash-image", name: "Google: Nano Banana (Gemini 2.5 Flash Image)" },
@@ -60,7 +59,7 @@ export interface ImageGenerationConfig {
 
 /** A deliberately configured Images API endpoint, not a provider-returned URL.
  * Local HTTP is useful for self-hosted routers; internet endpoints require TLS. */
-const API_KEY_SHAPE = /^(sk-|sk_|xai-|gsk_|AIza)[A-Za-z0-9_-]{12,}$/;
+const API_KEY_SHAPE = /^(sk-|sk_|AIza)[A-Za-z0-9_-]{12,}$/;
 
 /** A value pasted into a model field that has the shape of a provider's API key. */
 export function looksLikeApiKey(value: string): boolean {

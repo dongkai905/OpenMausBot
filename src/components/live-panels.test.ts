@@ -32,7 +32,7 @@ const bot = {
   tasks: [{ threadId: "thread", title: "Thread", createdAt: 1, approvalMode: "ask" }],
 } as unknown as Bot;
 const runtime = (eventId: string, fields: Record<string, unknown>, threadId = "thread") => ({
-  eventId, provider: "codex", threadId, createdAt: "2026-10-04T09:00:00.000Z", ...fields,
+  eventId, provider: "agent-two", threadId, createdAt: "2026-10-04T09:00:00.000Z", ...fields,
 }) as RuntimeEvent;
 const frame = (event: RuntimeEvent) => publishLiveFrame({ kind: "runtime", event });
 const missed = () => publishMissedFrames();

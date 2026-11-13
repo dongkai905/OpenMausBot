@@ -9,7 +9,6 @@ import { deniedNativeSkills, isNativeSkillEnabled, setNativeSkillEnabled } from 
 // HOME and the data folder are this test file's own temporary ones (server/testing/setup.ts).
 const HOME = join(DATA_DIR, "..");
 const CODEX_HOME = join(HOME, "codex-home");
-const env = { HOME, CODEX_HOME };
 const choicesFile = (botId: string) => join(DATA_DIR, "skill-state", botId, "native-skills.json");
 
 afterEach(() => {
@@ -19,16 +18,6 @@ afterEach(() => {
   }
 });
 
-const skillMd = (name: string) => `---\nname: ${name}\ndescription: Works with ${name}.\n---\n\nSteps.\n`;
-function plant(root: string, name: string): string {
-  mkdirSync(join(root, name), { recursive: true });
-  writeFileSync(join(root, name, "SKILL.md"), skillMd(name));
-  return join(root, name, "SKILL.md");
-}
-/** The path tables of a skills.config override, limited to this test's home: /etc/codex/skills belongs to the machine. */
-const paths = (args: string[]) => (args[1] ?? "").replace(/^skills\.config=\[|\]$/g, "").split("},{")
-  .map((table) => /path=("(?:[^"\\]|\\.)*")/.exec(table)?.[1]).filter((path): path is string => path !== undefined)
-  .map((path) => JSON.parse(path) as string).filter((path) => path.startsWith(HOME)).sort();
 function damage(botId: string) {
   mkdirSync(join(DATA_DIR, "skill-state", botId), { recursive: true });
   writeFileSync(choicesFile(botId), "{\"off\": [");

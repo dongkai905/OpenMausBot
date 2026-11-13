@@ -16,13 +16,13 @@ class FixtureEventSource {
 }
 
 const opus = { instanceId: "claude", model: "claude-opus-5" };
-const codex = { instanceId: "codex", model: "gpt-5-codex" };
+const second = { instanceId: "agent-two", model: "gpt-5-second" };
 const before: BotAnnouncement = {
   id: "bot", threadId: "first", name: "Fixture", title: "", description: "",
   notifications: true, unread: false, color: "green", modelSelection: opus,
   tasks: [
     { threadId: "first", title: "First", createdAt: 1, modelSelection: opus, followsBotModel: true },
-    { threadId: "busy", title: "Busy", createdAt: 2, modelSelection: codex, followsBotModel: false },
+    { threadId: "busy", title: "Busy", createdAt: 2, modelSelection: second, followsBotModel: false },
   ],
 };
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));

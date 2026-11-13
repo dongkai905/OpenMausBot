@@ -48,7 +48,7 @@ const DOCUMENTED = [
   "key_providers", "key_count", "has_boat_key", "cloud_computer_source", "cloud_computers", "team_computers", "bots_cloud_boat",
   "bots_cloud_vps", "bots", "bots_local_vm", "bots_this_computer", "bots_browser", "bots_off", "bots_auto", "rooms", "bot_channels",
   "teams", "routines", "routines_enabled", "routines_cloud", "routines_room_goal", "routines_once", "routines_daily",
-  "routines_interval", "routines_cron", "webhooks", "engines", "engine_count", "custom_endpoints", "trial_credit", "apps",
+  "routines_interval", "routines_cron", "webhooks", "engines", "engine_count", "trial_credit", "apps",
   "apps_connected", "connectors_mode", "local_vm_mode", "vps_configured", "voice", "voice_included", "decider", "decider_included",
   "live_calls", "phones_paired", "paired_devices", "phone_paired", "members", "cloud_home", "cloud_plan", "cloud_trial", "edition",
   "org_managed", "onboarded", "first_turn", "platform", "remote_client",
@@ -83,10 +83,9 @@ function hostileState(): SnapshotState {
   return {
     config: {
       anthropic: { configured: true, everyClaudeBot: false }, openai: { configured: false }, openrouter: { configured: false },
-      openaiCompat: { configured: true, url: `https://${HOSTILE}.example.com/v1` }, xai: { configured: false },
+      meta: { configured: false },
       composio: { configured: true, mode: "self-hosted" }, box: { configured: true },
       vps: { configured: true, sshAlias: HOSTILE }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "per-bot", maxInstances: 2 },
-      opencodeGo: { configured: true, providerKeys: [HOSTILE] },
       tts: { configured: true, ready: true, voice: HOSTILE, provider: "fish" },
       decider: { provider: "jev", model: HOSTILE, configured: true, enabled: true, jobs: { roomRouting: true } },
       live: { configured: true, keySource: "live", voice: HOSTILE, readTypedReplies: false, idleMinutes: 5 },
@@ -99,11 +98,11 @@ function hostileState(): SnapshotState {
       onboarding: { completedAt: "2026-10-01T00:00:00.000Z", version: 1, reelSeen: true, hintsSeen: [HOSTILE], firstTurnAt: "2026-10-01T00:05:00.000Z" },
     } as unknown as ConfigStatus,
     instances: [
-      instance("claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", "claudeAgent"),
-      instance("claude", "claudeAgent"),
-      instance("openai-compat-0a3a6f1e-2b7c-4c55-8a51-3f0c2b1e9d1a", "openai-compat", { url: `https://${HOSTILE}.example.com/v1` }),
+      instance("claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", "customAcp"),
+      instance("claude", "customAcp"),
+      instance("openai-compat-0a3a6f1e-2b7c-4c55-8a51-3f0c2b1e9d1a", "customAcp", { url: `https://${HOSTILE}.example.com/v1` }),
       instance(HOSTILE, HOSTILE, { trialCredit: "used_up" }),
-      instance("codex", "codex", { snapshot: { state: "unavailable", reason: HOSTILE } }),
+      instance("agent-two", "customAcp", { snapshot: { state: "unavailable", reason: HOSTILE } }),
     ],
     bots: [
       hostileBot("cloud"), hostileBot("cloud", "box"), hostileBot("cloud", "vps"), hostileBot("vm"), hostileBot("local"), hostileBot("browser"),
@@ -195,12 +194,12 @@ describe("the daily usage snapshot", () => {
     expect(await snapshot.sendDailySnapshot(hostileState(), hostileSources(), DAY)).toBe(true);
     const [sent] = snapshots();
     expect(sent).toEqual({
-      key_providers: ["anthropic", "openai_compat", "boat", "composio", "opencode_go", "fish_audio", "jev", "custom_image", "openai_live"],
-      key_count: 9, has_boat_key: true, cloud_computer_source: "own_key", cloud_computers: 3, team_computers: 1,
+      key_providers: ["anthropic", "boat", "composio", "fish_audio", "jev", "custom_image", "openai_live"],
+      key_count: 7, has_boat_key: true, cloud_computer_source: "own_key", cloud_computers: 3, team_computers: 1,
       bots_cloud_boat: 2, bots_cloud_vps: 1, bots: 9, bots_local_vm: 1, bots_this_computer: 1, bots_browser: 1, bots_off: 1, bots_auto: 2,
       rooms: 2, bot_channels: 1, teams: 2,
       routines: 4, routines_enabled: 3, routines_cloud: 1, routines_room_goal: 1, routines_once: 1, routines_daily: 1, routines_interval: 1, routines_cron: 1,
-      webhooks: 1, engines: ["claude", "openai_compat", "other"], engine_count: 4, custom_endpoints: 1, trial_credit: "used_up",
+      webhooks: 1, engines: ["custom_acp", "other"], engine_count: 4, trial_credit: "used_up",
       apps: ["gmail", "other"], apps_connected: 4, connectors_mode: "self_hosted", local_vm_mode: "per_bot", vps_configured: true,
       voice: "fish", voice_included: false, decider: "jev", decider_included: false, live_calls: true,
       phones_paired: 2, paired_devices: 2, phone_paired: true, members: 1,
@@ -273,7 +272,7 @@ describe("the daily usage snapshot", () => {
     for (const key of ["cloud_computers", "team_computers", "apps", "apps_connected", "phones_paired", "paired_devices", "phone_paired", "members", "cloud_trial"]) {
       expect(sent, key).not.toHaveProperty(key);
     }
-    expect(sent).toMatchObject({ cloud_plan: "unknown", bots: 9, key_count: 9 });
+    expect(sent).toMatchObject({ cloud_plan: "unknown", bots: 9, key_count: 7 });
   });
 
   it("reads the plan from a Cloud page's own bridge, and leaves out what only this computer knows", async () => {
@@ -354,9 +353,9 @@ describe("what counts as a key, a computer source and an app", () => {
     expect(buildUsageSnapshot(minimal({}, { apps: { services, authoritative: true } }))).toMatchObject({ apps: ["gmail"], apps_connected: 1 });
   });
 
-  it("counts one xAI key once, though avatar images can use it too", () => {
-    const imageGen = { configured: false, provider: "openai" as const, openaiConfigured: false, xaiConfigured: true, customKeyConfigured: false };
-    expect(buildUsageSnapshot(minimal({ xai: { configured: true }, imageGen }))).toMatchObject({ key_providers: ["xai"], key_count: 1 });
+  it("counts one OpenRouter key once, though avatar images can use it too", () => {
+    const imageGen = { configured: false, provider: "openai" as const, openaiConfigured: false, openrouterConfigured: true, customKeyConfigured: false };
+    expect(buildUsageSnapshot(minimal({ openrouter: { configured: true }, imageGen }))).toMatchObject({ key_providers: ["openrouter"], key_count: 1 });
   });
 
   it("counts a separate Live key as openai_live, and Live calls on the OpenAI key from API keys as the openai key only", () => {

@@ -319,7 +319,7 @@ export interface ProtocolAskQuestion {
   question: AskQuestion;
 }
 
-/** Entries carry their own string ids (codex's item/tool/requestUserInput). An
+/** Entries carry their own string ids (an engine's item/tool/requestUserInput). An
  * entry without a usable id and question is skipped; nothing answerable parses
  * to null. */
 export function parseProtocolAskQuestions(entries: unknown): ProtocolAskQuestion[] | null {
@@ -348,7 +348,7 @@ export function repeatsQuestionText(questions: readonly ProtocolAskQuestion[]): 
 }
 
 /**
- * Answers by id (codex's requestUserInput). Only ids with a real block are
+ * Answers by id (an engine's requestUserInput). Only ids with a real block are
  * answered; without blocks, the whole message answers a lone question.
  */
 export function questionAnswersById(

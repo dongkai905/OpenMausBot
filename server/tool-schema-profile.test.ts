@@ -9,10 +9,10 @@ import { createPageSchema, wideSchema } from "./testing/oversized-tool-schema.ts
 import { fitToolSchema, schemaBytes, toolSchemaProfile, toolSchemaProfileFor, type ToolSchemaProfile } from "./tool-schema-profile.ts";
 
 type Json = Record<string, unknown>;
-const MOONSHOT = toolSchemaProfile("moonshot")!;
+const GENERIC = toolSchemaProfile("generic")!;
 const isObject = (value: unknown): value is Json => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-/** What Moonshot's validator (walle, MFJS) rejects in a fitted schema: an untyped subschema, a `required` name with no
+/** What a provider's validator rejects in a fitted schema: an untyped subschema, a `required` name with no
  * property, or a reference left behind. */
 function mfjsProblems(schema: Json): string[] {
   const problems: string[] = [];
@@ -52,7 +52,7 @@ function inlined(schema: Json): Json {
   return resolve(schema) as Json;
 }
 
-describe("fitting a tool schema to Moonshot's per-tool limit", () => {
+describe("fitting a tool schema to the per-tool limit", () => {
   it("measures as Go's encoding/json does, so <, > and & count six bytes each", () => {
     expect(schemaBytes({ a: "x" })).toBe(9);
     expect(schemaBytes({ a: "<&>" })).toBe(9 + 2 + 15);
@@ -61,21 +61,21 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
 
   it("leaves a schema within the limit exactly as the server sent it", () => {
     const schema = { type: "object", properties: { query: { type: "string", description: "What to find." } }, required: ["query"] };
-    const fit = fitToolSchema(schema, MOONSHOT);
+    const fit = fitToolSchema(schema, GENERIC);
     expect(fit).toEqual({ outcome: "kept", schema, bytes: schemaBytes(schema) });
     expect(fit.outcome === "kept" && fit.schema).toBe(schema);
   });
 
-  it("measures a schema with its refs inlined, as Kimi Code sends it", () => {
+  it("measures a schema with its refs inlined, as the provider sends it", () => {
     const schema = createPageSchema();
     expect(schemaBytes(schema)).toBeLessThan(12_000);
     expect(schemaBytes(inlined(schema))).toBeGreaterThan(20_000);
-    expect(fitToolSchema(schema, MOONSHOT).outcome).not.toBe("kept");
+    expect(fitToolSchema(schema, GENERIC).outcome).not.toBe("kept");
   });
 
   it("fits a realistic oversized schema under the limit and keeps its meaning", () => {
     const original = createPageSchema();
-    const fit = fitToolSchema(original, MOONSHOT);
+    const fit = fitToolSchema(original, GENERIC);
     if (fit.outcome === "kept" || fit.outcome === "dropped") throw new Error(`unexpected ${fit.outcome}`);
     expect(fit.outcome).toBe("loosened");
     expect(fit.bytes).toBeLessThanOrEqual(12_000);
@@ -102,7 +102,7 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
       }])),
       required: ["item_0"],
     };
-    const fit = fitToolSchema(schema, MOONSHOT);
+    const fit = fitToolSchema(schema, GENERIC);
     expect(fit.outcome).toBe("trimmed");
     if (fit.outcome !== "trimmed") return;
     const withoutNestedWords = structuredClone(schema) as Json;
@@ -111,7 +111,7 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
   });
 
   it("keeps only the top-level fields when nothing less fits, and leaves out a tool even those overflow", () => {
-    const wide = fitToolSchema(wideSchema(110), MOONSHOT);
+    const wide = fitToolSchema(wideSchema(110), GENERIC);
     expect(wide.outcome).toBe("minimal");
     if (wide.outcome !== "minimal") return;
     expect(wide.bytes).toBeLessThanOrEqual(12_000);
@@ -120,7 +120,7 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
     expect((wide.schema.properties as Json).field_007).toEqual({ type: "object", additionalProperties: true, description: "Settings group 7." });
     expect(mfjsProblems(wide.schema)).toEqual([]);
 
-    const fit = fitToolSchema(wideSchema(400), MOONSHOT);
+    const fit = fitToolSchema(wideSchema(400), GENERIC);
     expect(fit.outcome).toBe("dropped");
     expect(fit.bytes).toBeGreaterThan(12_000);
   });
@@ -128,7 +128,7 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
   it("brings a schema deeper than the depth limit back within it", () => {
     let deep: Json = { type: "string" };
     for (let level = 0; level < 40; level += 1) deep = { type: "object", properties: { next: deep } };
-    const fit = fitToolSchema(deep, MOONSHOT);
+    const fit = fitToolSchema(deep, GENERIC);
     expect(fit.outcome).toBe("loosened");
     let depth = 0;
     for (let node = fit.outcome === "loosened" ? fit.schema : {}; isObject(node.properties); node = (node.properties as Json).next as Json) depth += 1;
@@ -138,27 +138,24 @@ describe("fitting a tool schema to Moonshot's per-tool limit", () => {
   it("keeps a cyclic reference it cannot inline, measured beside its definition", () => {
     const tree = { type: "object", $defs: { node: { type: "object", properties: { name: { type: "string" }, children: { type: "array", items: { $ref: "#/$defs/node" } } } } },
       properties: { root: { $ref: "#/$defs/node" } } };
-    expect(fitToolSchema(tree, MOONSHOT).outcome).toBe("kept");
+    expect(fitToolSchema(tree, GENERIC).outcome).toBe("kept");
   });
 });
 
-describe("which turns carry a schema profile", () => {
-  it("is Kimi Code's engine, Moonshot's own endpoint, or a Moonshot model on OpenRouter", () => {
-    expect(toolSchemaProfileFor({ engine: "kimiAgent" })).toBe(MOONSHOT);
-    expect(toolSchemaProfileFor({ url: "https://api.moonshot.ai/v1" })).toBe(MOONSHOT);
-    expect(toolSchemaProfileFor({ url: "https://api.moonshot.cn/v1", model: "kimi-k2.6" })).toBe(MOONSHOT);
-    expect(toolSchemaProfileFor({ url: "https://openrouter.ai/api/v1", model: "moonshotai/kimi-k2.6" })).toBe(MOONSHOT);
+describe("the schema profile a tool list is fitted to", () => {
+  it("is the generic one, and only that one", () => {
+    expect(toolSchemaProfile("generic")).toBe(GENERIC);
+    expect(toolSchemaProfile("__proto__")).toBeUndefined();
+    expect(toolSchemaProfile("unknown")).toBeUndefined();
+    expect(toolSchemaProfile(7)).toBeUndefined();
   });
 
-  it("is no other engine or endpoint, so their tool lists are unchanged", () => {
-    for (const engine of ["claudeAgent", "codex", "geminiAgent", "grokAgent", "opencodeGo", "qwenAgent", "cursorAgent", "hermesAgent"]) {
-      expect(toolSchemaProfileFor({ engine, model: "kimi-k2.6" })).toBeUndefined();
-    }
-    expect(toolSchemaProfileFor({ url: "https://api.groq.com/openai/v1", model: "moonshotai/kimi-k2-instruct-0905" })).toBeUndefined();
-    expect(toolSchemaProfileFor({ url: "https://openrouter.ai/api/v1", model: "openai/gpt-5" })).toBeUndefined();
-    expect(toolSchemaProfileFor({ url: "https://moonshot.ai.example.com/v1" })).toBeUndefined();
-    expect(toolSchemaProfileFor({ url: "not a url" })).toBeUndefined();
-    expect(toolSchemaProfile("__proto__")).toBeUndefined();
+  it("is what a model reached through OpenRouter carries, since it may be served by any provider", () => {
+    expect(toolSchemaProfileFor({ url: "https://openrouter.ai/api/v1", model: "some/model" })).toBe(GENERIC);
+    expect(toolSchemaProfileFor({ url: "https://openrouter.ai/api/v1" })).toBeUndefined();
+    expect(toolSchemaProfileFor({ url: "https://api.openai.com/v1", model: "some/model" })).toBeUndefined();
+    expect(toolSchemaProfileFor({ engine: "customAcp" })).toBeUndefined();
+    expect(toolSchemaProfileFor({ url: "not a url", model: "some/model" })).toBeUndefined();
   });
 });
 
@@ -169,7 +166,7 @@ describe("OpenMausBot's own tools", () => {
   ];
 
   it.each(catalogs)("fit every profile as written: %s", (_name, tools) => {
-    const profiles: ToolSchemaProfile[] = [MOONSHOT];
+    const profiles: ToolSchemaProfile[] = [GENERIC];
     for (const profile of profiles) {
       for (const tool of tools) expect([tool.name, fitToolSchema(tool.inputSchema as Json, profile).outcome]).toEqual([tool.name, "kept"]);
     }

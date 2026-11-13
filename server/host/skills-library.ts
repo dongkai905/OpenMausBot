@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 
 import { skillCalls, skillCommandTurnText } from "../../shared/skill-command.ts";
 import { isSkillSwitchAction, type SkillRequestCardData, type SkillShareRecord } from "../../shared/skill-request.ts";
@@ -31,7 +30,6 @@ import { enabledSkillFiles, listSkills, readSkillFile, resolveBotSkills, skillsS
 import type { BotRecord, Message, Store } from "../store.ts";
 import { claudeUserSkillsEnabled } from "../turn-settings.ts";
 import { typedWords } from "../typed-sends.ts";
-import { TASK_WORKSPACES_DIR } from "../workspace.ts";
 
 type ReceiptArgs = {
   botId: string;
@@ -89,11 +87,11 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     const live = store.bot(bot.id) ?? bot;
     return [live.name, live.description, live.soul, live.section, readSectionContext(live.section)?.text].filter(Boolean).join("\n");
   };
-  const listBotSkills = (bot: BotRecord, threadId = bot.threadId): SkillListing[] => {
+  const listBotSkills = (bot: BotRecord): SkillListing[] => {
     const own = ownSkills(bot);
     const listed = [...own, ...importedSkillListings(bot.id, new Set(own.map((skill) => skill.name)), aboutBot(bot))];
     const names = new Set(listed.map((skill) => skill.name));
-    return [...listed, ...nativesFor(bot, threadId).filter((skill) => !names.has(skill.name)).map((skill) => nativeSkillListing(skill, isNativeSkillEnabled(bot.id, skill.name)))];
+    return [...listed, ...nativesFor(bot).filter((skill) => !names.has(skill.name)).map((skill) => nativeSkillListing(skill, isNativeSkillEnabled(bot.id, skill.name)))];
   };
   const readBotSkillFile = (bot: BotRecord, name: string): string | null => {
     const own = readSkillFile(bot.id, name);
@@ -146,15 +144,10 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
   /** The ones of those the turn's prompt lists and links into its task folder; it searches for the rest. */
   const listedImports = (bot: BotRecord, available: readonly ImportedSkillView[]) => listedImportedSkills(bot.id, available, aboutBot(bot));
 
-  /** The folder a thread's turns run in, as the store pins it on its first turn; null for a thread pinned to none. */
-  const threadFolder = (bot: BotRecord, threadId: string): string | null => {
-    const task = store.taskByThread(bot.id, threadId);
-    return task?.cwd !== undefined ? task.cwd : bot.cwd ?? join(TASK_WORKSPACES_DIR, bot.id, threadId);
-  };
   /** Outside a turn, what the bot's main conversation would load. */
-  const nativesFor = (bot: BotRecord, threadId = bot.threadId, instance = deps.instanceOf?.(bot.modelSelection.instanceId)) => {
+  const nativesFor = (bot: BotRecord, instance = deps.instanceOf?.(bot.modelSelection.instanceId)) => {
     const engine = engineOf(instance);
-    return engine ? nativeSkills(engine, { claudeUserSkills: claudeUserSkillsEnabled(cfg), cwd: threadFolder(bot, threadId) }) : [];
+    return engine ? nativeSkills(engine, { claudeUserSkills: claudeUserSkillsEnabled(cfg) }) : [];
   };
 
   const editable = (botId: string, name: string): boolean =>
@@ -284,7 +277,7 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
         // A skill switched off on the Skills page stays off, even when the engine holds one of the same name.
         const switched = new Set([...resolveBotSkills(bot.id, assigned), ...importedSkillListings(bot.id, new Set())]
           .filter((skill) => !skill.enabled).map((skill) => skill.name));
-        add(nativesFor(bot, threadId, instance).filter((skill) => !switched.has(skill.name) && isNativeSkillEnabled(bot.id, skill.name)));
+        add(nativesFor(bot, instance).filter((skill) => !switched.has(skill.name) && isNativeSkillEnabled(bot.id, skill.name)));
       }
       return skillCommandTurnText(text, files, typed, ownStart);
     },

@@ -2,9 +2,9 @@
 import { isIP } from "node:net";
 
 
-export type ProviderKeyKind = "openai" | "openrouter" | "openaiCompat";
+export type ProviderKeyKind = "openai" | "openrouter";
 
-export const PROVIDER_KEY_KINDS: readonly ProviderKeyKind[] = ["openai", "openrouter", "openaiCompat"];
+export const PROVIDER_KEY_KINDS: readonly ProviderKeyKind[] = ["openai", "openrouter"];
 
 export type ProviderKeyVerdict =
   /** `freeTier`: OpenRouter's /key says the account never bought credit, so paid models refuse it. */
@@ -15,7 +15,6 @@ export type ProviderKeyVerdict =
 const DEFAULT_URLS: Record<ProviderKeyKind, string> = {
   openai: "https://api.openai.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
-  openaiCompat: "https://openrouter.ai/api/v1",
 };
 
 const MAX_MODELS = 5;
@@ -32,7 +31,6 @@ export function providerBaseUrl(provider: ProviderKeyKind, base?: string | null)
 
 export function providerModelsUrl(provider: ProviderKeyKind, base?: string | null): string {
   const root = providerBaseUrl(provider, base);
-  if (provider === "anthropic") return root.endsWith("/v1") ? `${root}/models` : `${root}/v1/models`;
   return `${root}/models`;
 }
 
@@ -65,13 +63,10 @@ export async function checkProviderKey(
   if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback(url.hostname))) {
     return { ok: false, reason: "unexpected" };
   }
-  const authenticate = (input.provider === "openaiCompat" || input.provider === "openrouter")
+  const authenticate = input.provider === "openrouter"
     && url.origin === "https://openrouter.ai" && url.pathname === "/api/v1/models";
   if (authenticate) url.pathname = "/api/v1/key";
-  const headers: Record<string, string> =
-    input.provider === "anthropic"
-      ? { "x-api-key": input.key, "anthropic-version": "2023-06-01" }
-      : { authorization: `Bearer ${input.key}` };
+  const headers: Record<string, string> = { authorization: `Bearer ${input.key}` };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

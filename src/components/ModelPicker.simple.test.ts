@@ -75,7 +75,7 @@ const claudeModels: Option[] = [
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
 ];
 const claude = (authenticated = true, options: Option[] = claudeModels): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
   snapshot: { state: "available", version: "2.1.300", authenticated },
   models: { default: "claude-opus-5-5", options },
   capabilities: { effortLevels: levels },
@@ -87,14 +87,14 @@ const engine = (instanceId: string, driverKind: string, displayName: string, acc
   snapshot: { state: "available", version: "1.0.0", authenticated: true },
   models: { default: options.find((option) => !option.custom)?.id ?? "", options },
 });
-const codex = engine("codex", "codex", "Codex", "subscription", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
-const grok = engine("grok", "grokAgent", "Grok", "subscription", [{ id: "grok-5", label: "Grok 5" }]);
-const cursor = engine("cursor", "cursorAgent", "Cursor", "subscription", [{ id: "auto", label: "Auto" }]);
-const openaiKey = engine("openai", "openai-compat", "OpenAI", "api", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
-const claudeKey = engine("claudeApi", "claudeAgent", "Claude (API key)", "api", claudeModels);
-const local = engine("pi", "piAgent", "pi", "custom", [
+const second = engine("agent-two", "customAcp", "Codex", "subscription", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
+const grok = engine("grok", "customAcp", "Grok", "subscription", [{ id: "grok-5", label: "Grok 5" }]);
+const cursor = engine("cursor", "customAcp", "Cursor", "subscription", [{ id: "auto", label: "Auto" }]);
+const openaiKey = engine("openai", "customAcp", "OpenAI", "api", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
+const claudeKey = engine("claudeApi", "customAcp", "Claude (API key)", "api", claudeModels);
+const local = engine("pi", "customAcp", "pi", "custom", [
   { id: "qwen", label: "Qwen 3", custom: true },
-  { id: "mistral", label: "Mistral Small", custom: true },
+  { id: "agent-nine", label: "Mistral Small", custom: true },
   { id: "phi", label: "Phi 4", custom: true },
   { id: "llama", label: "Llama 4", custom: true, loaded: true },
   { id: "deepseek", label: "DeepSeek R2", custom: true },
@@ -200,7 +200,7 @@ describe("the model picker in Simple mode", () => {
   });
 
   it("lists every ready provider at once: the current one first, then sign-ins, API keys and local engines", () => {
-    fixture.instances = [codex, grok, cursor, openaiKey, claudeKey, local, claude()];
+    fixture.instances = [second, grok, cursor, openaiKey, claudeKey, local, claude()];
     const opened = open(bot());
     expect(list(opened).groups.map((entry) => entry.label))
       .toEqual(["Claude", "OpenAI", "Grok", "Cursor", "OpenAI · API key", "Claude · API key", "pi"]);
@@ -208,12 +208,12 @@ describe("the model picker in Simple mode", () => {
     for (const name of ["OpenAI", "Grok", "Cursor", "OpenAI · API key", "Claude · API key", "pi"]) expect(html).toContain(`>${name}</span>`);
     expect(html).not.toContain("data-simple-key");
     expect(html).not.toContain("(API key)");
-    expect(labels(opened, "codex")).toEqual(["GPT-5.6"]);
+    expect(labels(opened, "agent-two")).toEqual(["GPT-5.6"]);
     expect(labels(opened, "pi")).toEqual(["Llama 4", "Gemma 4", "Qwen 3"]);
   });
 
   it("has no More row: the full picker opens only from a provider that needs setting up", () => {
-    fixture.instances = [claude(), codex, grok, cursor, openaiKey, local];
+    fixture.instances = [claude(), second, grok, cursor, openaiKey, local];
     const opened = open(bot());
     const html = menu(opened.html);
     expect(html).not.toContain("data-simple-model-more");
@@ -309,7 +309,7 @@ describe("the model picker in Simple mode", () => {
 
   it("keeps a provider's local models after its own, under a quiet Local models label", () => {
     const own = many(6);
-    const onThisMac: Option[] = [{ id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }, { id: "ollama::llama4", label: "llama4 (Ollama)", custom: true, loaded: true }];
+    const onThisMac: Option[] = [{ id: "local::qwen3", label: "qwen3 (Ollama)", custom: true }, { id: "local::llama4", label: "llama4 (Ollama)", custom: true, loaded: true }];
     fixture.instances = [claude(true, [...own, ...onThisMac])];
     const forBot = bot(undefined, "claude", "model-1");
     toggle(open(forBot));
@@ -322,8 +322,8 @@ describe("the model picker in Simple mode", () => {
   });
 
   it("keeps a signed-out engine's local model on top, with a way to sign in for its own", () => {
-    fixture.instances = [claude(false, [...claudeModels, { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }])];
-    const forBot = bot(undefined, "claude", "ollama::qwen3");
+    fixture.instances = [claude(false, [...claudeModels, { id: "local::qwen3", label: "qwen3 (Ollama)", custom: true }])];
+    const forBot = bot(undefined, "claude", "local::qwen3");
     const opened = open(forBot);
     expect(list(opened).current).toMatchObject({ label: "qwen3 (Ollama)", warning: false });
     expect(group(opened, "claude")!.body).toMatchObject({ kind: "models", rows: [], signInForOwn: true });
@@ -531,11 +531,11 @@ describe("the model picker in Simple mode", () => {
 
   it("lets a contained Antigravity picker return a named variant to the session setting", () => {
     const variants = [{ id: "low", label: "Low" }, { id: "high", label: "High" }];
-    fixture.instances = [{ ...engine("antigravity", "antigravityAgent", "Google Gemini", "subscription", [
+    fixture.instances = [{ ...engine("agent-four", "customAcp", "Google Gemini", "subscription", [
       { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", variants },
     ]), capabilities: { modelVariants: true } }];
-    const forBot = { ...bot(undefined, "antigravity", "gemini-3.8-flash"), modelSelection: {
-      instanceId: "antigravity", model: "gemini-3.8-flash", variant: "high",
+    const forBot = { ...bot(undefined, "agent-four", "gemini-3.8-flash"), modelSelection: {
+      instanceId: "agent-four", model: "gemini-3.8-flash", variant: "high",
     } };
     const opened = open(forBot, { contained: true });
     const simple = pane(opened)!;
@@ -543,29 +543,29 @@ describe("the model picker in Simple mode", () => {
     expect((simple.props as { onResetVariant?: () => void }).onResetVariant).toBeTypeOf("function");
     (simple.props as { onResetVariant: () => void }).onResetVariant();
     expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
-      type: "setModel", selection: { instanceId: "antigravity", model: "gemini-3.8-flash" },
+      type: "setModel", selection: { instanceId: "agent-four", model: "gemini-3.8-flash" },
     }));
   });
 
   it("shows the picked Antigravity thinking level on the closed picker, so the pick visibly lands (#4160)", () => {
     const variants = [{ id: "low", label: "Low" }, { id: "medium", label: "Medium" }];
-    fixture.instances = [{ ...engine("antigravity", "antigravityAgent", "Google Gemini", "subscription", [
+    fixture.instances = [{ ...engine("agent-four", "customAcp", "Google Gemini", "subscription", [
       { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", variants },
     ]), capabilities: { modelVariants: true } }];
-    const forBot = { ...bot(undefined, "antigravity", "gemini-3.8-flash"), modelSelection: {
-      instanceId: "antigravity", model: "gemini-3.8-flash", variant: "medium",
+    const forBot = { ...bot(undefined, "agent-four", "gemini-3.8-flash"), modelSelection: {
+      instanceId: "agent-four", model: "gemini-3.8-flash", variant: "medium",
     } };
     expect(render(forBot, { contained: true }).html).toContain(">Gemini 3.8 Flash</span><span class=\"shrink-0 whitespace-pre\"> · Medium</span>");
   });
 
   it("dispatches a picked Antigravity thinking level from its menu row (#4160)", () => {
     const variants = [{ id: "low", label: "Low" }, { id: "medium", label: "Medium" }];
-    fixture.instances = [{ ...engine("antigravity", "antigravityAgent", "Google Gemini", "subscription", [
+    fixture.instances = [{ ...engine("agent-four", "customAcp", "Google Gemini", "subscription", [
       { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", variants },
     ]), capabilities: { modelVariants: true } }];
-    pane(open(bot(undefined, "antigravity", "gemini-3.8-flash"), { contained: true }))!.props.onPick(instance("antigravity"), "gemini-3.8-flash", "medium");
+    pane(open(bot(undefined, "agent-four", "gemini-3.8-flash"), { contained: true }))!.props.onPick(instance("agent-four"), "gemini-3.8-flash", "medium");
     expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
-      type: "setModel", selection: expect.objectContaining({ instanceId: "antigravity", model: "gemini-3.8-flash", variant: "medium" }),
+      type: "setModel", selection: expect.objectContaining({ instanceId: "agent-four", model: "gemini-3.8-flash", variant: "medium" }),
     }));
   });
 
@@ -683,7 +683,7 @@ describe("the model picker in Simple mode", () => {
 
   it("asks a provider with nothing to list to check again", async () => {
     const plan: InstanceInfo = {
-      ...engine("chatgpt", "codex", "ChatGPT plan", "subscription", []),
+      ...engine("chatgpt", "customAcp", "ChatGPT plan", "subscription", []),
       snapshot: { state: "available", version: "1.0.0", authenticated: true, chatgptPlan: true },
     };
     fixture.instances = [claude(), plan];
@@ -700,7 +700,7 @@ describe("the model picker in Simple mode", () => {
     let arrive!: () => void;
     fixture.refreshModels = vi.fn(() => new Promise<void>((resolve) => { arrive = resolve; }));
     const plan: InstanceInfo = {
-      ...engine("chatgpt", "codex", "ChatGPT plan", "subscription", []),
+      ...engine("chatgpt", "customAcp", "ChatGPT plan", "subscription", []),
       snapshot: { state: "available", version: "1.0.0", authenticated: true, chatgptPlan: true },
     };
     const work: InstanceInfo = { ...plan, instanceId: "chatgpt-work", displayName: "Work plan" };
@@ -743,10 +743,10 @@ describe("the model picker in Simple mode", () => {
 
   it("lists Codex and the ChatGPT plan each under OpenAI", () => {
     const plan: InstanceInfo = {
-      ...engine("chatgpt", "codex", "ChatGPT plan", "subscription", [{ id: "gpt-5.6-plan", label: "GPT-5.6 (plan)" }]),
+      ...engine("chatgpt", "customAcp", "ChatGPT plan", "subscription", [{ id: "gpt-5.6-plan", label: "GPT-5.6 (plan)" }]),
       snapshot: { state: "available", version: "1.0.0", authenticated: true, chatgptPlan: true },
     };
-    fixture.instances = [claude(), codex, plan];
+    fixture.instances = [claude(), second, plan];
     const opened = open(bot());
     expect(list(opened).groups.map((entry) => entry.label)).toEqual(["Claude", "OpenAI · Codex", "OpenAI · ChatGPT plan"]);
     expect(labels(opened, "chatgpt")).toEqual(["GPT-5.6 (plan)"]);
@@ -771,7 +771,7 @@ describe("the model picker in Simple mode", () => {
   });
 
   it("tells same-named models apart by their route", () => {
-    fixture.instances = [engine("pi", "piAgent", "pi", "custom", [
+    fixture.instances = [engine("pi", "customAcp", "pi", "custom", [
       { id: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5", custom: true, provider: "anthropic" },
       { id: "openai/gpt-5.6", label: "GPT-5.6", custom: true, provider: "openai" },
       { id: "openai/gpt-5.6-mini", label: "GPT-5.6 mini", custom: true, provider: "openai" },
@@ -787,7 +787,7 @@ describe("the model picker in Simple mode", () => {
   });
 
   it("renders a model's route on its own line in a row that may grow", () => {
-    fixture.instances = [engine("pi", "piAgent", "pi", "custom", [
+    fixture.instances = [engine("pi", "customAcp", "pi", "custom", [
       { id: "amazon-bedrock/claude-sonnet-4-5", label: "Claude Sonnet 4.5", custom: true, provider: "amazon-bedrock" },
       { id: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5", custom: true, provider: "anthropic" },
     ])];
@@ -804,12 +804,12 @@ describe("the model picker in Simple mode", () => {
   });
 
   it("looks for local models only when asked, on Show all where a provider offers them, never just for opening", () => {
-    const codexMany = engine("codex", "codex", "Codex", "subscription", many(8));
+    const codexMany = engine("agent-two", "customAcp", "Codex", "subscription", many(8));
     fixture.instances = [claude(true, many(8)), codexMany, grok, local];
     const forBot = bot(undefined, "claude", "model-1");
     const opened = open(forBot);
     expect(fixture.refreshModels).not.toHaveBeenCalled();
-    toggle(opened, "codex");
+    toggle(opened, "agent-two");
     expect(fixture.refreshModels).not.toHaveBeenCalled();
     toggle(render(forBot));
     expect(fixture.refreshModels).toHaveBeenCalledExactlyOnceWith("claude");
@@ -843,14 +843,14 @@ describe("the model picker in Simple mode", () => {
     // The catalog OpenCode 2.1.4 gave for a Copilot GPT model with an effort list, and for one without.
     const variants = ["Low", "Medium", "High", "Xhigh", "Default"].map((label) => ({ id: label.toLowerCase(), label }));
     fixture.instances = [{
-      ...engine("opencodeGo", "opencodeGo", "OpenCode", "api", [
-        { id: "github-copilot/gpt-5.3-codex", label: "Github Copilot · GPT-5.3 Codex", variants },
+      ...engine("agent-three", "customAcp", "OpenCode", "api", [
+        { id: "github-copilot/gpt-5.3-second", label: "Github Copilot · GPT-5.3 Codex", variants },
         { id: "github-copilot/gemini-3.8-flash", label: "Github Copilot · Gemini 3.8 Flash" },
       ]),
       capabilities: { modelVariants: true },
     }];
-    const band = (model: string) => region(menu(open(bot(undefined, "opencodeGo", model)).html), "data-simple-effort-band");
-    const offered = band("github-copilot/gpt-5.3-codex");
+    const band = (model: string) => region(menu(open(bot(undefined, "agent-three", model)).html), "data-simple-effort-band");
+    const offered = band("github-copilot/gpt-5.3-second");
     expect([...offered.matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map((match) => match[1]))
       .toEqual(["Use session setting", "Low", "Medium", "High", "Xhigh", "OpenCode default"]);
     fixture.values = [];
@@ -958,12 +958,12 @@ describe("a thread's picker and its bot's model", () => {
 });
 
 describe("every capability of the picker stays reachable", () => {
-  const withLocal = claude(true, [...claudeModels, { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }]);
+  const withLocal = claude(true, [...claudeModels, { id: "local::qwen3", label: "qwen3 (Ollama)", custom: true }]);
   const updated: InstanceInfo = { ...withLocal, snapshot: { ...withLocal.snapshot, update: { title: "Update Claude", message: "A newer CLI is out.", command: "claude update" } } };
   const missing: InstanceInfo = { ...cursor, snapshot: { state: "unavailable", reason: "`cursor-agent` isn't installed" } };
   const managed: InstanceInfo = { ...openaiKey, policy: { organizationName: "Acme", reason: "Company models only." } };
   const signedOutWork: InstanceInfo = { ...claude(false), instanceId: "claude-work", displayName: "Work" };
-  const plan: InstanceInfo = { ...engine("chatgpt", "codex", "ChatGPT plan", "subscription", []), snapshot: { state: "available", version: "1.0.0", authenticated: true, chatgptPlan: true } };
+  const plan: InstanceInfo = { ...engine("chatgpt", "customAcp", "ChatGPT plan", "subscription", []), snapshot: { state: "available", version: "1.0.0", authenticated: true, chatgptPlan: true } };
   const rich = () => [updated, signedOutWork, missing, managed, plan, local];
   function followed(): Bot {
     const profile: Bot = { ...bot("high"), tasks: [{ threadId: "thread-scout", title: "This one", createdAt: 1,
@@ -1045,7 +1045,7 @@ describe("every capability of the picker stays reachable", () => {
 
   it("in Advanced mode, from the chip and the full picker", () => {
     fixture.advanced = true;
-    fixture.instances = [updated, signedOutWork, codex, plan, managed, local];
+    fixture.instances = [updated, signedOutWork, second, plan, managed, local];
     const forBot = followed();
     const chipHtml = renderToStaticMarkup(render(forBot).nodes.find((node) => node.props["data-tour"] === "model")!);
     const opened = open(forBot);

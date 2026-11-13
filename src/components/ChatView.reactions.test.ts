@@ -35,7 +35,7 @@ const state: AppState = {
   connected: true,
   selectedId: "pepper",
   bots: [pepper],
-  instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+  instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
 };
 
 let root: Root;

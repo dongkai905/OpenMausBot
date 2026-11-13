@@ -33,8 +33,6 @@ export interface ProviderPreset {
   checkedAt: string;
 }
 
-const CHECKED = "2026-09-30";
-
 export const OPENAI_COMPATIBLE_NPM = "@ai-sdk/openai-compatible";
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [];

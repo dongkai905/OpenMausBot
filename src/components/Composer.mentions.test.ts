@@ -14,7 +14,7 @@ vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
     state: { ...original.initialState, bots: [scout, analyst, chief], instances: [{
-      instanceId: ENGINE, driverKind: "claudeAgent", displayName: "Claude", capabilities: { agentsMcp: true },
+      instanceId: ENGINE, driverKind: "customAcp", displayName: "Claude", capabilities: { agentsMcp: true },
     }] },
     dispatch: fixture.dispatch,
   }) };

@@ -23,7 +23,7 @@ vi.mock("@/state/store", async (importOriginal) => {
         appSettingsSection: "computer",
         config: { box: { configured: false }, ...fixture.config },
         instances: [{
-          instanceId: "fixture", driverKind: "claudeAgent", displayName: "Fixture",
+          instanceId: "fixture", driverKind: "customAcp", displayName: "Fixture",
           models: { default: "fixture", options: [] }, snapshot: { state: "available" },
           capabilities: { browserMcp: fixture.browserMcp },
         } as InstanceInfo],

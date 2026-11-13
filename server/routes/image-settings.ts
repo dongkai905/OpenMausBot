@@ -12,12 +12,12 @@ import { PASS, type RouteHandler } from "./table.ts";
 const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 const testSchema = z.object({ provider: z.enum(IMAGE_PROVIDERS) });
 
-/** Every openaiCompat target carries its own URL: without one, the key check would fall back to OpenRouter. */
+/** Every compatible target carries its own URL: without one, the key check would fall back to OpenAI's own endpoint. */
 function keyCheckTarget(cfg: ImageCredentials, provider: ImageProvider): { provider: ProviderKeyKind; url?: string } | null {
-  if (provider === "gemini") return { provider: "openaiCompat", url: GEMINI_OPENAI_BASE };
+  if (provider === "gemini") return { provider: "openai", url: GEMINI_OPENAI_BASE };
   if (provider === "custom") {
     const url = customImageUrl(cfg);
-    return url ? { provider: "openaiCompat", url } : null;
+    return url ? { provider: "openai", url } : null;
   }
   return { provider };
 }

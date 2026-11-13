@@ -30,7 +30,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const instances = [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
+const instances = [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
 const draw = (state: AppState) => {
   const value = { state, dispatch: () => {}, flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {} };
   flushSync(() => root.render(createElement(BotEditorStore, { value, children: createElement(ChatView, { bot: state.bots.find((bot) => bot.id === state.selectedId)! }) })));

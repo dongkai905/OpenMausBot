@@ -8208,7 +8208,7 @@ describe("harness HTTP API", () => {
     expect(nothing.status).toBe(400);
   });
 
-  it.each(["fish", "xai"])("clears incompatible default and per-agent voices when switching to %s", async (provider) => {
+  it.each(["fish", "gemini"])("clears incompatible default and per-agent voices when switching to %s", async (provider) => {
     let botId = "";
     try {
       expect((await api("PUT", "/api/config", {
@@ -12882,7 +12882,7 @@ describe("harness HTTP API", () => {
       expect(saved.body.imageGen).toEqual({ provider: "custom", configured: true, model: "local/image",
         primary: { provider: "custom", model: "local/image", configured: true }, fallback: null, ready: true, maxPerTurn: 4,
         customUrl: "http://127.0.0.1:4321/v1", customModel: "local/image",
-        openaiConfigured: true, xaiConfigured: false, customKeyConfigured: true, geminiConfigured: false, openrouterConfigured: false });
+        openaiConfigured: true, customKeyConfigured: true, geminiConfigured: false, openrouterConfigured: false });
       for (const secret of ["openai-avatar-fixture", "custom-avatar-fixture"]) {
         expect(JSON.stringify(saved.body)).not.toContain(secret);
         expect(readFileSync(join(home, ".openmausbot", "config.json"), "utf8")).not.toContain(secret);

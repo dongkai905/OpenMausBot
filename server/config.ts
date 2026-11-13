@@ -11,13 +11,12 @@ import { imageGenConfigSchema, imageGenPatchSchema, keepKeysOutOfImageModels, ty
 import { botAvatarUrlSchema } from "../shared/bot-avatar.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { defaultBotThreads, MAX_CONCURRENT_BOT_THREADS } from "./bot-thread-limits.ts";
-import { anthropicKeyEnv } from "./anthropic-key-env.ts";
 import { withoutComputerEngine } from "./computer-engine-removal.ts";
 import { newBotDefaultsSchema, type NewBotDefaults } from "./new-bot-defaults.ts";
 import { replaySettings } from "./replay-settings.ts";
 import { EFFORT_LEVELS, type EffortLevel } from "../shared/wire.ts";
 import { isModelVariant, type InstanceConfigMap, type McpServerSpec, type ModelSelection } from "./contracts.ts";
-import { API_KEY_FLEET, DEFAULT_FLEET, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, PRODUCT_FLEET_ADDITIONS } from "./instance-fleets.ts";
+import { API_KEY_FLEET, DEFAULT_FLEET, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE } from "./instance-fleets.ts";
 export { OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE } from "./instance-fleets.ts";
 import { DEFAULT_WINDOW_MINUTES, MAX_WINDOW_MINUTES } from "./cache-keepwarm.ts";
 import { PROVIDER_ICON_PRESETS, providerIconError } from "../shared/provider-icon.ts";
@@ -347,15 +346,11 @@ treg: z.object({ key: optionalText }).optional(), postiz: z.object({ key: option
         .optional(),
     })
     .optional(),
-  /** `model` seeds the default selection; `provider` pins an OpenRouter upstream (e.g. "fireworks"). */
-  openaiCompat: z
-    .object({ key: optionalText, url: optionalText, model: optionalText, provider: optionalText })
-    .optional(),
   /** Composio project key; `userId`/`sessionId` reuse one Composio Session. */
   composio: z.object({ apiKey: optionalText, userId: optionalText, sessionId: optionalText }).optional(),
   box: z.object({ token: optionalText }).optional(),
   vps: vpsConfigSchema.optional(),
-  /** `provider`: "elevenlabs" (default, `key`), "fish" (`fishKey`, `fishModel`), "system", "xai" (`xai.key`), "gemini" (`geminiKey`, `model`), "openai" (`openai.key`) or "chatterbox" (local; `baseUrl`, `model`). */
+  /** `provider`: "elevenlabs" (default, `key`), "fish" (`fishKey`, `fishModel`), "system", "gemini" (`geminiKey`, `model`), "openai" (`openai.key`) or "chatterbox" (local; `baseUrl`, `model`). */
   tts: z.object({
     key: optionalText,
     fishKey: optionalText,
@@ -441,7 +436,6 @@ export interface AppConfig extends HelperConfig {
   loopGuard?: LoopGuardConfig;
   safetyFloor?: { enabled?: boolean };
   billing?: { currency?: string; prices?: Record<string, { inputPerMillion: number; outputPerMillion: number; cachedInputPerMillion?: number }> };
-  openaiCompat?: { key?: string; url?: string; model?: string; provider?: string };
   composio?: { apiKey?: string; userId?: string; sessionId?: string };
   /** Boat token (ascii.dev renamed Box to Boat); config key "box", env BOX_TOKEN. */
   box?: { token?: string };
@@ -702,20 +696,12 @@ export function loadConfig(): AppConfig {
     }
   }
   // Env wins over the file for every credential: the desktop shell injects them as env at spawn.
-  for (const [name, env] of [] as readonly (readonly [string, string])[]) {
-    cfg[name] = { ...cfg[name], ...(process.env[env] !== undefined ? { key: process.env[env] } : {}) };
-  }
   if (process.env.OMB_TREG_KEY !== undefined) cfg.treg = { ...cfg.treg, key: process.env.OMB_TREG_KEY }; if (process.env.OMB_POSTIZ_API_KEY !== undefined) cfg.postiz = { ...cfg.postiz, key: process.env.OMB_POSTIZ_API_KEY };
   // 步 6 / Task-135：厂商引擎的 API key 注入一并删除。
   cfg.openai = { ...cfg.openai };
   if (process.env.OMB_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.OMB_OPENAI_API_KEY;
   cfg.openrouter = { ...cfg.openrouter };
   if (process.env.OMB_OPENROUTER_API_KEY !== undefined) cfg.openrouter.key = process.env.OMB_OPENROUTER_API_KEY;
-  cfg.openaiCompat = { ...cfg.openaiCompat };
-  if (process.env.OPENAI_COMPAT_API_KEY !== undefined) cfg.openaiCompat.key = process.env.OPENAI_COMPAT_API_KEY;
-  if (process.env.OPENAI_COMPAT_URL !== undefined) cfg.openaiCompat.url = process.env.OPENAI_COMPAT_URL;
-  if (process.env.OPENAI_COMPAT_MODEL !== undefined) cfg.openaiCompat.model = process.env.OPENAI_COMPAT_MODEL;
-  if (process.env.OPENAI_COMPAT_PROVIDER !== undefined) cfg.openaiCompat.provider = process.env.OPENAI_COMPAT_PROVIDER;
   cfg.composio = { ...cfg.composio };
   if (process.env.COMPOSIO_API_KEY !== undefined) cfg.composio.apiKey = process.env.COMPOSIO_API_KEY;
   cfg.box = { ...cfg.box };
@@ -755,7 +741,6 @@ export function cacheUntilConfigChanges<T>(derive: (config: AppConfig) => T): ()
 export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { imageGen?: ImageGenCredentialPatch }): void {
   const secrets: Array<[value: string | undefined, name: string]> = [
     [patch.treg?.key, "OMB_TREG_KEY"], [patch.postiz?.key, "OMB_POSTIZ_API_KEY"],
-    [patch.openaiCompat?.key, "OPENAI_COMPAT_API_KEY"],
     [patch.openai?.key, "OMB_OPENAI_API_KEY"],
     [patch.openrouter?.key, "OMB_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
@@ -776,9 +761,6 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
     else delete process.env[name];
   }
   const settings: Array<[value: string | undefined, name: string]> = [
-    [patch.openaiCompat?.url, "OPENAI_COMPAT_URL"],
-    [patch.openaiCompat?.model, "OPENAI_COMPAT_MODEL"],
-    [patch.openaiCompat?.provider, "OPENAI_COMPAT_PROVIDER"],
     ...liveSettingEnv(patch.live),
   ];
   for (const [value, name] of settings) {
@@ -788,23 +770,8 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
 }
 
-import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV } from "./credential-env.ts";
-export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV };
-
-export const OPENCODE_PROVIDER_KEY_LIMIT = 20;
-const OPENCODE_PROVIDER_KEY_NAME = /^[A-Z][A-Z0-9_]{0,59}_(?:API_KEY|KEY|TOKEN)$/;
-const OPENCODE_PROVIDER_KEY_VALUE = /^[\x21-\x7e]{1,4096}$/;
-
-function openCodeProviderKeyNameRefusal(name: string): string | undefined {
-  if (!OPENCODE_PROVIDER_KEY_NAME.test(name)) {
-    return "Use the name the provider reads its key from: capitals, ending in _API_KEY, _KEY or _TOKEN, such as VENICE_API_KEY.";
-  }
-  if (name === "OPENCODE_API_KEY") return "Save the OpenCode key in the OpenCode API key box instead.";
-  const reserved = name.startsWith("OPENCODE_") || name.startsWith("OMB_")
-    || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
-    || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
-  return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
-}
+import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV } from "./credential-env.ts";
+export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV };
 
 const configSaveListeners = new Set<(before: JsonObject, after: JsonObject) => void>();
 
@@ -838,7 +805,7 @@ export function saveConfig(
   // 步 6 把这份名单缩到只剩五个厂商无关的段，结果 profile、budgets、threads、context、
   // features、tts、imageGen 等 23 段再也存不下去 —— 改一次设置就把它们悄悄抹掉。
   // 这里取回步 6 之前的名单，只去掉那些随厂商引擎一起删掉的段。
-  for (const key of ["treg", "postiz", "openai", "openrouter", "openaiCompat", "composio", "box", "tts", "decider", "imageGen", "live", "profile", "rooms", "mcp", "threads", "context", "memory", "localVm", "features", "budgets", "billing", "decisions", "loopGuard", "onboarding", "browserEngine", "newBots", "safetyFloor"] as const) {
+  for (const key of ["treg", "postiz", "openai", "openrouter", "composio", "box", "tts", "decider", "imageGen", "live", "profile", "rooms", "mcp", "threads", "context", "memory", "localVm", "features", "budgets", "billing", "decisions", "loopGuard", "onboarding", "browserEngine", "newBots", "safetyFloor"] as const) {
     const section = checkedPatch[key];
     if (!section) continue;
     const current = jsonObjectSchema.safeParse(disk[key]);
@@ -919,20 +886,6 @@ export function saveConfig(
     }
     disk.instances = diskInstances;
   }
-  if (checkedPatch.openaiCompat?.url !== undefined && checkedPatch.instances?.openaiCompat === undefined) {
-    const instances = jsonObjectSchema.safeParse(disk.instances);
-    const entry = jsonObjectSchema.safeParse(instances.success ? instances.data.openaiCompat : undefined);
-    const config = jsonObjectSchema.safeParse(entry.success ? entry.data.config : undefined);
-    const environment = jsonObjectSchema.safeParse(entry.success ? entry.data.environment : undefined);
-    if (entry.success && entry.data.driver === "openai-compat" && config.success
-      && !config.data.key
-      && (!config.data.apiKeyEnv || config.data.apiKeyEnv === "OPENAI_COMPAT_API_KEY")
-      && !(environment.success && Object.hasOwn(environment.data, "OPENAI_COMPAT_API_KEY"))) {
-      const nextConfig = { ...config.data };
-      delete nextConfig.url;
-      (disk.instances as JsonObject).openaiCompat = { ...entry.data, config: nextConfig };
-    }
-  }
   mkdirSync(DATA_DIR, { recursive: true });
   writeFileAtomic(p, JSON.stringify(disk, null, 2), { mode: 0o600 });
   storedConfig.forget();
@@ -1010,7 +963,6 @@ const sameUrl = (a: string, b: string) => a.trim().replace(/\/+$/u, "") === b.tr
 
 /** An instance with its own endpoint or credential never gets the workspace key, which would go to its host. */
 export function instanceOwnsRouting(
-  cfg: AppConfig,
   entry: { driver: string; config?: unknown; environment?: Record<string, string> },
   routingDefaults?: { url?: string; apiKeyEnv?: string },
 ): boolean {
@@ -1026,7 +978,7 @@ export function instanceOwnsRouting(
       return own(config.key) || own(entry.environment?.OPENAI_COMPAT_API_KEY)
         || own(entry.environment?.[compatKeyEnv])
         || (own(config.apiKeyEnv) && config.apiKeyEnv !== compatKeyEnv)
-        || ownUrl(routingDefaults?.url || cfg.openaiCompat?.url || process.env.OPENAI_COMPAT_URL || "https://openrouter.ai/api/v1");
+        || ownUrl(routingDefaults?.url);
     default:
       return false;
   }
@@ -1039,11 +991,6 @@ function injectedEnvironment(cfg: AppConfig, instanceId: string, driver: string)
     if (cfg.openai?.key) environment.set("OMB_OPENAI_API_KEY", cfg.openai.key);
   } else if (driver === "openai-compat" && instanceId === OPENROUTER_API_INSTANCE) {
     if (cfg.openrouter?.key) environment.set("OMB_OPENROUTER_API_KEY", cfg.openrouter.key);
-  } else {
-    if (driver === "openai-compat" && cfg.openaiCompat?.key)
-      environment.set("OPENAI_COMPAT_API_KEY", cfg.openaiCompat.key);
-    if (driver === "openai-compat" && cfg.openaiCompat?.url)
-      environment.set("OPENAI_COMPAT_URL", cfg.openaiCompat.url);
   }
   return environment;
 }
@@ -1068,35 +1015,11 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
     const routingDefaults = builtIn?.driver === entry.driver
       ? builtIn.config as { url?: string; apiKeyEnv?: string } | undefined
       : undefined;
-    const ownsRouting = instanceOwnsRouting(cfg, entry, routingDefaults);
+    const ownsRouting = instanceOwnsRouting(entry, routingDefaults);
     if (!ownsRouting) {
       for (const [key, value] of injectedEnvironment(cfg, id, entry.driver)) environment[key] = value;
     }
     entry.environment = environment;
-    if (entry.driver === "groq" && cfg.groq?.url && !ownsRouting) {
-      entry.config = { ...entry.config as object, url: cfg.groq.url };
-    }
-    if (entry.driver === "meta" && cfg.meta?.url && !ownsRouting) {
-      entry.config = { ...entry.config as object, url: cfg.meta.url };
-    }
-    if (entry.driver === "openai-compat" && cfg.openaiCompat && id !== OPENAI_API_INSTANCE && id !== OPENROUTER_API_INSTANCE) {
-      const defaults: Record<string, string> = {};
-      if (cfg.openaiCompat.url) defaults.url = cfg.openaiCompat.url;
-      if (cfg.openaiCompat.model) defaults.model = cfg.openaiCompat.model;
-      if (cfg.openaiCompat.provider) defaults.provider = cfg.openaiCompat.provider;
-      if (Object.keys(defaults).length) {
-        const raw = entry.config;
-        const current =
-          typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-        const merged = { ...current };
-        for (const [k, v] of Object.entries(defaults)) {
-          // An empty provider means "no upstream pin"; never fill it from the workspace.
-          if (k === "provider" && typeof merged[k] === "string") continue;
-          if (typeof merged[k] !== "string" || !(merged[k] as string).trim()) merged[k] = v;
-        }
-        entry.config = merged;
-      }
-    }
   }
   return map;
 }

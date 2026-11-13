@@ -238,7 +238,7 @@ const app = (slug: string, scope: "read" | "write" | null) => ({
   slug, label: slug[0]!.toUpperCase() + slug.slice(1), blurb: `${slug} things`, card: { logo: null, domain: null, label: slug }, scope,
 });
 const engine = (extra: Partial<InstanceInfo> & { capabilities?: Record<string, unknown> } = {}) => ({
-  instanceId: "claude", driverKind: "claudeAgent", snapshot: { state: "available", authenticated: true },
+  instanceId: "claude", driverKind: "customAcp", snapshot: { state: "available", authenticated: true },
   capabilities: { effortLevels: ["low", "medium", "high", "max"] }, ...extra,
 });
 const memoryDoc = (text: string): MemoryDoc => ({ path: "MEMORY.md", text, hash: "h1", exists: true });
@@ -794,28 +794,20 @@ describe("the Bot settings page", () => {
   });
 
   it.each([["auto", "Decide for me", undefined], ["edits", "Auto-accept edits", undefined], ["custom", "Custom", "Change this in Advanced mode"]] as const)(
-    "shows a bot in %s mode as a third, selected pill it cannot pick again, beside the two choices", (mode, label, tooltip) => {
+    "shows a bot in %s mode as a third, selected pill it cannot pick again, beside the two choices, and writes nothing until the person picks", (mode, label, tooltip) => {
       fixture.derived.approvalMode = mode;
-      const rendered = settingsPage(makeBot());
+      const rendered = settingsPage(makeBot({ approvalMode: mode }));
       const acts = segment(rendered, "data-approval-choice");
       expect(acts.options.map((option) => [option.value, option.label, Boolean(option.disabled)])).toEqual([["ask", "Ask me first", false], ["full", "Just do it", false], [mode, label, true]]);
       expect((acts.options[2] as { tooltip?: string }).tooltip).toBe(tooltip);
       expect(pressed(rendered.html, "data-approval-choice")).toEqual([mode]);
+      expect(patch).not.toHaveBeenCalled();
       acts.onChange(mode);
       expect(fixture.dispatch).not.toHaveBeenCalled();
       acts.onChange("ask");
       expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateBot", botId: "scout", patch: { approvalMode: "ask", applyToAllThreads: true } });
     },
   );
-
-  it("shows legacy Antigravity Auto as Ask without a third pill or a change to the saved mode", () => {
-    fixture.derived.engine = engine({ driverKind: "antigravityAgent" });
-    fixture.derived.approvalMode = "auto";
-    const rendered = settingsPage(makeBot({ approvalMode: "auto" }));
-    expect(segment(rendered, "data-approval-choice").options).toHaveLength(2);
-    expect(pressed(rendered.html, "data-approval-choice")).toEqual(["ask"]);
-    expect(patch).not.toHaveBeenCalled();
-  });
 
   it("lets the approval level change while the bot is busy and says from when", () => {
     const rendered = settingsPage(makeBot({ busy: true }));
@@ -831,7 +823,7 @@ describe("the Bot settings page", () => {
     expect(has(rendered, "data-panel-row", "thread-approval")).toBe(true);
     expect(rendered.html).toContain(">In this conversation<");
     const choice = ofType(rendered, ApprovalChip)!.props.choice as Parameters<typeof ApprovalChip>[0]["choice"];
-    expect(choice).toMatchObject({ approvalMode: "full", providerName: "Claude", driverKind: "claudeAgent" });
+    expect(choice).toMatchObject({ approvalMode: "full", providerName: "Claude", driverKind: "customAcp" });
     choice.onSelect("ask");
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateTask", botId: "scout", threadId: "thread-scout", patch: { approvalMode: "ask" } });
   });
@@ -1381,7 +1373,7 @@ describe("the bot settings dialog", () => {
     const opus = { instanceId: "claude", model: "claude-opus-5-5" };
     const tasks = [
       { threadId: "thread-scout", title: "Follows", createdAt: 1, modelSelection: opus, followsBotModel: true },
-      ...[0, 1, 2].map((index) => ({ threadId: `own-${index}`, title: `Own ${index}`, createdAt: 1, modelSelection: { instanceId: "codex", model: "gpt-5.6" }, followsBotModel: false })),
+      ...[0, 1, 2].map((index) => ({ threadId: `own-${index}`, title: `Own ${index}`, createdAt: 1, modelSelection: { instanceId: "agent-two", model: "gpt-5.6" }, followsBotModel: false })),
     ];
     const rendered = dialog(makeBot({ tasks }));
     expect(rendered.html).toContain("3 threads use their own model.");

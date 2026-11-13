@@ -312,7 +312,7 @@ readline.createInterface({input: process.stdin}).on("line", (line) => {
         child.kill("SIGKILL");
       }
     };
-    expect(JSON.stringify(await listed({ [TOOL_SCHEMA_PROFILE_ENV]: "moonshot" })).length).toBeLessThanOrEqual(12_000);
+    expect(JSON.stringify(await listed({ [TOOL_SCHEMA_PROFILE_ENV]: "generic" })).length).toBeLessThanOrEqual(12_000);
     expect(await listed({})).toEqual(wide);
   });
 

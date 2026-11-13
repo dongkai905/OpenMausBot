@@ -33,7 +33,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const instances = [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
+const instances = [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo];
 const scout = (messages: Message[], busy: boolean): Bot => ({
   id: "scout", threadId: "t", name: "Scout", title: "", description: "", color: "green", notifications: true, unread: false,
   busy, messages, modelSelection: { instanceId: "test", model: "m" },

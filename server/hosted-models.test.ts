@@ -3,13 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { hostedModelPolicy } from "./hosted-models.ts";
-import { ProviderRegistry } from "./harness/registry.ts";
-import { OpenAICompatDriver } from "./drivers/openai-compat.ts";
+import type { ProviderInstance } from "./contracts.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
-const directories: string[] = [], registries: ProviderRegistry[] = [];
+const directories: string[] = [];
 afterEach(async () => {
-  await Promise.all(registries.splice(0).map(registry => registry.disposeAll()));
   vi.unstubAllGlobals();
   for (const directory of directories.splice(0)) await removeTempDir(directory);
 });
@@ -17,6 +15,29 @@ const directory = () => { const value = mkdtempSync(join(tmpdir(), "omb-hosted-m
 const token = `omb_workspace_${"a".repeat(43)}`;
 const env = () => ({ OMB_ADMIN_URL: "https://admin.example.test", OMB_PUBLIC_URL: "https://fixture.example.test", OMB_ADMIN_WORKSPACE: "fixture", OMB_ADMIN_MEMBERSHIP: "portal",
   OMB_HOSTED_MODEL_TOKEN: token, OMB_HOSTED_MODELS: JSON.stringify({ anthropic: ["claude-fixture"], openai: ["gpt-fixture"], openrouter: ["provider/fixture"] }) });
+
+
+/** The engine the policy decorates: its model list and its route are the policy's to lock. */
+function hostedEngine(instanceId: string) {
+  const sent: string[] = [];
+  const instance = {
+    instanceId, driverKind: "hosted", displayName: "Company", enabled: true,
+    models: { default: "", options: [] },
+    snapshot: async () => ({ state: "available" as const }),
+    adapter: {
+      provider: "hosted",
+      capabilities: {},
+      sendTurn: async (input: { model?: string }) => { sent.push(input.model ?? ""); return { turnId: "fixture" }; },
+      interruptTurn: async () => {},
+      respondToRequest: async () => "unavailable" as const,
+      hasSession: () => false,
+      stopAll: async () => {},
+      onEvent: () => () => {},
+    },
+    dispose: async () => {},
+  } as unknown as ProviderInstance;
+  return { instance, sent };
+}
 
 it("requires an explicit complete hosted policy and leaves normal desktops alone", () => {
   expect(hostedModelPolicy(directory(), {})).toBeNull();
@@ -50,27 +71,17 @@ it.each([{ variant: "high" }, { effort: "high" as const }])("preserves an assign
   expect(policy.select(selection)).toEqual(selection);
 });
 
-it("locks native and OpenRouter instances to assigned catalogs and fixed gateway routes", async () => {
-  const root = directory(), policy = hostedModelPolicy(root, { ...env(),
-    OMB_HOSTED_CLAUDE_CLI: join(import.meta.dirname, "testing/fake-claude-cli.ts"),
-    OMB_HOSTED_CODEX_CLI: join(import.meta.dirname, "testing/fake-codex-app-server.ts"),
-  })!;
+it("locks the hosted engine to its assigned catalog and refuses an unassigned model", async () => {
+  const policy = hostedModelPolicy(directory(), env())!;
   const configs = policy.configs();
   expect(Object.keys(configs)).toEqual(["opencode"]);
   expect(configs.opencode.environment).toEqual({ OPENMAUSBOT_COMPANY_API_KEY: token });
   expect(configs.opencode.config).toMatchObject({ url: "https://admin.example.test/api/gateway/fixture/openrouter/v1", apiKeyEnv: "OPENMAUSBOT_COMPANY_API_KEY", model: "provider/fixture", managedModels: ["provider/fixture"] });
-  const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
-  // The one engine the registry still has is the OpenAI-compatible one, so the
-  // catalog lock is checked on it; the other two are config-only from here.
-  const registry = new ProviderRegistry([OpenAICompatDriver], { npmAvailable: () => false }); registries.push(registry);
-  await registry.load({ opencode: configs.opencode }, instance => policy.decorate(instance));
-  for (const [id, model] of [["opencode", "provider/fixture"]]) {
-    const instance = registry.get(id)!;
-    expect(instance.models.options.map(row => row.id)).toEqual([model]);
-    expect(instance.startAuthentication).toBeUndefined();
-    await expect(instance.adapter.sendTurn({ threadId: "forbidden", text: "Synthetic", model: "unassigned" })).rejects.toThrow("not assigned");
-    await instance.refreshModels?.();
-  }
-  expect(fetcher).not.toHaveBeenCalled();
+  const engine = hostedEngine("opencode");
+  const decorated = policy.decorate(engine.instance);
+  expect(decorated.models.options.map(row => row.id)).toEqual(["provider/fixture"]);
+  expect(decorated.startAuthentication).toBeUndefined();
+  await expect(decorated.adapter.sendTurn({ threadId: "forbidden", text: "Synthetic", model: "unassigned" })).rejects.toThrow("not assigned");
+  await decorated.refreshModels?.();
+  expect(engine.sent).toEqual([]);
 });
-

@@ -17,7 +17,7 @@ it("chooses the server installer even when the client has a different OS", () =>
 function instance(snapshot: InstanceInfo["snapshot"]): InstanceInfo {
   return {
     instanceId: "kimi",
-    driverKind: "kimiAgent",
+    driverKind: "customAcp",
     displayName: "Kimi",
     models: { default: "kimi-code/k3", options: [] },
     snapshot,
@@ -44,14 +44,16 @@ describe("needsCli / needsSignIn", () => {
   });
 });
 
-describe("managed engine setup errors", () => {
-  function managed(snapshot: InstanceInfo["snapshot"]): InstanceInfo {
+describe("an engine's setup errors", () => {
+  function cliEngine(snapshot: InstanceInfo["snapshot"]): InstanceInfo {
     return {
       ...instance(snapshot),
-      instanceId: "antigravity",
-      driverKind: "antigravityAgent",
-      displayName: "Antigravity",
-      install: { managed: { label: "Install official Antigravity", downloadBytes: 1024 } },
+      instanceId: "agent-four",
+      driverKind: "customAcp",
+      displayName: "Fixture engine",
+      install: {
+        command: { linux: "npm install -g @example/fixture-engine", darwin: "npm install -g @example/fixture-engine", win32: "npm install -g @example/fixture-engine" },
+      },
     };
   }
 
@@ -61,28 +63,35 @@ describe("managed engine setup errors", () => {
   }
 
   it("shows profile failures without claiming the runtime is missing", () => {
-    const reason = "Cannot write Antigravity profile settings (EACCES).";
-    const engine = managed({ state: "unavailable", reason });
+    const reason = "Cannot write the fixture engine profile settings (EACCES).";
+    const engine = cliEngine({ state: "unavailable", reason });
     const markup = render(engine);
     expect(markup).toContain(reason);
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain("Install official Antigravity");
     expect(engineStatus(engine)).toBe("Setup required");
     expect(markup).not.toMatch(/CLI not found|Not installed/);
   });
 
   it("renders an initialization failure reported by the snapshot", () => {
-    const engine = managed({ state: "unavailable", reason: "initialize timed out." });
+    const engine = cliEngine({ state: "unavailable", reason: "initialize timed out." });
     expect(render(engine)).toContain("initialize timed out.");
     expect(engineStatus(engine)).toBe("Setup required");
   });
 
-  it("preserves the installed engine's sign-in flow", () => {
-    const engine = managed({ state: "available", authenticated: false, version: "1.1.1" });
+  it("keeps an installed engine's sign-in step, with the command that signs it in", () => {
+    const engine: InstanceInfo = {
+      ...instance({ state: "available", authenticated: false, version: "1.1.1" }),
+      install: {
+        command: { linux: "npm install -g kimi-fixture", darwin: "npm install -g kimi-fixture", win32: "npm install -g kimi-fixture" },
+        signInCommand: "kimi login",
+      },
+    };
     const markup = render(engine);
     expect(engineStatus(engine)).toBe("Sign-in required");
-    expect(markup).toContain("Sign in with Google");
-    expect(markup).not.toContain("Install official Antigravity");
+    expect(markup).toContain("Sign in to Kimi");
+    expect(markup).toContain("kimi login");
+    expect(markup).toContain("Check again");
+    expect(markup).not.toContain("Install Kimi here");
   });
 });
 
@@ -91,38 +100,38 @@ describe("engines set up with a key in Settings", () => {
     vi.stubGlobal("window", { ogb: { platform: "darwin" } });
     const engine: InstanceInfo = {
       ...instance({ state: "unavailable", reason: "No API key — open Settings → API keys." }),
-      instanceId: "openaiCompat",
-      driverKind: "openai-compat",
-      displayName: "Other (OpenAI-compatible)",
+      instanceId: "local-server",
+      driverKind: "customAcp",
+      displayName: "Custom agent",
       install: { docsUrl: "https://openrouter.ai/keys", settings: "connections" },
     };
     const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
-    expect(markup).toContain("Other (OpenAI-compatible) needs an API key");
+    expect(markup).toContain("Custom agent needs an API key");
     expect(markup).toContain("Open AI › Other services");
     expect(markup).not.toContain("Open install in Terminal");
     expect(markup).not.toContain("config.json");
   });
 
-  it("still offers the install when a key engine's own CLI is missing, and the key once it is installed", () => {
+  it("still offers the install when a key engine's own CLI is missing, and the key in Settings once it is installed", () => {
     vi.stubGlobal("window", { ogb: { platform: "darwin" } });
-    const dsh = (snapshot: InstanceInfo["snapshot"]): InstanceInfo => ({
+    const harness = (snapshot: InstanceInfo["snapshot"]): InstanceInfo => ({
       ...instance(snapshot),
-      instanceId: "deepseek",
-      driverKind: "deepseekAgent",
-      displayName: "DeepSeek Harness",
+      instanceId: "harness",
+      driverKind: "customAcp",
+      displayName: "Harness CLI",
       install: {
-        command: { linux: "npm install -g @deepseek-ai/dsh", darwin: "npm install -g @deepseek-ai/dsh", win32: "npm install -g @deepseek-ai/dsh" },
-        docsUrl: "https://github.com/deepseek-ai/deepseek-harness",
+        command: { linux: "npm install -g @example/harness-cli", darwin: "npm install -g @example/harness-cli", win32: "npm install -g @example/harness-cli" },
+        docsUrl: "https://example.test/harness-cli",
         needsNode: true,
         settings: "connections",
       },
     });
-    const missing = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: dsh({ state: "unavailable", reason: "dsh not found" }) })));
-    expect(missing).toContain("npm install -g @deepseek-ai/dsh");
+    const missing = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: harness({ state: "unavailable", reason: "harness not found" }) })));
+    expect(missing).toContain("npm install -g @example/harness-cli");
     expect(missing).not.toContain("needs an API key");
-    const keyless = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: dsh({ state: "available", authenticated: false, version: "0.2.1" }) })));
-    expect(keyless).toContain("DeepSeek Harness needs an API key");
-    expect(keyless).toContain('data-key-row="deepseek"');
+    const keyless = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: harness({ state: "available", authenticated: false, version: "0.2.1" }) })));
+    expect(keyless).toContain("Harness CLI needs an API key");
+    expect(keyless).toContain("Open AI › Other services");
     expect(keyless).not.toContain("Terminal");
     // No key is saved, so nothing was rejected.
     expect(keyless).not.toContain("rejected the saved key");
@@ -177,7 +186,7 @@ describe("install from Settings on the server", () => {
     const opencode = (server?: NonNullable<InstanceInfo["install"]>["server"]): InstanceInfo => ({
       ...instance({ state: "unavailable", reason: "`opencode` CLI not found" }),
       instanceId: "opencode",
-      driverKind: "opencodeGo",
+      driverKind: "customAcp",
       displayName: "OpenCode",
       install: {
         command: { linux: "npm install -g opencode-ai", darwin: "npm install -g opencode-ai", win32: "npm install -g opencode-ai" },
@@ -201,35 +210,30 @@ describe("install from Settings on the server", () => {
     expect(neither).toContain("Requires Node.js");
   });
 
-  it("finishes the app's own signed-out copy in the app, never in a terminal", () => {
+  it("signs the app's own copy in on the computer that runs it, and installs it again when it breaks", () => {
     const appCopy = (snapshot: InstanceInfo["snapshot"]): InstanceInfo => ({
       ...instance(snapshot),
-      instanceId: "opencodeGo",
-      driverKind: "opencodeGo",
-      displayName: "OpenCode",
+      instanceId: "agent-three",
+      driverKind: "customAcp",
+      displayName: "Fixture agent",
       install: {
-        command: { linux: "npm install -g opencode-ai", darwin: "npm install -g opencode-ai", win32: "npm install -g opencode-ai" },
+        command: { linux: "npm install -g fixture-agent", darwin: "npm install -g fixture-agent", win32: "npm install -g fixture-agent" },
         needsNode: true,
-        docsUrl: "https://opencode.ai/docs/",
+        docsUrl: "https://example.test/agent/",
         server: { standalone: { version: "1.19.4", downloadBytes: 64_291_659 } },
         appCopy: true,
       },
     });
     const markup = render(appCopy({ state: "available", authenticated: false, version: "1.19.4" }));
-    expect(markup).toContain("OpenCode is installed");
-    expect(markup).toContain("free models");
-    expect(markup).toContain("Open AI › Other services");
+    expect(markup).toContain("Sign in to Fixture agent");
     expect(markup).toContain("Check again");
-    for (const line of ["Terminal", "terminal", "one-line installer", "npm install", "Install and sign in on the computer", "Sign in to OpenCode"]) {
-      expect(markup).not.toContain(line);
-    }
+    expect(markup).toContain("View setup guide");
     // A remote client's Settings has no keys, so it names the computer instead of offering the button.
     vi.stubGlobal("window", { ogb: { platform: "linux", remoteClient: { active: true } } });
     const remote = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: appCopy({ state: "available", authenticated: false, version: "1.19.4" }) })));
     expect(remote).toContain("on the computer running MausBot");
-    expect(remote).not.toContain("Open AI › Other services");
     // Missing or broken, the app's copy is installed again from here.
-    expect(render(appCopy({ state: "unavailable", reason: "`opencode` version check failed." }))).toContain("Install OpenCode here");
+    expect(render(appCopy({ state: "unavailable", reason: "`fixture-agent` version check failed." }))).toContain("Install Fixture agent here");
   });
 
   it("never offers an install when only sign-in is missing", () => {
@@ -251,48 +255,18 @@ describe("install from Settings on the server", () => {
 });
 
 describe("server device-code sign-in", () => {
-  it("offers the distinct ChatGPT plan connection without the legacy Codex command", () => {
-    vi.stubGlobal("window", { ogb: { platform: "linux" } });
-    const engine: InstanceInfo = {
-      ...instance({ state: "available", authenticated: false, chatgptPlan: true }),
-      instanceId: "chatgpt", displayName: "ChatGPT plan", driverKind: "codex",
-      authentication: { method: "browser-pkce" }, install: { signInCommand: "codex login" },
-    };
-    const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
-    expect(markup).toContain("Continue with ChatGPT");
-    expect(markup).toContain("separate from MausBot Cloud and from paying with an API key");
-    expect(markup).not.toContain("codex login");
-    expect(markup).not.toContain("Device-code login");
-  });
-
   it("explains unavailable hosted plan auth without offering a broken login or install", () => {
     vi.stubGlobal("window", { ogb: { platform: "linux" } });
     const engine: InstanceInfo = {
       ...instance({ state: "unavailable", authenticated: false, chatgptPlan: true, authenticationUnavailableReason: "Hosted ChatGPT plan access requires approval." }),
-      instanceId: "chatgpt", displayName: "ChatGPT plan", driverKind: "codex",
-      authentication: { method: "browser-pkce" }, install: { command: { linux: "npm install -g @openai/codex" }, signInCommand: "codex login" },
+      instanceId: "chatgpt", displayName: "ChatGPT plan", driverKind: "customAcp",
+      authentication: { method: "browser-pkce" }, install: { command: { linux: "npm install -g @openai/second" }, signInCommand: "second login" },
     };
     const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
     expect(markup).toContain("Hosted ChatGPT plan access requires approval.");
     expect(markup).not.toContain("Continue with ChatGPT");
     expect(markup).not.toContain("npm install");
-    expect(markup).not.toContain("codex login");
-  });
-
-  it("uses the supported browser sign-in flow instead of asking a remote user to run a command", () => {
-    vi.stubGlobal("window", { ogb: { platform: "linux" } });
-    const engine: InstanceInfo = {
-      ...instance({ state: "available", authenticated: false }),
-      instanceId: "codex",
-      driverKind: "codexAgent",
-      displayName: "Codex",
-      authentication: { method: "device-code" },
-      install: { signInCommand: "codex login" },
-    };
-    const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
-    expect(markup).toContain("Connect ChatGPT");
-    expect(markup).toContain("no terminal or password sharing");
-    expect(markup).not.toContain("codex login");
+    expect(markup).not.toContain("second login");
   });
 
   it("does not ask to sign in when installing a CLI for local-model injection", () => {
@@ -300,7 +274,7 @@ describe("server device-code sign-in", () => {
     const engine: InstanceInfo = {
       ...instance({ state: "available", authenticated: false }),
       authentication: { method: "device-code" },
-      install: { command: { linux: "npm install -g @openai/codex" }, signInCommand: "codex login" },
+      install: { command: { linux: "npm install -g @openai/second" }, signInCommand: "second login" },
     };
     const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine, intent: "inject" })));
     expect(markup).not.toContain("Connect ChatGPT");
@@ -309,8 +283,8 @@ describe("server device-code sign-in", () => {
 });
 
 describe("API-key engine setup", () => {
-  function keyEngine(driverKind: string, snapshot: InstanceInfo["snapshot"]): InstanceInfo {
-    return { ...instance(snapshot), instanceId: driverKind, driverKind, displayName: "Grok (API)", access: "api", install: { docsUrl: "https://console.x.ai" } };
+  function keyEngine(instanceId: string, snapshot: InstanceInfo["snapshot"]): InstanceInfo {
+    return { ...instance(snapshot), instanceId, driverKind: "customAcp", displayName: "Model provider", access: "api", install: { docsUrl: "https://example.test/keys" } };
   }
   const render = (engine: InstanceInfo, ogb: Record<string, unknown> = { platform: "darwin" }) => {
     vi.stubGlobal("window", { ogb });
@@ -318,64 +292,35 @@ describe("API-key engine setup", () => {
   };
 
   it("takes a missing key in place, in the same key row as Settings, not in a config file", () => {
-    const html = render(keyEngine("grok", { state: "unavailable", reason: "No xAI API key — open Settings → API keys." }));
+    const html = render(keyEngine("openai", { state: "unavailable", reason: "No API key — open Settings → API keys." }));
     expect(html).toContain("data-engine-setup-api-key");
-    expect(html).toContain("Grok (API) needs an API key");
+    expect(html).toContain("Model provider needs an API key");
     expect(html).toContain("Paste it here. It saves and checks itself");
-    expect(html).toContain('data-key-row="xai"');
+    expect(html).toContain('data-key-row="openai"');
     expect(html).not.toContain("Open AI › Other services");
     expect(html).not.toContain("config.json");
   });
 
   it("says so in the key row when the provider rejected the saved key", () => {
-    const html = render(keyEngine("grok", { state: "available", authenticated: false, reason: "The provider rejected this key." }));
+    const html = render(keyEngine("openai", { state: "available", authenticated: false, reason: "The provider rejected this key." }));
     expect(html).toContain("data-engine-setup-api-key");
     expect(html).toContain("Didn&#x27;t work: The provider rejected this key.");
-    expect(render(keyEngine("grok", { state: "unavailable" }))).not.toContain("rejected");
+    expect(render(keyEngine("openai", { state: "unavailable" }))).not.toContain("rejected");
   });
 
   it("still sends an engine with no key row of its own to Settings → API keys", () => {
-    const html = render(keyEngine("openai-compat", { state: "unavailable" }));
+    const html = render(keyEngine("local-server", { state: "unavailable" }));
     expect(html).toContain("Open AI › Other services");
     expect(html).not.toContain("data-key-row");
   });
 
   it("has no button on a remote client, whose settings hide the keys", () => {
-    const html = render(keyEngine("openai-compat", { state: "unavailable" }), { platform: "darwin", remoteClient: { active: true } });
+    const html = render(keyEngine("local-server", { state: "unavailable" }), { platform: "darwin", remoteClient: { active: true } });
     expect(html).toContain("on the computer running MausBot");
     expect(html).not.toContain("Open AI › Other services");
   });
 
   it("leaves CLI engines on their install card", () => {
     expect(render(instance({ state: "unavailable", reason: "`kimi` CLI not found" }))).not.toContain("data-engine-setup-api-key");
-  });
-});
-
-describe("Ollama setup", () => {
-  it("says why Ollama can't answer instead of asking for an API key", () => {
-    vi.stubGlobal("window", { ogb: { platform: "darwin" } });
-    const reason = "Ollama isn't running at http://127.0.0.1:11434. Open the Ollama app or run `ollama serve`.";
-    const ollama: InstanceInfo = {
-      instanceId: "openaiCompat", driverKind: "openai-compat", displayName: "Ollama", access: "api", serverKind: "ollama",
-      models: { default: "", options: [] }, snapshot: { state: "unavailable", reason },
-      install: { docsUrl: "https://openrouter.ai/keys", settings: "connections", signInCommand: "Save an OpenAI-compatible API key." },
-    };
-    const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: ollama })));
-    expect(markup).toContain("Ollama isn&#x27;t running at http://127.0.0.1:11434");
-    expect(markup).not.toContain("API key");
-  });
-
-  it("says it in the app's own words when the engine names the problem, with the command to run", () => {
-    vi.stubGlobal("window", { ogb: { platform: "darwin" } });
-    const ollama: InstanceInfo = {
-      instanceId: "openaiCompat", driverKind: "openai-compat", displayName: "Ollama", access: "api", serverKind: "ollama",
-      models: { default: "", options: [] },
-      snapshot: { state: "unavailable", reason: "Ollama has no models yet.", ollama: { state: "no-models", url: "http://127.0.0.1:11434" } },
-    };
-    const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: ollama })));
-    expect(markup).toContain('data-ollama-state="no-models"');
-    expect(markup).toContain("ollama pull llama3.2");
-    expect(markup).toContain("Check again");
-    expect(markup).not.toContain("Ollama has no models yet.");
   });
 });

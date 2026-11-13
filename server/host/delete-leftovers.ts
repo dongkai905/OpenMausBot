@@ -19,13 +19,10 @@ const SESSION_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 const WHOLE_SESSION_ID = new RegExp(`^${SESSION_ID.source}$`, "i");
 const MAX_LOG_BYTES = 64 * 1024 * 1024;
 const MAX_NOTED = 5_000;
-const MAX_DEPTH = 6;
 
 /** Folder names as Claude Code 2.1 keeps a session's files: `projects/<folder>/<session>.jsonl` and its session
  * folder, and one entry named after the session in each of the others. */
 const CLAUDE_SESSION_FOLDERS = ["file-history", "session-env", "todos", "debug"] as const;
-/** Codex 0.16 keeps a session as `sessions/<year>/<month>/<day>/rollout-<time>-<session>.jsonl`. */
-const CODEX_SESSION_FOLDERS = ["sessions", "archived_sessions"] as const;
 
 export interface EngineSessionFolders {
   claude: readonly string[];
@@ -151,7 +148,7 @@ export function removeMemoryLayer(dataDir: string, layer: string, records: Memor
 }
 
 /** Where each engine keeps its sessions, for every environment an engine of this server runs with. */
-export function engineSessionFolders(dataDir: string, environments: Iterable<Record<string, string | undefined>>): EngineSessionFolders {
+export function engineSessionFolders(environments: Iterable<Record<string, string | undefined>>): EngineSessionFolders {
   const claude = new Set<string>(), pi = new Set<string>();
   const absolute = (value: string | undefined) => (value && isAbsolute(value) ? resolve(value) : null);
   for (const env of environments) {
@@ -160,7 +157,6 @@ export function engineSessionFolders(dataDir: string, environments: Iterable<Rec
     if (claudeFolder) claude.add(claudeFolder);
     if (home) pi.add(join(home, ".pi", "agent"));
   }
-  const plans = join(resolve(dataDir), "providers", "chatgpt-plan");
   return { claude: [...claude], pi: [...pi] };
 }
 
