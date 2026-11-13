@@ -7,14 +7,10 @@ import { activeLocale, t, tFromServer } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { SkillRequestPreview } from "@/components/SkillRequestPreview";
 import { approvalDetailText, composioActionPhrase, outboundSummary } from "@/lib/approval-summary";
-import { niceDate, niceTime, scheduleLabel } from "@/lib/schedule-label";
-import { cronPresetText, cronText } from "@/lib/cron-text";
 import { PROFILE_REQUEST_FIELDS, type ProfileRequestField } from "../../shared/profile-request";
 import { RESERVED_MCP_NAMES } from "../../shared/mcp-name";
-import type { RoutineRequestSchedule } from "../../shared/routine-request";
 import { isSkillSwitchAction, type SkillShareRecord } from "../../shared/skill-request";
 import { cardAutomation } from "@/lib/automations";
-import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { yourComputerAsk } from "@/lib/your-computer";
 import { computerAskWords } from "@/lib/computer-ask";
 import { mcpRequestActionLabel } from "@/lib/mcp-request-label";
@@ -25,15 +21,6 @@ interface ToolLabels {
   [tool: string]: LocaleKey;
 }
 
-const ROUTINE_SETTLED_LABEL = {
-  create: "approval.status.routineScheduled",
-  update: "approval.status.routineUpdated",
-  pause: "approval.status.routinePaused",
-  resume: "approval.status.routineResumed",
-  run_now: "approval.status.routineRunQueued",
-  delete: "approval.status.routineDeleted",
-} as const;
-
 const SKILL_SETTLED_LABEL = {
   create: "approval.status.skillEnabled",
   update: "approval.status.skillUpdated",
@@ -42,15 +29,6 @@ const SKILL_SETTLED_LABEL = {
   delete: "approval.status.skillDeleted",
 } as const;
 
-/** Schedules and webhooks alike are "automations" to a person. */
-const AUTOMATION_APPLIED_LINE = {
-  create: "approval.applied.automation.create",
-  update: "approval.applied.automation.update",
-  pause: "approval.applied.automation.pause",
-  resume: "approval.applied.automation.resume",
-  run_now: "approval.applied.automation.runNow",
-  delete: "approval.applied.automation.delete",
-} as const;
 const WAIT_APPLIED_LINE = {
   waiting: "approval.applied.wait",
   fired: "approval.applied.waitFired",
@@ -76,9 +54,6 @@ const PROFILE_FIELD_LABEL: Record<ProfileRequestField, LocaleKey> = {
   speakReplies: "approval.applied.field.speakReplies",
 };
 
-/** A routine card no one answered is from before Triggers v2 applied changes on their own: nothing can confirm it now. */
-const staleRoutineCard = (card: OptionCardData) => Boolean(card.routineRequest && !card.answered);
-
 /** Cards whose server-written title and first option say what approving does. */
 export const titledCard = (card: OptionCardData | undefined) =>
   Boolean(card?.teamSetupRequest || card?.mcpRequest || card?.lendingLift || isSkillSwitchAction(card?.skillRequest?.action));
@@ -90,19 +65,16 @@ export function titledCardAction(card: OptionCardData): string {
 }
 
 export function approvalCardOutcome(card: OptionCardData): string | undefined {
-  const isProposal = Boolean(card.routineRequest || card.skillRequest || card.profileRequest || card.modelRequest || titledCard(card));
-  if (card.expired === true || staleRoutineCard(card)) return t(isProposal || !card.tool ? "approval.status.expired" : "approval.status.timedOut");
+  const isProposal = Boolean(card.skillRequest || card.profileRequest || card.modelRequest || titledCard(card));
+  if (card.expired === true) return t(isProposal || !card.tool ? "approval.status.expired" : "approval.status.timedOut");
   if (!card.answered) return undefined;
   if (card.undone === true) return t("approval.status.undone");
   if (card.answered !== "allow") return isProposal ? t("approval.status.cancelled") : t("approval.status.denied");
   if (card.teamSetupRequest) return t(card.teamSetupRequest.deletion ? "approval.status.botDeleted" : "approval.status.teamApplied");
-  const routineAction = card.routineRequest?.operation.action;
-  if (routineAction) return t(ROUTINE_SETTLED_LABEL[routineAction]);
   const skillAction = card.skillRequest?.action;
   if (skillAction) return t(SKILL_SETTLED_LABEL[skillAction]);
   if (card.profileRequest) return t("approval.status.profileUpdated");
   if (card.modelRequest) return t("approval.status.modelChanged");
-  if (card.routineRequest) return t("approval.status.routineConfirmed");
   if (card.skillRequest) return t("approval.status.skillConfirmed");
   return t("approval.status.allowed");
 }
@@ -121,8 +93,6 @@ export function toolLabel(tool?: string): string {
     Edit: "approval.tool.editFile",
     WebFetch: "approval.tool.fetchWebPage",
     WebSearch: "approval.tool.searchWeb",
-    schedule_routine: "approval.tool.scheduleRoutine",
-    manage_routine: "approval.tool.changeRoutine",
     stage_skill: "approval.tool.enableSkill",
     update_skill: "approval.tool.updateSkill",
     update_profile: "approval.tool.updateProfile",
@@ -144,46 +114,9 @@ export function toolLabel(tool?: string): string {
   return server && !RESERVED_MCP_NAMES.has(server) ? `${server} · ${phrase}` : phrase;
 }
 
-function plainWhen(schedule: RoutineRequestSchedule): string {
-  if (schedule.type === "once") {
-    return new Date(schedule.at).toDateString() === new Date().toDateString()
-      ? t("approval.applied.today", { time: niceTime(schedule.at) })
-      : `${niceDate(schedule.at)}, ${niceTime(schedule.at)}`;
-  }
-  if (schedule.type === "cron") {
-    return cronPresetText(schedule) ? cronText(schedule) : "";
-  }
-  if (schedule.type === "interval") return scheduleLabel({ ...schedule, anchorAt: schedule.anchorAt ?? 0 });
-  if (schedule.type === "limit_reset") return scheduleLabel({ ...schedule, at: null });
-  return scheduleLabel(schedule);
-}
-
 export function appliedChange(card: OptionCardData, name: string): { line: string; canUndo: boolean; cancels?: boolean } | undefined {
-  const routine = card.routineRequest;
-  if (routine) {
-    const operation = routine.operation;
-    const undo = routine.undo;
-    const when = undo?.schedule && operation.action !== "pause" && operation.action !== "delete" && operation.action !== "run_now"
-      ? plainWhen(undo.schedule)
-      : "";
-    const title = [
-      undo?.name ?? (operation.action === "create" ? operation.routine.name : ""),
-      operation.forBot ? t("approval.applied.forBot", { target: `@${operation.forBot.name}` }) : "",
-    ].filter(Boolean).join(" · ") + (when ? `, ${when}` : "");
-    const canUndo = operation.action === "create" ? Boolean(routine.resultId)
-      : operation.action === "update" ? Boolean(undo?.before && undo.appliedUpdatedAt !== undefined)
-        : operation.action === "pause" || operation.action === "resume" ? undo?.appliedUpdatedAt !== undefined
-          : operation.action === "delete" ? Boolean(undo?.before)
-            : false;
-    return { line: t(AUTOMATION_APPLIED_LINE[operation.action], { name, title }), canUndo };
-  }
   const wait = card.waitRequest;
   if (wait) return { line: t(WAIT_APPLIED_LINE[wait.settled ?? "waiting"], { name, title: wait.label }), canUndo: !wait.settled, cancels: true };
-  const webhook = card.webhookRequest;
-  if (webhook) {
-    const target = webhook.operation.forBot ? ` · ${t("approval.applied.forBot", { target: `@${webhook.operation.forBot.name}` })}` : "";
-    return { line: t(AUTOMATION_APPLIED_LINE[webhook.operation.action], { name, title: `${webhook.undo?.name ?? ""}${target}` }), canUndo: webhook.operation.action !== "run_now" };
-  }
   const skill = card.skillRequest;
   if (skill) {
     return {
@@ -216,9 +149,6 @@ export function appliedChange(card: OptionCardData, name: string): { line: strin
       names("updated") && t("approval.applied.teamUpdated", { names: names("updated") })].filter(Boolean).join("; ");
     return { line: t("approval.applied.teamSetup", { name, title }), canUndo: Boolean(setup.undo) };
   }
-  if (card.teamMemoryRequest) {
-    return { line: t("approval.applied.teamMemory", { name, title: card.subtitle.split(" — ")[0] ?? "" }), canUndo: Boolean(card.teamMemoryRequest.revision) };
-  }
   return undefined;
 }
 
@@ -242,8 +172,7 @@ function AppliedChangeLine({
   // Kept until the card's own patch arrives, so the Share button cannot come back in between.
   const [sharedNow, setSharedNow] = useState<{ requestId: string; shared: SkillShareRecord }>();
   const config = useContext(StoreContext)?.state.config ?? null;
-  const reviewsTeamMemory = useOwnerOrAdmin() !== false;
-  const canUndo = summary.canUndo && (!card.teamMemoryRequest || reviewsTeamMemory);
+  const canUndo = summary.canUndo;
   const undone = card.undone === true;
   const cancels = summary.cancels === true;
   const skill = card.skillRequest;
@@ -454,22 +383,18 @@ export function ApprovalCard({
     : undefined;
   if (applied) return <AppliedChangeLine card={card} name={bot?.name ?? t("approval.someone")} originalName={message.from?.name} threadId={threadId} summary={applied} />;
   const settled = card.answered;
-  const expired = card.expired === true || staleRoutineCard(card);
+  const expired = card.expired === true;
   const via = card.answeredBy?.via;
   const byVoice = via ? <span className="text-ink-tertiary">· {t(via === "call" ? "approval.status.byVoice" : "approval.status.byReaction")}</span> : null;
-  const isRoutineRequest = Boolean(card.routineRequest);
   const isSkillRequest = Boolean(card.skillRequest);
   const isProfileRequest = Boolean(card.profileRequest);
   const titled = titledCard(card);
-  const routineAction = card.routineRequest?.operation.action;
   const skillAction = card.skillRequest?.action;
   const heldNote = tFromServer(card.heldCode, card.held);
   const outcome = approvalCardOutcome(card);
   const outbound = outboundSummary(card);
-  const displayTool = isRoutineRequest
-    ? routineAction === "create" ? "schedule_routine" : "manage_routine"
-    : isSkillRequest
-      ? skillAction === "update" ? "update_skill" : "stage_skill"
+  const displayTool = isSkillRequest
+    ? skillAction === "update" ? "update_skill" : "stage_skill"
     : isProfileRequest
       ? "update_profile"
     // An ACP permission request without a tool kind carries the qualified MCP tool name as its title: label the
@@ -496,7 +421,7 @@ export function ApprovalCard({
       </div>
     );
   }
-  if (!isRoutineRequest && !isSkillRequest && !isProfileRequest && !titled && !card.modelRequest) {
+  if (!isSkillRequest && !isProfileRequest && !titled && !card.modelRequest) {
     const waiting = !settled && !expired;
     const ask = yourComputerAsk(card, bot?.name ?? t("approval.someone"));
     const header = ask ? ask.line : outbound
@@ -546,13 +471,11 @@ export function ApprovalCard({
       <pre
         tabIndex={0}
         aria-label={
-          isRoutineRequest
-            ? t("approval.aria.routineDetails")
-            : isSkillRequest
-              ? t("approval.aria.skillDetails")
-              : isProfileRequest
-                ? t("approval.aria.profileChange")
-                : t("approval.aria.details")
+          isSkillRequest
+            ? t("approval.aria.skillDetails")
+            : isProfileRequest
+              ? t("approval.aria.profileChange")
+              : t("approval.aria.details")
         }
         className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-inset px-3 py-2 font-mono text-[13px] leading-relaxed text-ink"
       >
@@ -576,7 +499,7 @@ export function ApprovalCard({
         ) : (
           <>
             <ShieldCheck size={14} className="text-accent" />
-            {isRoutineRequest || isSkillRequest || isProfileRequest || titled
+            {isSkillRequest || isProfileRequest || titled
               ? t("approval.status.waitingConfirmation")
               : t("approval.status.waitingAnswer")}
           </>

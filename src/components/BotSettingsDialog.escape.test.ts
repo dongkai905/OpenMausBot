@@ -23,7 +23,6 @@ vi.mock("./DesktopCapabilities", async (importOriginal) => ({
 }));
 vi.mock("./bot-settings/useBotSettingsDerived", () => ({ useBotSettingsDerived: () => ({ patch: vi.fn() }) }));
 vi.mock("./bot-settings/useSlackManagement", () => ({ useSlackManagementUrl: () => null }));
-vi.mock("./bot-settings/MemorySection", () => ({ MemorySection: () => null }));
 vi.mock("./bot-settings/useBotOverview", () => ({
   useBotOverview: () => ({ overview: null, overviewError: false, prompt: null, promptError: false }),
   useBotHistory: () => ({ rows: null, error: false, revision: null, rollingBack: false }),

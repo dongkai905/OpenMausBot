@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createTeamMove, parseTeamMoves } from "./team-move.mjs";
-import { QUEUE_POLL_MS, switchOn } from "./one-home.mjs";
+import { QUEUE_POLL_MS } from "./one-home.mjs";
 
 export const MY_CLOUD = Object.freeze({ id: "my-cloud", name: "My Cloud" });
 const ID = /^[\w-]{1,128}$/u;
@@ -100,19 +100,11 @@ export function createBotMove({ journal, local, send, session, lease = null, rea
           }
           return { name: move.bot.name };
         },
-        /** My Cloud switches on what was on here, and keeps which computer the bots came from. */
+        /** My Cloud keeps which computer the bots came from. */
         async done() {
           const there = await session();
-          const held = list(current().held).filter((key) => typeof key === "string");
-          for (const key of held) {
-            const change = switchOn(key);
-            if (!change) continue;
-            const answer = await there.call(change.method, change.route, change.body);
-            if (!answer.ok && answer.status !== 404) throw Object.assign(new Error(answer.body?.error ?? "My Cloud did not switch on an automation."), { status: answer.status });
-          }
           const computer = String((await local.call("GET", "/api/cloud-connections").catch(() => null))?.body?.computer?.label ?? "").trim() || "this computer";
-          const webhooks = held.flatMap((key) => (key.startsWith("webhook:") ? [key.slice("webhook:".length)] : []));
-          const arrived = await there.call("POST", "/api/cloud-send/arrived", { v: 1, computer, webhooks });
+          const arrived = await there.call("POST", "/api/cloud-send/arrived", { v: 1, computer });
           if (!arrived.ok) throw Object.assign(new Error(arrived.body?.error ?? "My Cloud did not finish the move."), { status: arrived.status });
           const going = new Set(ids());
           const bots = list((await local.call("GET", "/api/bots?messages=0").catch(() => null))?.body?.bots);
@@ -142,7 +134,7 @@ export function createBotMove({ journal, local, send, session, lease = null, rea
     /** The bots on their way now, by id. */
     moving: () => moves().filter((move) => move.phase !== "done").flatMap((move) => list(move.bots).map((bot) => bot.id)),
     /** Everything is moving now instead: a choice still on its way stops, and its bots go on here until that move takes them.
-     * One at its switch is past the point of no return (My Cloud has switched its automations on), so it finishes: let go
+     * One at its switch is past the point of no return (My Cloud keeps its bots as its own line), so it finishes: let go
      * here, its bots would run in both places. */
     async drop() {
       for (const move of moves().filter((entry) => entry.phase !== "done" && entry.phase !== "switch")) {

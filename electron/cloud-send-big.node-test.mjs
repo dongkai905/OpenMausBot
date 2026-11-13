@@ -24,7 +24,7 @@ function bigWorkspace() {
     return { threadId: `t-${bot}-${c}`, bot, rows, newest: `t-${bot}-${c}-${rows - 1}`, settings: {} };
   }));
   const manifest = {
-    v: 1, appVersion: "0.1.151", memory: [], journal: [], learned: [], forgotten: [], teams: [], rooms: [], connections: [], automations: [], runs: [],
+    v: 1, appVersion: "0.1.151", rooms: [], connections: [],
     items: bots.map((id) => ({ key: `bot:${id}`, kind: "bot", label: `Bot ${id}`, id, parts: { soul: "s" } })),
     conversations,
     attachments: Array.from({ length: ATTACHMENTS }, (_, i) => `${String(i).padStart(8, "0")}-a.png`),
@@ -208,8 +208,6 @@ function wholeMove() {
     if (route === "/api/bots?messages=0") return json({ bots: bots.map((id) => ({ id, threadId: `t-${id}-0`, name: `Bot ${id}`, soul: "s" })) });
     if (/^\/api\/bots\/[\w-]+\/skills$/u.test(route)) return json({ skills: [] });
     if (route.startsWith("/api/cloud-send/kind?key=")) return json({ v: 1, dataDir: "/desk", record: {} });
-    if (route.startsWith("/api/cloud-send/memory?bot=")) return json({ v: 1, files: [], journal: [] });
-    if (route === "/api/cloud-send/memory") return json({ v: 1, about: { learned: [], removed: [] }, teams: [] });
     if (route === "/api/cloud-send/files") return json({ v: 1, files: manifest.files });
     if (route.startsWith("/api/cloud-send/files?path=")) return new Response(data);
     if (route.startsWith("/api/cloud-send/chats/attachment/")) return new Response(data);
@@ -297,7 +295,7 @@ test("the whole move of 100 bots and 3,000 conversations, copy to switch, finish
   const home = createOneHome({
     journal: { read: () => structuredClone(journal), write: (value) => { journal = structuredClone(value); } },
     cloud: () => ({ origin: CLOUD, account: "acct-1", machine: CLOUD, ready: true, moves: true, ended: false, paid: false }),
-    send: { move: (options) => send.send({ reason: "move", final: options?.final === true }), check: () => send.check(), switches: () => send.switches(), snapshot: () => send.snapshot() },
+    send: { move: (options) => send.send({ reason: "move", final: options?.final === true }), check: () => send.check(), snapshot: () => send.snapshot() },
     local: {
       freeze: async () => { frozen = true; freezes++; return { frozen: true }; }, unfreeze: async () => { frozen = false; }, frozen: async () => frozen,
       json: async (route) => (await cloud.local(route)).json(), call: async () => reply(200),

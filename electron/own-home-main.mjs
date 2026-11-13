@@ -1,6 +1,6 @@
 // The one-time move that makes a server of the person's own their only home, as My Cloud is: chosen once on that server's
 // circle ("Make … my home"), then run by one-home.mjs over cloud-send.mjs, which carry everything, stop this computer for
-// good and switch on there what was on here, so no routine ever runs in two places. Every pass goes over this window's own
+// good and keeps it as its own line, so a bot never runs in two places. Every pass goes over this window's own
 // sign-in at that server, as the person's: never a sign-in of its own, and never signed out here.
 //
 // Security: only a server that says this sign-in is its one owner's (server/own-home.ts) is ever chosen or written to, and
@@ -145,7 +145,7 @@ export function installOwnHome({ localRequest, fetch: fetchImpl, environments, h
   const home = createOneHome({
     journal,
     cloud: target,
-    send: { move: (options) => send.send({ reason: "move", final: options?.final === true }), check: () => send.check(), switches: () => send.switches(), snapshot: () => send.snapshot() },
+    send: { move: (options) => send.send({ reason: "move", final: options?.final === true }), check: () => send.check(), snapshot: () => send.snapshot() },
     local: {
       ...local,
       freeze: async (origin) => freezeAnswer(await local.call("POST", "/api/move/freeze", { cloud: origin, place: chosen()?.name })),

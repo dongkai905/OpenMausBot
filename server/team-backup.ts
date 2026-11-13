@@ -4,34 +4,7 @@ import { takeImportName } from "../shared/import-name.ts";
 import { MAX_TEAM_BACKUP_BYTES, parseTeamBackup, type BackupTask, type TeamBackup } from "../shared/team-backup.ts";
 import { helperModelAllowed, type BotVisibility } from "../shared/wire.ts";
 import type { BotRecord, GroupRecord, Message, Store, TaskRecord } from "./store.ts";
-import type { Routine, RoutineManager } from "./routines.ts";
-import { redactSecretsInText } from "./redact.ts";
 import { exportedGoalWords, restoredGoalWords } from "./team-backup-words.ts";
-import {
-  listMemoryLogs, listMemoryTopics, readMemoryFile, readMemoryLog, readMemoryTopic,
-  writeMemoryFile, writeMemoryLog, writeMemoryTopic,
-} from "./workspace.ts";
-
-/** Scrubbed on the way out: files the bot's own tools wrote never passed the server's scrub. */
-function memoryFor(botId: string): TeamBackup["bots"][number]["memory"] {
-  const file = redactSecretsInText(readMemoryFile(botId).text);
-  const topics = listMemoryTopics(botId).flatMap((topic) => {
-    const text = readMemoryTopic(botId, topic.name);
-    return text === null ? [] : [{ name: topic.name, text: redactSecretsInText(text) }];
-  });
-  const logs = listMemoryLogs(botId).flatMap((name) => {
-    const text = readMemoryLog(botId, name);
-    return text === null ? [] : [{ name, text: redactSecretsInText(text) }];
-  });
-  if (!file && !topics.length && !logs.length) return undefined;
-  return { file, topics, logs };
-}
-
-function restoreMemory(botId: string, memory: NonNullable<TeamBackup["bots"][number]["memory"]>): void {
-  if (memory.file) writeMemoryFile(botId, memory.file);
-  for (const topic of memory.topics) writeMemoryTopic(botId, topic.name, topic.text);
-  for (const log of memory.logs) writeMemoryLog(botId, log.name, log.text);
-}
 
 /** Readable history only: no executable cards, queue entries, approval requests, local paths or session handles. */
 function messageText(message: Message) {
@@ -41,7 +14,6 @@ function messageText(message: Message) {
   if (message.kind === "connector") parts.push("[Connection card — reconnect in Settings]");
   if (message.kind === "secret") parts.push("[Secret request — not restored]");
   if (message.kind === "signin") parts.push("[Sign-in request — not restored]");
-  if (message.routineRun) parts.push(`[Routine: ${message.routineRun.routineName} — ${message.routineRun.status}]`, message.routineRun.summary ?? "", message.routineRun.error ?? "");
   const goalPart = parts.length;
   if (message.goalRun) parts.push(`[Goal: ${message.goalRun.status}]`, message.goalRun.goal, message.goalRun.detail ?? "");
   if (message.kind === "screen" || message.attachments?.length) parts.push("[Image or attachment — file not included in this backup]");
@@ -53,7 +25,7 @@ function messageText(message: Message) {
 }
 
 /** `shown`: on a Team Cloud someone else's private chat is never in the exporting person's backup. */
-export function createTeamBackup(store: Store, routines: Routine[], name: string, shown: (threadId: string) => boolean = () => true): TeamBackup {
+export function createTeamBackup(store: Store, name: string, shown: (threadId: string) => boolean = () => true): TeamBackup {
   const warnings: string[] = [];
   const history = (record: BotRecord | GroupRecord): BackupTask[] => {
     const tasks = record.tasks?.length ? record.tasks : [{ threadId: record.threadId, title: "Conversation", createdAt: record.createdAt }];
@@ -102,12 +74,6 @@ export function createTeamBackup(store: Store, routines: Routine[], name: string
       ),
     };
   });
-  const validRoutines = routines.filter((routine) => {
-    const room = groups.find((group) => group.key === routine.groupId);
-    const valid = botIds.has(routine.botId) && (routine.target !== "room-goal" || !routine.groupId || (room && !room.dm && room.memberIds.includes(routine.botId)));
-    if (!valid) warnings.push(`Routine “${routine.name}” is not included because its bot, room or coordinator was deleted.`);
-    return valid;
-  });
   const document = parseTeamBackup({
     format: "openmaus.backup", version: 1, name, exportedAt: Date.now(),
     warnings,
@@ -122,17 +88,11 @@ export function createTeamBackup(store: Store, routines: Routine[], name: string
       ...(bot.toolScope !== undefined ? { toolScope: structuredClone(bot.toolScope) } : {}),
       // A bot kept off the helper model stays off it wherever its notes and chats land.
       ...(helperModelAllowed(bot) ? {} : { helperModel: false }),
-      memory: memoryFor(bot.id),
       // Someone else's private chat selected: the backup opens on the first conversation it carries instead.
       ...((tasks) => ({ activeTask: tasks.some((task) => task.key === bot.threadId) ? bot.threadId : tasks[0]?.key ?? bot.threadId, tasks }))(histories.get(bot.id)!),
     })),
     groups,
-    routines: validRoutines.map((routine) => ({
-      name: routine.name, prompt: routine.prompt, target: routine.target, botId: routine.botId,
-      groupId: routine.groupId, runOn: routine.runOn, schedule: routine.schedule,
-      durationMinutes: routine.durationMinutes, timeoutMinutes: routine.timeoutMinutes,
-      ...(routine.checks ? { checks: routine.checks } : {}), ...(routine.access ? { access: routine.access } : {}), ...(routine.deliver ? { deliver: routine.deliver } : {}),
-    })),
+    routines: [],
   });
   if (Buffer.byteLength(JSON.stringify(document)) > MAX_TEAM_BACKUP_BYTES) {
     throw new Error("This backup exceeds the 50 MB portable-backup limit. Nothing was exported or changed.");
@@ -141,15 +101,13 @@ export function createTeamBackup(store: Store, routines: Routine[], name: string
 }
 
 /** Always additive: rollback owns only the fresh records and cannot touch an existing bot or chat. */
-export function importTeamBackup(store: Store, routines: RoutineManager, input: unknown, selection: ModelSelection, options: { visibility?: BotVisibility; createdBy?: string } = {}) {
+export function importTeamBackup(store: Store, input: unknown, selection: ModelSelection, options: { visibility?: BotVisibility; createdBy?: string } = {}) {
   const backup = parseTeamBackup(input);
   const bots: BotRecord[] = [];
   const groups: GroupRecord[] = [];
-  const createdRoutines: Routine[] = [];
   const existingBotIds = new Set(store.bots.map((bot) => bot.id));
   const existingGroupIds = new Set(store.groups.map((group) => group.id));
   const botIds = new Map<string, string>();
-  const groupIds = new Map<string, string>();
   const takenNames = new Set(store.bots.map((bot) => bot.name.trim().toLowerCase()));
   const takenGroups = new Set(store.groups.map((group) => group.name.trim().toLowerCase()));
   const takenSections = new Set([
@@ -196,7 +154,6 @@ export function importTeamBackup(store: Store, routines: RoutineManager, input: 
       store.patchBot(bot.id, { composio: false, computer: "off", browser: false, autoApprove: false,
         connectorTools: {}, toolScope: source.toolScope, hidden: source.hidden, chiefOfStaff: source.chiefOfStaff, playbooks: source.playbooks,
         ...(source.helperModel === false ? { helperModel: false } : {}) });
-      if (source.memory) restoreMemory(bot.id, source.memory);
     }
     for (const source of backup.bots) {
       const bot = store.bot(botIds.get(source.key)!)!;
@@ -222,7 +179,6 @@ export function importTeamBackup(store: Store, routines: RoutineManager, input: 
     for (const source of backup.groups) {
       const group = store.createGroup(takeImportName(source.name, takenGroups), source.memberIds.map((id) => botIds.get(id)!), source.dm, sectionFor(source.section));
       groups.push(group);
-      groupIds.set(source.key, group.id);
       const responder = source.defaultResponder;
       store.patchGroup(group.id, {
         bulletin: source.bulletin,
@@ -253,13 +209,8 @@ export function importTeamBackup(store: Store, routines: RoutineManager, input: 
         store.switchGroupTask(group.id, threads[source.tasks.findIndex((task) => task.key === source.activeTask)]);
       }
     }
-    for (const source of backup.routines) {
-      createdRoutines.push(routines.create({ ...source, botId: botIds.get(source.botId)!,
-        groupId: source.target === "room-goal" && source.groupId ? groupIds.get(source.groupId) : undefined, enabled: false }));
-    }
-    return { name: backup.name, bots, groups, routines: createdRoutines };
+    return { name: backup.name, bots, groups, routines: [] };
   } catch (error) {
-    for (const routine of createdRoutines) routines.remove(routine.id);
     // createBot/createGroup can throw after persisting, so every fresh ID is swept.
     for (const group of store.groups) if (!existingGroupIds.has(group.id)) store.deleteGroup(group.id);
     for (const bot of store.bots) if (!existingBotIds.has(bot.id)) store.deleteBot(bot.id);

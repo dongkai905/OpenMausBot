@@ -8,7 +8,6 @@ import type { Handoffs } from "../delta-context.ts";
 import type { hostedModelPolicy } from "../hosted-models.ts";
 import type { PhoneSecretSubmissionRegistry } from "../phone-secret.ts";
 import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { SkillReview } from "../skill-review.ts";
 import { isProjectEmoji, type BotRecord, type Store, type TaskRecord } from "../store.ts";
 import { parseSurface } from "../surface.ts";
@@ -37,7 +36,6 @@ export interface TaskRouteDeps {
   hostedWorkspace: boolean;
   hostedFullAccessRefusal: string;
   hostedModels: Pick<HostedModels, "resetTask"> | null;
-  routines(): Pick<RoutineManager, "isActiveThread"> | null;
   coordinator: Pick<Coordinator, "cancelDirect">;
   handoffs: Pick<Handoffs, "forget">;
   skillReview: Pick<SkillReview, "dropThread">;
@@ -95,7 +93,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
     if (phoneSecretSubmissions.hasThread(threadId)) {
       return { status: 409, error: "this task is securely saving a credential — try again when it finishes" };
     }
-    if (threadBusy(botId, threadId) || deps.routines()!.isActiveThread(threadId)) {
+    if (threadBusy(botId, threadId)) {
       return { status: 409, error: "this task is running — stop it first" };
     }
     return null;

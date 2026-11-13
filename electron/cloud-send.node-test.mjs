@@ -79,7 +79,7 @@ test("a bot's fields reach My Cloud without Custom approval", () => {
   assert.deepEqual(parseSendState({ auto: false, clouds: { "javascript:alert(1)": {}, [CLOUD]: { off: { a: "you", b: "nonsense" }, created: { "bot:x": true, "login:y": true }, creating: { "bot:z": true, "skill:q": true }, release: [{ id: "mcp:a", digest: "d" }, { id: 3 }],
     verified: { "t-1": { newest: "m9", rows: 9, there: 9 }, "t-2": { newest: 3 }, "bad id": { newest: "m", rows: 1, there: 1 } }, stamped: { "t-1": true, "t-2": "yes" } } } }),
     { v: 1, clouds: { [CLOUD]: { sent: {}, off: { a: "you" }, dismissed: "", last: null, whole: null, arrived: { bots: 0, updatedBots: 0, skills: 0, logins: 0, settings: 0, onePassword: false, chats: { conversations: 0, messages: 0 } },
-      chats: {}, created: { "bot:x": true }, creating: { "bot:z": true }, release: [{ id: "mcp:a", digest: "d" }], files: {}, on: {}, verified: { "t-1": { newest: "m9", rows: 9, there: 9 } }, stamped: { "t-1": true } } } },
+      chats: {}, created: { "bot:x": true }, creating: { "bot:z": true }, release: [{ id: "mcp:a", digest: "d" }], files: {}, verified: { "t-1": { newest: "m9", rows: 9, there: 9 } }, stamped: { "t-1": true } } } },
     "nothing is kept of the switch that once sent by itself");
 });
 
@@ -104,8 +104,6 @@ function fakeSides({ cloudItems = [], localItems = [], refuse = {} } = {}) {
         if (route === "/api/cloud-send" || route === "/api/cloud-send?move=1") return localJson(summary(localItems));
         if (route === "/api/bots?messages=0") return localJson({ bots: [{ id: "ember", threadId: "t-ember", name: "Ember", soul: "Be brief." }] });
         if (route === "/api/bots/ember/skills") return localJson({ skills: [] });
-        if (route === "/api/bots/ember/memory") return localJson({ topics: [] });
-        if (route.startsWith("/api/bots/ember/memory/file")) return localJson({ exists: false, text: "" });
         if (route === "/api/config") return localJson({ profile: { name: "Amit" } });
         return new Response("{}", { status: 404 });
       },
@@ -639,7 +637,7 @@ test("closing the move's done line closes the move's own send result with it, so
   const dir = mkdtempSync(join(tmpdir(), "omb-move-line-"));
   const file = join(dir, "cloud-send.json");
   const result = { bots: ["Ember"], updatedBots: [], skills: 0, logins: 0, onePassword: false, settings: [], chats: null, failed: [], notes: [] };
-  writeFileSync(file, JSON.stringify({ v: 1, clouds: { [CLOUD]: { sent: {}, off: {}, dismissed: "", last: { at: 7, reason: "move", result }, whole: null, chats: {}, created: {}, release: [], files: {}, on: {} } } }));
+  writeFileSync(file, JSON.stringify({ v: 1, clouds: { [CLOUD]: { sent: {}, off: {}, dismissed: "", last: { at: 7, reason: "move", result }, whole: null, chats: {}, created: {}, release: [], files: {} } } }));
   const handlers = new Map();
   let seen = 0;
   let line = { phase: "done", phone: false, held: [] };

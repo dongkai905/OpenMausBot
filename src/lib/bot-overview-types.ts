@@ -1,9 +1,6 @@
-import type { RoutineSchedule } from "@/lib/routines";
-
 export interface BotOverview {
   who: { name: string; title: string; blurb: string; soulLead: string };
   does: string[];
-  doesRoutines?: OverviewRoutineLine[];
   managedSections?: string[];
   reaches: string[];
   wont: string[];
@@ -12,16 +9,8 @@ export interface BotOverview {
 }
 
 export interface SetupStep {
-  id: "identity" | "soul" | "folder" | "apps" | "schedule";
+  id: "identity" | "soul" | "folder" | "apps";
   label: string;
   done: boolean;
-  section?: "identity" | "soul" | "access" | "routines";
-}
-
-export interface OverviewRoutineLine {
-  name: string;
-  paused?: true;
-  schedule: RoutineSchedule;
-  nextRunAt?: number;
-  lastRun?: { status: string; at: number };
+  section?: "identity" | "soul" | "access";
 }

@@ -4,7 +4,7 @@ import { TRIAL_CREDIT_REFUSED } from "../../shared/trial-credit.ts";
 import "../server-line-packs.ts";
 import { engineFailureMessage } from "../drivers/engine-errors.ts";
 import { AUTO_RETRY_LEAD, RETRY_BLOCKED } from "../incidents.ts";
-import type { RoutineFailureFacts } from "../routine-recovery.ts";
+import type { FailureFacts } from "../turn-failure.ts";
 import { createChiefNotices, MEMORY_RETRY_MS, MEMORY_RETRY_TEXT, type ChiefNoticeDeps } from "./chief-notices.ts";
 
 function fixture(over: Partial<ChiefNoticeDeps> = {}) {
@@ -99,7 +99,7 @@ describe("OpenMausBot's one automatic retry of a teammate's failed thread", () =
     expect(f.turnsOf("chief")[0]!.text).not.toContain(RETRIED);
   });
 
-  it.each<[string, { detail: string; facts?: RoutineFailureFacts }]>([
+  it.each<[string, { detail: string; facts?: FailureFacts }]>([
     ["a Stop someone pressed or typed", { detail: CRASH, facts: { stopReason: "interrupted" } }],
     ["a Stop the engine reported as an error", { detail: "session closed", facts: { stopReason: "cancelled" } }],
     ["an AI that declined", { detail: "The engine stopped without saying why (stop reason: refusal).", facts: { stopReason: "refusal" } }],

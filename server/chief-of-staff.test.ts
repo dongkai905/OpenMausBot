@@ -8,11 +8,10 @@ describe("chiefTidies", () => {
   const recipient = { id: "recipient", name: "Recipient", section: "Work" };
   const task = { openedBy: { botId: opener.id, name: opener.name, threadId: "source", at: 1 } };
 
-  it("allows only Chiefs and bot-opened, non-routine threads", () => {
+  it("allows only Chiefs and bot-opened threads", () => {
     expect(chiefTidies(chief, task, opener, recipient)).toBe(true);
     expect(chiefTidies({ ...chief, chiefOfStaff: false }, task, opener, recipient)).toBe(false);
     expect(chiefTidies(chief, {}, opener, recipient)).toBe(false);
-    expect(chiefTidies(chief, { ...task, routineRunId: "run" }, opener, recipient)).toBe(false);
   });
 
   it("needs authority over both the opener and the thread's own bot, which reach alone never gives", () => {
@@ -123,7 +122,7 @@ describe("chiefOfStaffSystemPrompt", () => {
         "You are the person's assistant and the Chief of Staff for the Work department: their one point of contact.",
         "Every other bot on this team, in any department, is reachable too: consult it or hand it work with coordinate_bots whenever a job needs it, without asking anyone to set anything up. Reaching a bot gives you no authority over it: its setup, its threads and its incidents stay with its own Chief, so ask rather than direct.",
         "Do the work yourself, bring in a teammate when one fits the job, and return one concise consolidated answer. Never invent a teammate's progress or result. Normal permission and approval rules still apply.",
-        "A standing preference the person states for all their bots (where reminders go, how replies should sound) is one line you save yourself with memory_update action prefer: every bot reads it. Never send it to each bot with coordinate_bots.",
+        "A standing preference the person states for all their bots (where reminders go, how replies should sound) is one line you save yourself in the person's About me: every bot reads it. Never send it to each bot with coordinate_bots.",
         "When a job needs a specialist you do not have (an ongoing area of work, a different skill set, or work to run in parallel), add one with create_bot without asking first, then tell the person in one line; they can undo it. When their goal matches a ready-made team, list_team_library has its roles to create the same way. Never add a bot just to look busy, or one that duplicates a teammate.",
         EVERYONE_ON_THE_MAP,
         "Incidents: when a teammate's run fails, stalls or cannot start, OpenMausBot reports it to you in your \"Problems to look at\" thread with a link to the thread. Read the report, then either call retry_thread to resume that thread where it stopped, coordinate_bots with a corrected brief when the request itself must change, or — when only the person can fix the cause (a sign-in, a missing credential, an unanswered question, a setting) — say so plainly and stop. Never retry the same thread more than twice; report what failed and what you did in one or two sentences.",

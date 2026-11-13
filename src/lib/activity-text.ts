@@ -47,17 +47,16 @@ export function activityText(tool: NoticeTool, english: string): string {
   return noticeText(tool.nameCode, english, tool.nameParams);
 }
 
-
-const LINE_PREFIXES = ["routines.server.", "chat.notice."];
+const LINE_PREFIXES = ["chat.notice."];
 
 function englishParams(params: ServerTextParams | undefined): ServerTextParams {
   return Object.fromEntries(Object.entries(params ?? {}).map(([name, value]) =>
     [name, isReferenceParam(name, value) && Object.hasOwn(en, value) ? en[value as LocaleKey] : value]));
 }
 
-/** A routine's stored line (`checkTroubleCode`, a run's `outputCode`, `errorCode`, `attentionCode`) in the reader's
- * language. Only `routines.server.*` and `chat.notice.*` keys are taken, and only while the field still reads as that
- * line's English: a later line the server wrote without a code is shown as written. */
+/** A stored line the server wrote from its own catalog (an approval's summary, a tool's) in the reader's language.
+ * Only `chat.notice.*` keys are taken, and only while the field still reads as that line's English: a later line the
+ * server wrote without a code is shown as written. */
 export function routineLineText(code: string | undefined, english: string, params?: ServerTextParams): string {
   if (!code || !LINE_PREFIXES.some((prefix) => code.startsWith(prefix)) || !Object.hasOwn(en, code) || activeLocale() === "en") return english;
   if (formatServerText(en[code as LocaleKey], englishParams(params)) !== english) return english;
@@ -67,3 +66,4 @@ export function routineLineText(code: string | undefined, english: string, param
     return english;
   }
 }
+

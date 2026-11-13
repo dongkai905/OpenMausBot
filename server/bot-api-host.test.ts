@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,8 +8,6 @@ import { BotApiManager } from "./bot-api.ts";
 import { BOT_API_DEFAULT_WAIT_MS, createBotApiHost, type BotApiHostDeps, type BotApiTurnOptions } from "./bot-api-host.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import type { Message } from "./store.ts";
-import { createWebhookIngressHandler } from "./webhook-ingress.ts";
-import type { WebhookManager } from "./webhooks.ts";
 
 const dirs: string[] = [];
 const servers: Server[] = [];
@@ -93,9 +91,8 @@ async function harness(script: Script, options: { waitMs?: number; full?: boolea
     manageRefusal: (auth) => (auth.scopes.includes("admin") ? null : "Only people who can edit Scout can change this."),
     record: (_auth, row) => recorded.push(row),
   });
-  const webhooks = { authorize: () => false, recordUnauthorized: () => null } as unknown as WebhookManager;
-  const handle = createWebhookIngressHandler(webhooks, undefined, host.door);
-  const server = createServer((req, res) => { void handle(req, res); });
+  const handle = (req: IncomingMessage, res: ServerResponse) => { void host.door(req, res, new URL(req.url ?? "/", "http://localhost")); };
+  const server = createServer(handle);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as { port: number }).port;
@@ -297,7 +294,7 @@ describe("the Bot API door on the webhook receiver", () => {
       claimRequest: () => { if (refuse) throw Object.assign(new Error("This Cloud moved"), { status: 409 }); return () => { release.count += 1; }; },
     });
     const key = host.manager.enable("b1").key;
-    const server = createServer((req, res) => { void createWebhookIngressHandler({} as WebhookManager, undefined, host.door)(req, res); });
+    const server = createServer((req, res) => { void host.door(req, res, new URL(req.url ?? "/", "http://localhost")); });
     servers.push(server);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/hooks/api/bots/b1/messages`;
@@ -397,7 +394,7 @@ describe("the Bot API door on the webhook receiver", () => {
       startTurn: async () => { throw thrown; }, discard: (_botId, threadId) => { removed.push(threadId); },
     });
     const key = manager.enable("b1").key;
-    const server = createServer((req, res) => { void createWebhookIngressHandler({} as WebhookManager, undefined, host.door)(req, res); });
+    const server = createServer((req, res) => { void host.door(req, res, new URL(req.url ?? "/", "http://localhost")); });
     servers.push(server);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/hooks/api/bots/b1/messages`;

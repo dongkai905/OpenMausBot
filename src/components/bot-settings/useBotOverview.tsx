@@ -14,7 +14,7 @@ import { t } from "@/lib/i18n";
  * there would save, record a history row and read once per keystroke.
  */
 export function useBotOverview(bot: Bot, want: { overview: boolean; prompt: boolean; followEdits?: boolean }) {
-  const { state, flushBotPatches } = useStore();
+  const { flushBotPatches } = useStore();
   const [overview, setOverview] = useState<BotOverview | null>(null);
   const [overviewError, setOverviewError] = useState(false);
   const [prompt, setPrompt] = useState<PromptPreviewData | null>(null);
@@ -60,8 +60,6 @@ export function useBotOverview(bot: Bot, want: { overview: boolean; prompt: bool
 
   const followEdits = want.followEdits ?? true;
   const editedFacts = followEdits ? factsSignature : null;
-  const routines = followEdits ? state.routines : null;
-  const webhooks = followEdits ? state.webhooks : null;
 
   // Await the existing write queue rather than racing a second debounce.
   useEffect(() => {
@@ -98,7 +96,7 @@ export function useBotOverview(bot: Bot, want: { overview: boolean; prompt: bool
     return () => {
       cancelled = true;
     };
-  }, [bot.id, want.overview, want.prompt, editedFacts, routines, webhooks, flushBotPatches]);
+  }, [bot.id, want.overview, want.prompt, editedFacts, flushBotPatches]);
 
   return { overview, overviewError, prompt, promptError };
 }

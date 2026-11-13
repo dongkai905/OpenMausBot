@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { personKey } from "../person-key.ts";
 import { createConversationShares, shareKey } from "./conversation-shares.ts";
-import { teamMemoryLine, TEAM_MEMORY_TEXT_MAX } from "./team-memory-saves.ts";
 
 const rui = personKey({ id: "", email: "rui@acme.test" });
 const marta = personKey({ id: "", email: "marta@acme.test" });
@@ -68,17 +67,5 @@ describe("conversation shares", () => {
     expect(shares.forViewer({ threadId: "t1" }, rui, names)).toEqual({ threadId: "t1", shared: true, sharedWith: { name: "Marta", byYou: true } });
     expect(shares.forViewer({ threadId: "t1" }, marta, names)).toEqual({ threadId: "t1", shared: true, sharedWith: { name: "Rui" } });
     expect(shares.forViewer({ threadId: "t9" }, rui, names)).toEqual({ threadId: "t9" });
-  });
-});
-
-describe("a team memory line", () => {
-  it("says who saved it and when", () => {
-    expect(teamMemoryLine("  We ship\non 3 March ", "Rui", Date.UTC(2026, 10, 11))).toBe("We ship on 3 March (saved by Rui, 2026-11-11)");
-  });
-
-  it("keeps one note's worth of a long message, cut at a word, and says it was shortened", () => {
-    const line = teamMemoryLine(Array.from({ length: 400 }, () => "word").join(" "), "Rui", Date.UTC(2026, 10, 11));
-    expect(line).toMatch(/^word( word)*… \(shortened; saved by Rui, 2026-11-11\)$/);
-    expect(line.length).toBeLessThanOrEqual(TEAM_MEMORY_TEXT_MAX + 50);
   });
 });

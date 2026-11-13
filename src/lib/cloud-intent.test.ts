@@ -76,14 +76,4 @@ describe("the job once sent", () => {
     expect(saved.has("omb.cloudIntent.pending")).toBe(false);
     expect(JSON.parse(saved.get("omb.cloudIntent.sent")!)).toEqual({ botId: "b2", at: 1_000_000 });
   });
-
-  it("is set up by that bot's first routine made after it, not by another bot's or an older one", async () => {
-    const { module } = await load();
-    const sent = { botId: "b2", at: 10_000_000 };
-    const routine = (id: string, botId: string, createdAt: number) => ({ id, botId, createdAt });
-    expect(module.jobRoutine([routine("old", "b2", 1_000), routine("other", "b1", 10_500_000)], sent)).toBeUndefined();
-    expect(module.jobRoutine([routine("later", "b2", 10_900_000), routine("first", "b2", 10_400_000)], sent)?.id).toBe("first");
-    expect(module.jobRoutine([routine("skew", "b2", 9_970_000)], sent)?.id).toBe("skew");
-    expect(module.jobRoutine([routine("any", "b1", 1)], null)?.id).toBe("any");
-  });
 });

@@ -184,11 +184,11 @@ export function installTeamMove({ ipcMain, cloudPage, pageOrigin = () => null, c
           if (begun?.name) scope.name = begun.name;
           return begun;
         },
-        async done(on) {
+        async done() {
           const session = await target.get();
           if (!session) return;
-          const switched = await session.call("POST", `/api/team-move-in/${move.bot.id}/done`, { v: 1, on });
-          if (!switched.ok) throw Object.assign(new Error(sentence(switched.body?.error) ?? `${move.team.name} did not switch ${move.bot.name}'s routines on.`), { status: switched.status });
+          const switched = await session.call("POST", `/api/team-move-in/${move.bot.id}/done`, { v: 1, on: [] });
+          if (!switched.ok) throw Object.assign(new Error(sentence(switched.body?.error) ?? `${move.team.name} did not take ${move.bot.name} in.`), { status: switched.status });
         },
       },
       close: async () => { await source.close(); await target.close(); },

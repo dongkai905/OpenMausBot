@@ -3,7 +3,6 @@
 import { labelledLine } from "../peer-provenance.ts";
 import { AUTHORITY, fromNoteWith, routineWho, type LineLabels } from "../provenance-label.ts";
 import { speakerOf, type PersonName } from "../replies.ts";
-import type { RoutineRunTrigger } from "../routines.ts";
 import type { ResolvedSender } from "../../shared/wire.ts";
 
 export interface LineLabelDeps {
@@ -13,6 +12,9 @@ export interface LineLabelDeps {
   /** The routine whose run this conversation is, by name. */
   routineName(threadId: string): string | undefined;
 }
+
+/** What started a run of its own accord. */
+type RoutineRunTrigger = "schedule" | "manual" | "webhook" | "startup" | "api";
 
 const ROUTINE_RUNS: ReadonlySet<RoutineRunTrigger | undefined> = new Set<RoutineRunTrigger | undefined>(["schedule", "manual", "startup"]);
 

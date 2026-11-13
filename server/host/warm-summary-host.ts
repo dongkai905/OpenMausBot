@@ -13,12 +13,10 @@
 import type { IdleCompactResult } from "../contracts.ts";
 import { isContextMessage, type HandedState } from "../delta-context.ts";
 import { sinceFreshStart } from "../fresh-start.ts";
-import { wakeHoldOf } from "../routine-due.ts";
-import type { Routine, RoutineRun } from "../routines.ts";
 import { serverLine } from "../server-lines.ts";
 import type { Message, Store } from "../store.ts";
 import type { WaitRecord } from "../waits.ts";
-import { createWarmSummary, WARM_SUMMARY_MIN_TOKENS, WARM_SUMMARY_RETRY_MS, type WarmSummaryOutcome, type WarmSummaryPlan, type WarmSummaryTarget } from "../warm-summary.ts";
+import { createWarmSummary, WARM_SUMMARY_MIN_TOKENS, type WarmSummaryOutcome, type WarmSummaryPlan, type WarmSummaryTarget } from "../warm-summary.ts";
 
 /** Claude Code summarizes at the start of a turn once its context passes about 0.81 of its window (162k of 200k measured
  * on a Team trial): from 0.8 the next turn would summarize anyway, so the warm summary starts almost at once. */
@@ -42,11 +40,10 @@ export interface WarmSummaryHostDeps {
   /** A turn is running or being set up in this conversation, or the bot is busy elsewhere. */
   busy(botId: string, threadId: string): boolean;
   memoryShort(): boolean;
-  /** What can wake a conversation without the person: a queued message, a teammate's answer, a wait, a routine. */
+  /** What can wake a conversation without the person: a queued message, a teammate's answer, a wait. */
   queued(botId: string, threadId: string): boolean;
   coordinator: { activeDirect(threadId: string): boolean; awaitingTeammateThreads(): Set<string> };
   waits(): { all(): WaitRecord[] } | null;
-  routines(): { listRoutines(): Routine[]; listRuns(): RoutineRun[] } | null;
   /** OpenMausBot's fold, now: true when it wrote a summary, false when the conversation does not need one yet. */
   fold(target: WarmSummaryTarget, signal: AbortSignal): Promise<boolean>;
   /** The summary call's usage, booked like a keep-warm ping. */
@@ -137,10 +134,6 @@ export function createWarmSummaryHost(deps: WarmSummaryHostDeps) {
       }
       if (deps.waits()?.all().some((w) => w.botId === botId && w.threadId === threadId && w.followUp !== undefined && w.ending?.status === "fired")) {
         return { reason: "a wait has fired and will carry on here", retry: false };
-      }
-      const routines = deps.routines();
-      if (routines && wakeHoldOf(routines.listRoutines().filter((r) => r.botId === botId), routines.listRuns().filter((r) => r.botId === botId), now(), WARM_SUMMARY_RETRY_MS).hold) {
-        return { reason: "a routine of this bot is about to run", retry: true };
       }
       return null;
     },

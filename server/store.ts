@@ -12,7 +12,6 @@ import { removeBotFolder, soulFile, soulHash, writeSoulMirror } from "./bot-fold
 import type { BotProfilePatch } from "./bot-profile.ts";
 import { DATA_DIR, EVENTS_DIR, NATIVE_DIR, loadBrowserProfileIdAliases } from "./config.ts";
 import * as mdb from "./message-db.ts";
-import { forgetBotMemoryJournal, journalFile } from "./memory-journal.ts";
 import { runCommand, type Command } from "./commands.ts";
 import { workspaceDir } from "./workspace.ts";
 import type { Destination } from "./surface.ts";
@@ -105,7 +104,7 @@ const ASK_NOW = { approvalMode: "ask" as const, autoApprove: false, alwaysAllow:
 const TASK_PATCH_FIELDS = [
   "title", "projectId", "modelSelection", "approvalMode", "autoApprove", "alwaysAllow",
   "unread", "lastReadMessageId", "rewound", "archivedAt", "pinned", "pinnedMessageId", "resumeCursors", "lastInstanceId", "cwd",
-  "routineRunId", "surface", "surfaceSource", "snoozedUntil", "link", "linkAuto", "appliedCompactionId", "contextFloor", "lastContextModel", "usage", "setupRequest", "botApi", "outside",
+  "surface", "surfaceSource", "snoozedUntil", "link", "linkAuto", "appliedCompactionId", "contextFloor", "lastContextModel", "usage", "setupRequest", "botApi", "outside",
 ] as const satisfies readonly (keyof TaskRecord)[];
 export type TaskPatch = Partial<Pick<TaskRecord, typeof TASK_PATCH_FIELDS[number]>>;
 
@@ -275,8 +274,8 @@ export function pruneRoomHolds(group: Pick<GroupRecord, "memberIds" | "holds" | 
   }
 }
 
-function taskCountsAsBotUnread(task: { unread?: boolean; routineRunId?: string }): boolean {
-  return Boolean(task.unread) && !task.routineRunId;
+function taskCountsAsBotUnread(task: { unread?: boolean }): boolean {
+  return Boolean(task.unread);
 }
 
 export class Store {
@@ -541,10 +540,6 @@ export class Store {
           task.unread = task === active && b.unread;
           botsMigrated = true;
         }
-        if (task.routineRunId && task.unread) {
-          task.unread = false;
-          botsMigrated = true;
-        }
         if (task === active) {
           if (task.rewound === undefined && b.rewound !== undefined) {
             task.rewound = b.rewound;
@@ -622,7 +617,7 @@ export class Store {
   }
 
   private fillTaskAskedAts(): void {
-    const tasks = this.bots.flatMap((bot) => bot.tasks ?? []).filter((task) => task.askedAt === undefined && !task.routineRunId);
+    const tasks = this.bots.flatMap((bot) => bot.tasks ?? []).filter((task) => task.askedAt === undefined);
     const asked = mdb.latestPersonLineAts(tasks.map((task) => task.threadId));
     for (const task of tasks) {
       const at = asked.get(task.threadId);
@@ -1479,11 +1474,6 @@ export class Store {
       rmSync(workspaceDir(id), { recursive: true, force: true });
     } catch {}
     try {
-      rmSync(journalFile(id), { force: true });
-    } catch {}
-    mdb.deleteBotMemoryFiles(id);
-    forgetBotMemoryJournal(id);
-    try {
       rmSync(join(DATA_DIR, "skill-state", id), { recursive: true, force: true });
     } catch {}
     removeBotFolder(id);
@@ -2052,7 +2042,6 @@ export class Store {
       if (task.snoozedUntil === 0 && patch.unread === true) task.snoozedUntil = undefined;
       if (typeof patch.title === "string") task.title = patch.title.trim().slice(0, 80) || UNTITLED_THREAD;
       if (Object.prototype.hasOwnProperty.call(patch, "pinned") && task.pinned !== true) delete task.pinned;
-      if (task.routineRunId) task.unread = false;
       if (bot.threadId === threadId) this.mirrorActiveTask(bot, task);
       bot.unread = bot.tasks!.some(taskCountsAsBotUnread);
     }, revocation && (() => Object.assign(task, revocation)), !touchesPermissions(patch));
@@ -2272,7 +2261,7 @@ export class Store {
       const kept = bot.tasks!.filter((t) => !doomed.has(t.threadId));
       const visible = nextOpenThread(kept) ?? this.buildTask(bot);
       bot.tasks = kept.includes(visible) ? kept : [visible, ...kept];
-      if (doomed.has(bot.threadId) || this.taskByThread(botId, bot.threadId)?.routineRunId) this.mirrorActiveTask(bot, visible);
+      if (doomed.has(bot.threadId)) this.mirrorActiveTask(bot, visible);
       bot.unread = bot.tasks.some(taskCountsAsBotUnread);
       this.refreshBotActivity(bot);
     }));

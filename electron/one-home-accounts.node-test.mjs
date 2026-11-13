@@ -13,7 +13,7 @@ function world({ journal = null, cloud = cloudOf("b", CLOUD_B), marker = { froze
   w.home = createOneHome({
     journal: { read: () => structuredClone(w.journal), write: (value) => { w.journal = structuredClone(value); } },
     cloud: () => (w.cloud ? { ...w.cloud } : null),
-    send: { async move(options) { w.passes.push(options?.final ? "final" : "copy"); await onPass(w); }, check: async () => ({ ok: true }), switches: () => ({}), snapshot: () => ({ running: w.running }) },
+    send: { async move(options) { w.passes.push(options?.final ? "final" : "copy"); await onPass(w); }, check: async () => ({ ok: true }), snapshot: () => ({ running: w.running }) },
     local: {
       freeze: async () => { w.freezes++; w.marker = { frozen: true }; return { frozen: true }; },
       unfreeze: async (options) => { w.unfreezes.push(options ?? null); w.marker = { frozen: false }; },

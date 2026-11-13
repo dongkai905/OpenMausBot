@@ -1,13 +1,13 @@
 // A Team Cloud's side of the audience rule (server/audience.ts, docs/team-cloud.md): which conversation is whose, which
-// memory layer a turn reads and writes, whose "About you" and profile a turn gets, who "you" is for a member session,
+// folder a turn works in, whose "About you" and profile a turn gets, who "you" is for a member session,
 // and what that session is told. On any server that is not a Team Cloud every answer here is the plain one (the bot's own
-// memory, the server's profile), so a My Cloud and a desktop behave exactly as before.
+// folder, the server's profile), so a My Cloud and a desktop behave exactly as before.
 import type { ThreadAudiences } from "../bot-visibility.ts";
 import { type Audience, baseBotId, layerAudience, layerId, mayRead, memberAudience, audienceMember, threadAudienceFrom } from "../audience.ts";
 import type { CloudTeam, TeamRole } from "../cloud-team.ts";
 import { createPeopleAbout, type PeopleAbout, type PersonProfilePatch, type SeedField } from "../people-about.ts";
 import { personKey } from "../person-key.ts";
-import { ensureWorkspace, loadMemory, workspaceDir } from "../workspace.ts";
+import { ensureWorkspace, workspaceDir } from "../workspace.ts";
 import type { EngineHomes } from "../engine-homes/engine-homes.ts";
 import { storeThreads, type StoreBotThreads } from "../engine-homes/migrate.ts";
 import type { ConversationShares } from "./conversation-shares.ts";
@@ -56,7 +56,7 @@ export function createCloudTeamHost(deps: CloudTeamHostDeps) {
   const layer = (botId: string, threadId: string): string => {
     if (!team) return botId;
     const id = layerId(botId, audienceOf(threadId));
-    if (id !== botId) ensureWorkspace(id, deps.language?.());
+    if (id !== botId) ensureWorkspace(id);
     return id;
   };
   const claimed = (session: MemberSession) => session.email?.trim().toLowerCase() ?? "";
@@ -99,37 +99,16 @@ export function createCloudTeamHost(deps: CloudTeamHostDeps) {
     team,
     audienceOf,
     layer,
-    /** What a turn in this conversation reads: its own layer and the team's (the bot's own folder). */
-    memoryIds(botId: string, threadId: string): string[] {
-      const own = layer(botId, threadId);
-      return own === botId ? [botId] : [own, botId];
-    },
     /** The folders a turn's box must put back besides the bot's own: its layer, when it has one. */
     layerDirs(botId: string, threadId: string): string[] {
       const own = layer(botId, threadId);
       return own === botId ? [] : [workspaceDir(own)];
-    },
-    /** Captured facts about the person, into that person's own "About you"; nothing for the team's or a room's layer. */
-    learnAbout(layerOrBotId: string, plan: (current: string) => { next: string; count: number } | null): number {
-      const person = team ? ownPerson(layerAudience(layerOrBotId)) : null;
-      if (!person) return 0;
-      const planned = plan(people.read(person));
-      if (!planned) return 0;
-      people.write(person, planned.next);
-      return planned.count;
     },
     /** Whether a turn in `threadId` may read `other` (the read rule). Off a team: everything, as before. */
     readableFrom(threadId: string): (other: string) => boolean {
       if (!team) return () => true;
       const turn = audienceOf(threadId);
       return (other) => mayRead(audienceOf(other), turn);
-    },
-    /** The team's notes, read-only, for a turn that writes elsewhere (a room's or a member's layer). */
-    sharedNotesPrompt(botId: string, threadId: string): string {
-      if (!team || layer(botId, threadId) === botId) return "";
-      const shared = loadMemory(botId);
-      if (!shared) return "";
-      return `\n\n${team.name}'s shared notes with you (read-only here; what you save in this conversation stays with it):\n${shared.text}`;
     },
     /** "About the user" for a turn: on a team only a member's own, with their name, in their own conversations; the
      * server's profile otherwise. */

@@ -7,8 +7,6 @@ import { isAbsolute, join } from "node:path";
 
 import { CARRY_ON_MS } from "../computer-asks.ts";
 import type { DecisionRow } from "../decision-log.ts";
-import { readMemoryJournal } from "../memory-journal.ts";
-import { hashMemoryText } from "../memory-store.ts";
 import { buildNotification, type Notification } from "../notify.ts";
 import { redactSecretsInText } from "../redact.ts";
 import { serverLine } from "../server-lines.ts";
@@ -17,8 +15,8 @@ import { turnWaitedOnPerson } from "../waiting-on-person.ts";
 import { workspaceDir } from "../workspace.ts";
 
 const TOOL = "lending_lift";
-/** The request of a card for a whole bot's memory, which no line of a conversation asked for. */
-const WHOLE_BOT = "whole-bot-memory";
+/** The request of a card for a whole bot's files, which no line of a conversation asked for. */
+const LOCKED = "bot-files-locked";
 /** A card shows what it allows; past this it says where the rest is. */
 const SHOWN_CHARS = 2_000;
 const CARRY_ON_EVERY_MS = 5_000;
@@ -29,7 +27,7 @@ const BOT_FOLDER = /^.*[\\/](?:workspaces[\\/][^\\/]+|task-workspaces[\\/][^\\/]
 
 type Lift = NonNullable<NonNullable<Message["card"]>["lendingLift"]>;
 
-/** What a changed file says now, for the card: the lines a memory file's last change added, or the file itself. */
+/** What a changed file says now, for the card: the file itself. */
 export function changedWords(botId: string, file: string): string | undefined {
   const clip = (text: string) => { const trimmed = text.trim(); return trimmed.length > WORDS_CHARS ? `${trimmed.slice(0, WORDS_CHARS)}…` : trimmed; };
   const path = isAbsolute(file) ? file : join(workspaceDir(botId), file);
@@ -37,11 +35,7 @@ export function changedWords(botId: string, file: string): string | undefined {
     const stat = lstatSync(path);
     if (stat.isSymbolicLink()) return `→ ${readlinkSync(path)}`;
     if (!stat.isFile()) return undefined;
-    const text = readFileSync(path, "utf8");
-    const row = isAbsolute(file) ? undefined : readMemoryJournal(botId, 50).find((entry) => entry.path === file);
-    // Only while it describes what's there now: anything written since would go unshown.
-    const added = row?.afterHash && row.afterHash === hashMemoryText(text) ? row.diff.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++")).map((line) => line.slice(1)).join("\n") : "";
-    return clip(added || text);
+    return clip(readFileSync(path, "utf8"));
   } catch {
     return undefined;
   }
@@ -135,10 +129,10 @@ export function createLendingLifts(deps: LendingLiftDeps) {
         return "open";
       }
       // A line's Not now holds for that line; a bot's holds until its memory changes again.
-      if (last?.card?.answered === "deny" && (requestMessageId !== WHOLE_BOT || last.card.lendingLift?.memoryToken === lift.memoryToken)) return "declined";
+      if (last?.card?.answered === "deny") return "declined";
       const language = deps.language(threadId);
       const room = store.groupByThread(threadId);
-      const title = serverLine(language, requestMessageId === WHOLE_BOT ? "server.lendingLift.wholeBotTitle" : "server.lendingLift.title", { bot: bot?.name ?? "", device: deps.device() });
+      const title = serverLine(language, "server.lendingLift.title", { bot: bot?.name ?? "", device: deps.device() });
       const requestId = `lending-lift-${randomUUID()}`;
       store.appendMessage(threadId, {
         role: "bot", kind: "options",
@@ -151,12 +145,12 @@ export function createLendingLifts(deps: LendingLiftDeps) {
       return "open";
     },
 
-    /** Security invariant: a bot's memory just became locked. The card goes to its own main chat, for the owner alone to
-     * answer from one of their devices, and shows exactly what it would allow, like any other. */
+    /** Security invariant: the files a lent bot may reach just changed. The card goes to its own main chat, for the owner
+     * alone to answer from one of their devices, and shows exactly what it would allow, like any other. */
     memoryLocked(botId: string): void {
       const bot = store.bot(botId);
       if (!bot?.threadId) return;
-      this.raise({ botId, threadId: bot.threadId, requestMessageId: WHOLE_BOT, memoryChanged: true, outside: false });
+      this.raise({ botId, threadId: bot.threadId, requestMessageId: LOCKED, memoryChanged: true, outside: false });
     },
 
     /** They said Not now to this line of theirs. */

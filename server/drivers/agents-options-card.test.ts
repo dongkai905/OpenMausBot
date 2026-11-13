@@ -32,8 +32,8 @@ function context(overrides: Partial<ToolCallContext> = {}): ToolCallContext {
 }
 
 describe("Watcher options-card tool", () => {
-  it("hides memory tools when native memory is off", () => {
-    const names = availableTools(profile({ memoryEnabled: false })).map((tool) => tool.name);
+  it("offers no memory tools at all, and keeps the one that searches conversations", () => {
+    const names = availableTools(profile()).map((tool) => tool.name);
     expect(names).not.toContain("memory_update");
     expect(names).not.toContain("memory_log");
     expect(names).toContain("session_search");

@@ -43,12 +43,11 @@ export const CHECK_PASSES: number;
 export const RETRY_MS: number[];
 export const BUSY_POLL_MS: number;
 export function parseTeamMoves(value: unknown): { v: 1; moves: TeamMove[] };
-export function routinesOn(held: unknown): string[];
 
 export interface TeamMoveIo {
   engine: { move(options?: { final?: boolean }): Promise<unknown>; check(): Promise<{ ok: boolean }> };
   myCloud: { call(method: string, route: string, body?: unknown): Promise<{ ok: boolean; status: number; body: any }> };
-  team: { begin(): Promise<{ name: string; done?: undefined } | { done: true; name?: string }>; done(on: string[]): Promise<void> };
+  team: { begin(): Promise<{ name: string; done?: undefined } | { done: true; name?: string }>; done(): Promise<void> };
   prepare?(): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 }

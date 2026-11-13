@@ -7,7 +7,6 @@ import type {
   PackageConnection,
   PackagePlaybook,
   PackageRoom,
-  PackageRoutine,
 } from "../shared/package-format.ts";
 
 export interface PartPair { r: string; w: string }
@@ -16,8 +15,6 @@ export const AGENT_PARTS = ["name", "title", "description", "soul", "look", "pla
 export type AgentPart = typeof AGENT_PARTS[number];
 export const ROOM_PARTS = ["name", "bulletin", "members", "defaultResponder"] as const;
 export type RoomPart = typeof ROOM_PARTS[number];
-export const ROUTINE_PARTS = ["name", "prompt", "schedule", "target"] as const;
-export type RoutinePart = typeof ROUTINE_PARTS[number];
 export const TEAM_PARTS = ["name", "brief", "leader"] as const;
 export type TeamPart = typeof TEAM_PARTS[number];
 
@@ -75,34 +72,6 @@ export const roomReleaseValues = (room: PackageRoom): Record<RoomPart, unknown> 
     : room.defaultResponder.kind === "auto" && room.defaultResponder.agent
       ? { kind: "auto", agent: room.defaultResponder.agent }
       : { kind: room.defaultResponder.kind },
-});
-
-/** Run on startup appears only when set, so installs from before it keep their hash. */
-export function scheduleValue(routine: {
-  runOn: string;
-  schedule: unknown;
-  durationMinutes: number;
-  timeoutMinutes?: number | null;
-  overlap?: string | null;
-  continuity?: boolean | null;
-  runOnStartup?: boolean | null;
-}) {
-  return {
-    runOn: routine.runOn,
-    schedule: routine.schedule,
-    durationMinutes: routine.durationMinutes,
-    timeoutMinutes: routine.timeoutMinutes ?? null,
-    overlap: routine.overlap ?? "skip",
-    continuity: routine.continuity === true,
-    ...(routine.runOnStartup === true ? { runOnStartup: true } : {}),
-  };
-}
-
-export const routineReleaseValues = (routine: PackageRoutine): Record<RoutinePart, unknown> => ({
-  name: routine.name,
-  prompt: routine.prompt,
-  schedule: scheduleValue(routine),
-  target: { agent: routine.agent, room: routine.room ?? null },
 });
 
 export const connectionReleaseValue = (connection: PackageConnection) => ({

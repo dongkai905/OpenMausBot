@@ -18,7 +18,6 @@ import {
 import { VPS_CONTAINER_LABEL, VPS_IMAGE, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL, vpsContainerName } from "./vps-computer.ts";
 import { CONTROL_BUSY, CONTROL_REFUSAL_PLAIN, controlRefusal, createControlClient } from "./control-client.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
-import type { RoutineSchedule } from "../shared/routines.ts";
 import { workerPort } from "./testing/worker-port.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
@@ -163,7 +162,7 @@ posixOnly("VPS turn routing e2e (fake ACP fleet + fake docker over SSH)", () => 
   let askerDump: string;
   let dockerLog: string;
 
-  type ApiBody = Record<string, string | boolean | null | RoutineSchedule | { instanceId: string; model: string } | { sshAlias: string }>;
+  type ApiBody = Record<string, string | boolean | null | { instanceId: string; model: string } | { sshAlias: string } | { type: string }>;
 
   const api = async (method: string, path: string, body?: ApiBody): Promise<{ status: number; body: any }> => {
     const res = await fetch(`${BASE}${path}`, {
@@ -588,25 +587,6 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
       expect(explicitTools.find((tool: { name: string }) => tool.name === "computer")?.args).toContain("production-vps");
       const threadPreview = await api("GET", `/api/bots/${bot.id}/computer?threadId=${explicitThread}`);
       expect(threadPreview.body).toMatchObject({ surface: "cloud", backend: "vps", ready: true });
-
-      const created = await api("POST", "/api/routines", {
-        botId: bot.id, name: "VPS scheduled check", prompt: "Check the existing VPS.", enabled: false,
-        schedule: { type: "interval", everyMinutes: 60, anchorAt: Date.now() + 3_600_000 },
-      });
-      expect(created.status, JSON.stringify(created.body)).toBe(201);
-      expect(created.body.routine.runOn).toBe("maus");
-      rmSync(`${acpDump}.mcp.json`, { force: true });
-      const started = await api("POST", `/api/routines/${created.body.routine.id}/run`);
-      expect(started.status, JSON.stringify(started.body)).toBe(201);
-      let completed: any;
-      await until(async () => {
-        completed = (await api("GET", "/api/routines")).body.runs.find((run: any) => run.id === started.body.run.id);
-        return completed?.status === "completed";
-      }, "the routine on the existing VPS");
-      const routineTools = JSON.parse(readFileSync(`${acpDump}.mcp.json`, "utf8"));
-      expect(routineTools.find((tool: { name: string }) => tool.name === "computer")?.args).toContain("production-vps");
-      const routineMessages = (await api("GET", `/api/threads/${completed.threadId}/messages?limit=100`)).body.messages;
-      expect(routineMessages.some((message: any) => message.text?.includes("This is the user's own VPS"))).toBe(true);
 
       const released = await api("PUT", "/api/config", { vps: { sshAlias: "other-vps" } });
       expect(released.status, JSON.stringify(released.body)).toBe(409);

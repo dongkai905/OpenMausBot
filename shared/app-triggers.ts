@@ -1,7 +1,10 @@
 /** App-event automations: "when something happens in a connected app, a bot does something". Wire shapes for the
  * REST snapshot (`/api/app-triggers`), the `app-trigger*` live frames and the chat card a bot's change leaves. */
 import type { ConnectorToolGrant } from "./wire.ts";
-import type { RoutineRunOn } from "./routines.ts";
+
+/** Where an app-event automation runs: on this computer ("maus") or in the
+ * Cloud. Local to this file: the routine types it used to share are gone. */
+export type AppTriggerRunOn = "maus" | "cloud";
 
 /** Plain words a person or bot gives. Gmail turns them into its own search, so other mail never arrives at all; other
  * apps match them, case-insensitively, against the event's fields. */
@@ -36,7 +39,7 @@ export interface AppTrigger {
   name: string;
   prompt: string;
   botId: string;
-  runOn: RoutineRunOn;
+  runOn: AppTriggerRunOn;
   enabled: boolean;
   /** Composio toolkit slug, e.g. `gmail`. */
   app: string;
@@ -119,7 +122,7 @@ export interface AppTriggerDefinition {
   account?: string;
   filter?: AppTriggerFilter;
   config?: Record<string, unknown>;
-  runOn?: RoutineRunOn;
+  runOn?: AppTriggerRunOn;
 }
 
 export type AppTriggerChange = Partial<Pick<AppTriggerDefinition, "name" | "instructions" | "filter" | "config" | "runOn">>;
@@ -142,7 +145,7 @@ export interface AppTriggerRequestCardData {
     name: string;
     /** The automation's revision right after the change; Undo refuses once it moved. */
     appliedUpdatedAt?: number;
-    before?: { name: string; prompt: string; runOn: RoutineRunOn; enabled: boolean; filter?: AppTriggerFilter; config: Record<string, unknown> };
+    before?: { name: string; prompt: string; runOn: AppTriggerRunOn; enabled: boolean; filter?: AppTriggerFilter; config: Record<string, unknown> };
   };
 }
 

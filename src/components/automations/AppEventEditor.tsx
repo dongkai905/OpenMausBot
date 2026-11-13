@@ -10,10 +10,15 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { useStore, type Bot } from "@/state/store";
 import { Select } from "../Select";
-import { suggestedName } from "../WebhookTrigger";
 
 const FIELD = "w-full rounded-xl border border-hairline/60 bg-panel px-3.5 py-2.5 text-[13px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent/70";
 const LABEL = "mb-1.5 block text-[12px] font-medium text-ink-secondary";
+
+/** A name taken from what the bot is asked to do, until the person writes one. */
+function suggestedName(prompt: string, bot?: Bot): string {
+  const first = prompt.trim().split(/[.!?\n]/)[0]?.trim().slice(0, 60);
+  return first || `${bot?.name ?? "Bot"} automation`;
+}
 
 export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }: { trigger?: AppTrigger; bots: Bot[]; initialBotId?: string; onClose: () => void; onSaved?: (trigger: AppTrigger) => void }) {
   const { dispatch } = useStore();

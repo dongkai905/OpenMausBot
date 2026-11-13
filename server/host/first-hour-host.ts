@@ -5,10 +5,8 @@ import { CLOUD_WELCOME_DONE } from "../../shared/cloud-hints.ts";
 import type { Notification } from "../../shared/notification.ts";
 import type { RuntimeEvent } from "../../shared/runtime-events.ts";
 import type { AppConfig } from "../config.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { createFirstHour, LOOK_APPS, type FirstHour, type FirstHourDeps, type LookApp } from "./first-hour.ts";
-import type { Proactive } from "./proactive.ts";
 import { proactiveOwner } from "./proactive-owner.ts";
 import { createValueLedger, valueReport, type ValueKind } from "./value-ledger.ts";
 
@@ -49,7 +47,8 @@ export interface FirstHourHostDeps {
   bus: { subscribe(listener: (event: RuntimeEvent) => void): unknown };
   cfg: AppConfig;
   dataDir: string;
-  proactive: Pick<Proactive, "brief">;
+  /** The brief's own words: the language it reads in and the zone it writes in. */
+  brief: { language(): string | undefined; timeZone(): string | undefined };
   /** The brief is on: the proactive bot's briefing routine. */
   briefOn(): boolean;
   ensureBrief(): void;
@@ -60,7 +59,6 @@ export interface FirstHourHostDeps {
   };
   sessions: { list(): ReadonlyArray<{ owner?: string; email?: string; scopes: readonly string[] }> };
   phones(): number;
-  routines(): RoutineManager | null;
   mainThread(botId: string): string | undefined;
   threadBusy(botId: string, threadId: string): boolean;
   startTurn: FirstHourDeps["startTurn"];
@@ -84,8 +82,8 @@ export function startFirstHour(deps: FirstHourHostDeps): FirstHour | null {
       const email = deps.sessions.list().find((session) => session.scopes.includes("admin") && session.owner)?.owner;
       return { ...(name ? { name } : {}), ...(email ? { email } : {}) };
     },
-    language: () => deps.proactive.brief.language(),
-    timeZone: () => deps.proactive.brief.timeZone(),
+    language: () => deps.brief.language(),
+    timeZone: () => deps.brief.timeZone(),
     apps: {
       reachable: (bot) => composio.configured(cfg) && bot.composio !== false,
       connected: async () => {
@@ -105,7 +103,6 @@ export function startFirstHour(deps: FirstHourHostDeps): FirstHour | null {
     notify: (bot, threadId, body) => deps.notify(bot.notifications === false ? null : { kind: "brief", botId: bot.id, botName: bot.name, threadId, title: bot.name, body, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) }),
     wrote: deps.wrote,
     welcomeDone: deps.welcomeDone,
-    runs: () => deps.routines()?.listRuns() ?? [],
     ledger: deps.hooks.ledger,
   });
   if (deps.fresh) firstHour.begin();

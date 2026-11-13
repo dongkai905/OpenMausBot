@@ -2,13 +2,10 @@
 // started from their own admin-scoped device, a room member answering their own line there, or a routine they wrote or
 // started by hand), in a conversation they opened that has never held anybody else's words, since a resumed session
 // carries everything said in it. Webhooks, guests, work handed in from elsewhere and anything unprovable never can.
-import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
-import { z } from "zod";
-import { writeFileAtomic } from "./atomic.ts";
-import { CLOUD_NOBODY_KEY, CLOUD_OUTSIDE_KEY } from "./cloud-sharing.ts";
 import type { WorkOrigin } from "./peer-provenance.ts";
-import type { RoutineRunTrigger } from "./routines.ts";
+
+/** What started a run of its own accord. */
+export type RoutineRunTrigger = "schedule" | "manual" | "webhook" | "startup" | "api";
 
 type Card = { requestId?: string; answered?: string; answeredText?: string; dismissed?: boolean; autoApplied?: boolean; answeredBy?: { kind: string; person?: string } };
 type Line = { id: string; role: string; peerAsk?: unknown; sender?: { id?: string }; card?: Card };
@@ -81,11 +78,6 @@ export function cloudLendingRefusalText(why: CloudLendingRefusal | "memory-chang
   return `Only conversations you start with a bot, and routines you wrote, can use ${yours}. Start a new conversation with this bot to use it.`;
 }
 
-/** A routine's run that isn't proven the owner's (changed or made outside their chats): saving it in its editor renews it. */
-export function changedRoutineRefusalText(name: string, device: "Mac" | "PC" | "computer"): string {
-  return `"${name}" can't use your ${device} because it isn't confirmed as yours: it was last changed or made outside your own chats. Open it and save it to make it yours again.`;
-}
-
 /** On a team nobody's own computer is lent: the team's bots use the team's cloud computer. */
 export function teamLendingRefusal(team: string): string {
   return `${team}'s bots never use anyone's own computer; they use ${team}'s cloud computer.`;
@@ -147,66 +139,4 @@ export function ownerOnlyConversation(
 export function answeredByPerson(card: Card | undefined): boolean {
   if (!card || card.answeredBy?.kind === "bot") return false;
   return (Boolean(card.answered) && card.answered !== "unavailable" && card.dismissed !== true && card.autoApplied !== true) || Boolean(card.answeredText);
-}
-
-type RoutineShape = {
-  prompt?: string; target?: unknown; botId?: string; groupId?: string; attachments?: { id: string; path: string }[];
-  schedule?: unknown; runOn?: string;
-};
-
-/** The scheduler never rewrites these fields, so any edit by someone else changes the fingerprint. */
-export function routineFingerprint(routine: RoutineShape): string {
-  const attachments = (routine.attachments ?? []).map(attachment => [attachment.id, attachment.path]);
-  return createHash("sha256").update(JSON.stringify([
-    routine.prompt ?? "", routine.target ?? null, routine.botId ?? "", routine.groupId ?? null, attachments,
-    routine.schedule ?? null, routine.runOn ?? null,
-  ])).digest("hex");
-}
-
-const authorsFile = z.object({
-  version: z.literal(1),
-  routines: z.record(z.string().max(128), z.string().regex(/^[a-f0-9]{64}$/)),
-  writers: z.record(z.string().max(128), z.string().regex(/^p_[\w-]{22}$/)).optional(),
-}).strict();
-
-/** A missing or damaged file means none: it never grants anything by being absent. */
-export function createCloudRoutineAuthors(file: string) {
-  let routines: Record<string, string> = {};
-  let writers: Record<string, string> = {};
-  try {
-    if (existsSync(file)) {
-      const stat = lstatSync(file);
-      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 1_000_000) {
-        const parsed = authorsFile.parse(JSON.parse(readFileSync(file, "utf8")));
-        routines = parsed.routines;
-        writers = parsed.writers ?? {};
-      }
-    }
-  } catch { routines = {}; writers = {}; }
-  const save = () => writeFileAtomic(file, JSON.stringify({ version: 1, routines, writers }), { mode: 0o600 });
-  return {
-    record(id: string, routine: RoutineShape) { routines = { ...routines, [id]: routineFingerprint(routine) }; save(); },
-    forget(id: string) { if (Object.hasOwn(routines, id)) { const next = { ...routines }; delete next[id]; routines = next; save(); } },
-    /** Security invariant: what outside work wrote stays outside until a person saves it; a bot's change never makes it nobody's. */
-    wrote(id: string, person: string) { if (writers[id] !== person && !(writers[id] === CLOUD_OUTSIDE_KEY && person === CLOUD_NOBODY_KEY)) { writers = { ...writers, [id]: person }; save(); } },
-    writer(id: string): string | undefined { return Object.hasOwn(writers, id) ? writers[id] : undefined; },
-    remove(id: string) {
-      if (!Object.hasOwn(routines, id) && !Object.hasOwn(writers, id)) return;
-      const nextRoutines = { ...routines }; delete nextRoutines[id]; routines = nextRoutines;
-      const nextWriters = { ...writers }; delete nextWriters[id]; writers = nextWriters;
-      save();
-    },
-    authored(id: string, routine: RoutineShape) { return Object.hasOwn(routines, id) && routines[id] === routineFingerprint(routine); },
-    recorded(id: string): boolean { return Object.hasOwn(routines, id); },
-    /** Writes the file even when nothing changed: its presence says records are being kept. */
-    persist() { save(); },
-    people(): Set<string> { return new Set(Object.values(writers)); },
-    reassign(move: (person: string) => boolean, to: string): string[] {
-      const moved: string[] = [];
-      const next = { ...writers };
-      for (const [id, person] of Object.entries(writers)) if (person !== to && move(person)) { next[id] = to; moved.push(id); }
-      if (moved.length) { writers = next; save(); }
-      return moved;
-    },
-  };
 }

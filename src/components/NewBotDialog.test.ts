@@ -144,7 +144,7 @@ describe("bot draft dialog", () => {
 
   it.each([undefined, null, { instanceId: "", model: "" }])("fills an unselected saved default from the available model (%j)", async selection => {
     const available = { instanceId: "openrouter", model: "fixture-model" };
-    fixture.api.mockResolvedValue({ defaults: { profile: { modelSelection: selection }, memory: {}, skills: [], routines: [] }, modelSelection: available, suggestedName: "Fixture" });
+    fixture.api.mockResolvedValue({ defaults: { profile: { modelSelection: selection }, memory: {}, skills: [] }, modelSelection: available, suggestedName: "Fixture" });
     render();
     fixture.effects[0]();
     await vi.waitFor(() => expect(fixture.setDraft).toHaveBeenCalledOnce());
@@ -156,7 +156,7 @@ describe("bot draft dialog", () => {
     { instanceId: "claude", model: "" },
     { instanceId: "", model: "chosen-model" },
   ])("preserves an intentional saved model choice (%j)", async selection => {
-    fixture.api.mockResolvedValue({ defaults: { profile: { modelSelection: selection }, memory: {}, skills: [], routines: [] }, modelSelection: { instanceId: "openrouter", model: "fixture-model" }, suggestedName: "Fixture" });
+    fixture.api.mockResolvedValue({ defaults: { profile: { modelSelection: selection }, memory: {}, skills: [] }, modelSelection: { instanceId: "openrouter", model: "fixture-model" }, suggestedName: "Fixture" });
     render();
     fixture.effects[0]();
     await vi.waitFor(() => expect(fixture.setDraft).toHaveBeenCalledOnce());

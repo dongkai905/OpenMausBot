@@ -113,7 +113,7 @@ test("ensureManagedDesktop gives the organization library its own record, the fi
 
 test("main hands the library a restarted runtime, the runtime's own messages and the quit", () => {
   // Outside ensureManagedDesktop(), so checked in the source.
-  assert.match(section("onReady(proc) {", "routineWake.start();"), /\n\s*orgLibrary\?\.runtimeReady\(\);\n/);
+  assert.match(section("onReady(proc) {", "for (const win of appWindows()) {"), /\n\s*orgLibrary\?\.runtimeReady\(\);\n/);
   const messages = section('proc.on("message", (message) => {', 'proc.once("spawn"');
   assert.match(messages, /if \(!serverSupervisor\.isCurrent\(proc\)\) return;/, "a replaced runtime's messages are dropped first");
   assert.match(messages, /\n\s*if \(orgLibrary\?\.receive\(message\)\) return;\n/);

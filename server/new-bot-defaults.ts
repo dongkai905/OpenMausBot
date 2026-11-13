@@ -3,13 +3,15 @@ import { z } from "zod";
 import { profilePatchSchema, fitsOnOneLine } from "./bot-profile.ts";
 import { EFFORT_LEVELS, MAUS_COLOR_NAMES } from "../shared/wire.ts";
 import { isModelVariant } from "./contracts.ts";
-import { normalizeCronSchedule } from "../shared/routine-schedule.ts";
 import { parseToolScope, type ToolScope } from "../shared/tool-scope.ts";
 
 const strings = (max: number, length: number) => z.array(z.string().max(length)).max(max);
 const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const weekdays = z.array(z.number().int().min(0).max(6)).min(1).max(7);
 const timestamp = z.number().int().nonnegative().max(8_640_000_000_000_000);
+
+/** A named zone, so wall-clock times follow its daylight-saving rules. */
+const isNamedTimeZone = (value: string): boolean => value.trim() === "UTC" || /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)+$/.test(value.trim());
 
 export const botDefaultModelSchema = z.object({
   instanceId: z.string().trim().min(1).max(200),
@@ -69,8 +71,11 @@ const scheduleSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("cron"), expression: z.string().max(256), timeZone: z.string().max(128) }).strict(),
 ]).superRefine((value, ctx) => {
   if (value.type === "cron") {
-    try { normalizeCronSchedule(value); }
-    catch (error) { ctx.addIssue({ code: "custom", message: String(error) }); }
+    if (value.expression.trim().split(/\s+/).length !== 5) {
+      ctx.addIssue({ code: "custom", message: "Cron must have five fields: minute hour day-of-month month weekday." });
+    } else if (!isNamedTimeZone(value.timeZone)) {
+      ctx.addIssue({ code: "custom", message: "A cron schedule needs an explicit IANA timezone, for example Asia/Kolkata." });
+    }
   }
   if (value.type === "interval" && value.window) {
     const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));

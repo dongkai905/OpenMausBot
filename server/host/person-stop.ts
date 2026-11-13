@@ -2,7 +2,6 @@
 // while the bot works (acceptDirectSend), and "Restart turn" from the send menu. A stop ends what the request handed out too.
 import type { Handoffs } from "../delta-context.ts";
 import { addressesEveryone, isStopCommand } from "../room-holds.ts";
-import type { RoutineManager } from "../routines.ts";
 import { serverLine } from "../server-lines.ts";
 import type { Message, Store } from "../store.ts";
 import type { UsageTrigger } from "../usage-ledger.ts";
@@ -11,7 +10,6 @@ import type { Actor } from "./run-owner.ts";
 
 export interface PersonStopDeps {
   store: Pick<Store, "appendMessage" | "bot" | "botByThread" | "groupByThread" | "taskByThread" | "tasks">;
-  routines(): Pick<RoutineManager, "activeBotRunForBot" | "cancelRun"> | null;
   handoffs(): Pick<Handoffs, "stoppedByPerson">;
   interruptDirectThread(botId: string, threadId: string): Promise<void>;
   /** Read before the interrupt: what frees the thread once it is interrupted, when no turn's end will. */
@@ -50,16 +48,11 @@ export function createPersonStop(deps: PersonStopDeps) {
   const { store } = deps;
 
   async function stopThreadForPerson(botId: string, threadId: string, by?: ResolvedSender): Promise<void> {
-    const routines = deps.routines();
-    const routine = routines?.activeBotRunForBot(botId);
     const free = deps.stopping(botId, threadId);
-    if (routine?.threadId === threadId) await routines!.cancelRun(routine.id);
-    else {
-      deps.handoffs().stoppedByPerson(threadId);
-      deps.markStopped(threadId, by);
-      deps.stopGoal(threadId);
-      await deps.interruptDirectThread(botId, threadId);
-    }
+    deps.handoffs().stoppedByPerson(threadId);
+    deps.markStopped(threadId, by);
+    deps.stopGoal(threadId);
+    await deps.interruptDirectThread(botId, threadId);
     free();
   }
 

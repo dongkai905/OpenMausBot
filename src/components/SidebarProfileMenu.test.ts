@@ -340,7 +340,7 @@ describe("profileMenuItems", () => {
 
 describe("Simple mode's account menu", () => {
   const noop = () => {};
-  const tools = toolMenuItems({ activeView: "routines", automationsNeedYou: true, onAutomations: noop, onTeamMap: noop });
+  const tools = toolMenuItems({ activeView: "automations", automationsNeedYou: true, onAutomations: noop, onTeamMap: noop });
   const place = (patch: Partial<Parameters<typeof placeMenuItems>[0]> = {}) => ({
     bridge: { state: async () => ({ local: true, name: "This computer" }), menu: async () => {} },
     current: { local: true, name: "This computer" },

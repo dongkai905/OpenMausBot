@@ -19,6 +19,13 @@ vi.mock("@/lib/sidebar-preferences", async (importOriginal) => ({
 vi.mock("@/lib/web-panel-preferences", () => ({ useWebPanels: () => fixture.panels }));
 vi.mock("./UpdateIndicator", () => ({ UpdateIndicator: () => null }));
 import { SidebarAppsButton, SidebarBottomButtons, SidebarFooterNav } from "./SidebarFooterNav";
+import { applyAppTriggerSnapshot, type AppTrigger } from "@/lib/app-triggers";
+
+const trigger = (overrides: Partial<AppTrigger> = {}): AppTrigger => ({
+  id: "acme", name: "Acme replies", prompt: "Draft a reply.", botId: "scout", runOn: "maus", enabled: true,
+  app: "gmail", appName: "Gmail", event: "GMAIL_NEW_GMAIL_MESSAGE", eventName: "New Gmail message", delivery: "poll", accountId: "ca_1",
+  config: {}, remote: { triggerId: "ti_1", state: "active" }, received: 0, filtered: 0, createdAt: 0, updatedAt: 0, ...overrides,
+});
 
 type Props = { children?: ReactNode; [key: string]: unknown };
 function nodes(value: ReactNode): ReactElement<Props>[] {
@@ -39,7 +46,8 @@ function render(density: SidebarDensity, { toolsLayout = "rows", ...extra }: { c
 beforeEach(() => {
   fixture.advanced = false;
   fixture.dispatch.mockReset();
-  fixture.state = { activeView: "chat", routines: [{ id: "daily", name: "Daily", botId: "scout", enabled: true }], webhooks: [], bots: [{ id: "scout" }], routineRuns: [], pluginsOpen: false };
+  fixture.state = { activeView: "chat", bots: [{ id: "scout" }], pluginsOpen: false };
+  applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
   fixture.toolsLayout = "rows";
   fixture.panels = [];
   vi.stubGlobal("window", {});
@@ -54,7 +62,6 @@ describe("sidebar footer places", () => {
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(html).toContain(">Automations</span>");
-    expect(html).not.toContain('data-sidebar-nav="routines"');
     expect(html).not.toContain('data-sidebar-nav="triggers"');
     expect(html).not.toContain('data-sidebar-nav="apps"');
   });
@@ -83,8 +90,8 @@ describe("sidebar footer places", () => {
     fixture.advanced = true;
     const { nodes: tree } = render("comfortable");
     (tree.find((node) => node.props.id === "automations" && typeof node.props.onClick === "function")!.props.onClick as () => void)();
-    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "showRoutines", view: "list" });
-    fixture.state.activeView = "routines";
+    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "showAutomations" });
+    fixture.state.activeView = "automations";
     expect(render("comfortable").html).toMatch(/data-sidebar-nav="automations"[^>]*aria-current="page"/);
   });
 
@@ -118,23 +125,13 @@ describe("sidebar footer places", () => {
     expect(html).toMatch(/data-tour="nav-automations" data-sidebar-nav="automations"/);
   });
 
-  it("carries the dot for an unseen failed run on Automations, and clears it once seen", () => {
+  it("carries the dot for an app trigger in trouble on Automations", () => {
     fixture.advanced = true;
-    fixture.state.routineRuns = [{ id: "r", routineId: "daily", status: "failed", scheduledFor: 1 }];
+    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
     const html = render("comfortable").html;
-    expect(html.indexOf('data-testid="routines-attention"')).toBeGreaterThan(html.indexOf('data-sidebar-nav="automations"'));
-    fixture.state.routineRuns = [{ id: "r", routineId: "daily", status: "failed", scheduledFor: 1, seenAt: 1 }];
-    expect(render("comfortable").html).not.toContain('data-testid="routines-attention"');
-  });
-
-  it("leaves the dot off for a failed run whose automation or bot is gone, since Automations has nothing to open and clear", () => {
-    fixture.advanced = true;
-    fixture.state.routineRuns = [{ id: "r", routineId: "deleted-hook", webhookId: "deleted-hook", status: "failed", scheduledFor: 1 }];
-    expect(render("comfortable").html).not.toContain('data-testid="routines-attention"');
-    fixture.state.webhooks = [{ id: "deleted-hook", name: "Orders", botId: "scout", enabled: true }];
-    expect(render("comfortable").html).toContain('data-testid="routines-attention"');
-    fixture.state.bots = [];
-    expect(render("comfortable").html).not.toContain('data-testid="routines-attention"');
+    expect(html.indexOf('data-testid="automations-attention"')).toBeGreaterThan(html.indexOf('data-sidebar-nav="automations"'));
+    applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
+    expect(render("comfortable").html).not.toContain('data-testid="automations-attention"');
   });
 
   it("shows Team map as its own row in Advanced mode, with no Tools menu", () => {
@@ -184,15 +181,15 @@ describe("Tools header", () => {
     expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the failed-run dot on the header only while collapsed", () => {
+  it("shows the attention dot on the header only while collapsed", () => {
     fixture.advanced = true;
-    fixture.state.routineRuns = [{ id: "r", routineId: "daily", status: "failed", scheduledFor: 1 }];
+    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
     const collapsed = render("comfortable", { collapsed: true }).html;
     expect(collapsed).toContain('data-testid="section-alert"');
-    expect(collapsed).not.toContain('data-testid="routines-attention"');
+    expect(collapsed).not.toContain('data-testid="automations-attention"');
     const expanded = render("comfortable").html;
     expect(expanded).not.toContain('data-testid="section-alert"');
-    expect(expanded).toContain('data-testid="routines-attention"');
+    expect(expanded).toContain('data-testid="automations-attention"');
   });
 
   it("shows no dot on a collapsed header when nothing needs you", () => {
@@ -257,7 +254,7 @@ describe("toolbar tools layout", () => {
 
   it("toolbar keeps tour anchors and aria-current", () => {
     fixture.advanced = true;
-    fixture.state.activeView = "routines";
+    fixture.state.activeView = "automations";
     const { html } = render("comfortable", { toolsLayout: "toolbar" });
     expect(html).toContain('data-tour="tools"');
     expect(html).toMatch(/data-tour="nav-automations" data-sidebar-nav="automations"/);
@@ -273,12 +270,12 @@ describe("toolbar tools layout", () => {
     expect(place("team-map")).not.toContain('aria-current="page"');
   });
 
-  it("toolbar shows the failed-run dot and clears it once seen", () => {
+  it("toolbar shows the attention dot for an app trigger in trouble", () => {
     fixture.advanced = true;
-    fixture.state.routineRuns = [{ id: "r", routineId: "daily", status: "failed", scheduledFor: 1 }];
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html).toContain('data-testid="routines-attention"');
-    fixture.state.routineRuns = [{ id: "r", routineId: "daily", status: "failed", scheduledFor: 1, seenAt: 1 }];
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html).not.toContain('data-testid="routines-attention"');
+    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
+    expect(render("comfortable", { toolsLayout: "toolbar" }).html).toContain('data-testid="automations-attention"');
+    applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
+    expect(render("comfortable", { toolsLayout: "toolbar" }).html).not.toContain('data-testid="automations-attention"');
   });
 
   it("toolbar applies to Advanced mode's three places; Simple mode keeps them in the bottom bar instead", () => {

@@ -103,7 +103,7 @@ describe("the divider in the store", () => {
     const background = reducer(switched, { type: "taskSwitched", bot: bot("other", { threadId: "other-b", tasks: unreadTasks("other", "other-b") }) });
     expect(background.unreadDivider).toEqual(switched.unreadDivider);
     expect(background.bots.find((b) => b.id === "other")!.tasks!.find((task) => task.threadId === "other-b")!.unread).toBe(true);
-    const away = reducer({ ...selected, activeView: "routines" }, { type: "taskSwitched", bot: bot("pepper", { threadId: "pepper-b", tasks: unreadTasks("pepper", "pepper-b") }) });
+    const away = reducer({ ...selected, activeView: "automations" }, { type: "taskSwitched", bot: bot("pepper", { threadId: "pepper-b", tasks: unreadTasks("pepper", "pepper-b") }) });
     expect(away.bots.find((b) => b.id === "pepper")!.tasks!.find((task) => task.threadId === "pepper-b")!.unread).toBe(true);
   });
 

@@ -31,7 +31,6 @@ vi.mock("./AndroidDevicePanel", async (importOriginal) => ({
 }));
 vi.mock("./BrowserPanel", () => ({ BrowserPanel: () => null }));
 vi.mock("./CloudBackendPicker", () => ({ CloudBackendPicker: () => null }));
-vi.mock("./bot-settings/RoutinesSection", () => ({ RoutinesSection: () => null }));
 vi.mock("./data/DataPanel", () => ({ DataPanel: () => createElement("div", { "data-testid": "data-panel" }) }));
 const panelViewStore = vi.hoisted(() => ({ current: "computer" }));
 vi.mock("@/lib/computer-panel-view", async (importOriginal) => ({

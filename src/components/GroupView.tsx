@@ -57,7 +57,6 @@ import { ReplyQuote } from "./ReplyQuote";
 import { ConnectorCard } from "./ConnectorCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { SignInRequestCard } from "./SignInRequestCard";
-import { hasRoutineExecutionTask, RoutineRunCard } from "./RoutineRunCard";
 import { GoalRunCard } from "./GoalRunCard";
 import { AttachmentGallery, MessageAttachmentGallery, replyAttachmentGroup } from "./AttachmentGallery";
 import { VoiceNoteBubble, type VoiceNoteAttachment } from "./VoiceNoteBubble";
@@ -406,11 +405,6 @@ export const Transcript = memo(function Transcript({
         const m = item.message;
         const user = m.role === "user";
         const newCluster = !prev || prev.role !== m.role || prev.from?.botId !== m.from?.botId || Boolean(prev.comm) || newDay;
-        const routineOwner = m.kind === "routine.run" ? memberOf(m.from?.botId) : undefined;
-        const routineExecutionThreadId = m.routineRun?.executionThreadId;
-        const routineTarget = routineOwner && hasRoutineExecutionTask(routineOwner.tasks, routineExecutionThreadId)
-          ? { botId: routineOwner.id, threadId: routineExecutionThreadId }
-          : undefined;
         const canRetryRoom = m.id === retryableId && retryRequest !== null && !roomBusy;
         const row = isCancelledTranscriptRow(m) ? (
           <CancelledTurnRow onRetry={canRetryRoom ? retryRoom : undefined} />
@@ -442,15 +436,6 @@ export const Transcript = memo(function Transcript({
           ) : m.kind === "goal.run" ? (
             <div className="flex justify-start">
               <GoalRunCard message={m} />
-            </div>
-          ) : m.kind === "routine.run" ? (
-            <div className="flex justify-start">
-              <RoutineRunCard
-                message={m}
-                onOpen={routineTarget
-                  ? () => openThread(dispatch, routineTarget, state, showThreads)
-                  : undefined}
-              />
             </div>
           ) : m.kind === "activity" && m.tool ? (
             roomActivityVisible(m, showToolCalls) ? (

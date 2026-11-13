@@ -31,7 +31,7 @@ function world({ busy = () => null, checks = [], untouched = [], ready = () => t
         const who = busy(id);
         if (who) return reply(409, { busy: who });
         w.holds.set(id, "moving");
-        return reply(200, { v: 1, movedTo: { held: [`routine:r-${id}`, `webhook:w-${id}`] } });
+        return reply(200, { v: 1, movedTo: { held: [] } });
       }
       if (id && body.state === "moved") { w.holds.set(id, "moved"); return reply(200, { v: 1, movedTo: {} }); }
       if (id && body.state === "back") { w.holds.delete(id); return reply(200, { v: 1, released: true }); }
@@ -58,7 +58,7 @@ function world({ busy = () => null, checks = [], untouched = [], ready = () => t
 }
 const settle = async (w) => { await w.move.kick(); await new Promise((resolve) => setImmediate(resolve)); await w.move.kick(); };
 
-test("a choice of bots goes as one move: each is held, what was on here goes on there, and each stays here as the line that opens it", async () => {
+test("a choice of bots goes as one move: each is held, My Cloud keeps which computer they came from, and each stays here as the line that opens it", async () => {
   const w = world();
   assert.ok(w.move.start(bots(3)));
   await settle(w);
@@ -68,8 +68,7 @@ test("a choice of bots goes as one move: each is held, what was on here goes on 
   assert.deepEqual([...w.holds.values()], ["moved", "moved", "moved"]);
   assert.deepEqual(w.passes.map((pass) => pass.check ? "check" : pass.final ? "final" : "copy"), ["copy", "final", "check"], "one copy, one final and one check for all of them");
   assert.ok(w.passes.every((pass) => pass.scope === "scope-1"), "every read of this computer's server is kept to the choice");
-  assert.deepEqual(w.cloud.filter(([method]) => method === "PATCH").map(([, route]) => route).sort(), ["/api/routines/r-b0", "/api/routines/r-b1", "/api/routines/r-b2", "/api/webhooks/w-b0", "/api/webhooks/w-b1", "/api/webhooks/w-b2"]);
-  assert.deepEqual(w.cloud.find(([, route]) => route === "/api/cloud-send/arrived")[2], { v: 1, computer: "MacBook Air", webhooks: ["w-b0", "w-b1", "w-b2"] });
+  assert.deepEqual(w.cloud.find(([, route]) => route === "/api/cloud-send/arrived")[2], { v: 1, computer: "MacBook Air" });
   assert.deepEqual(w.lent, [["/work/b0", "/work/b1", "/work/b2"]], "My Cloud can reach their folders on this computer");
   assert.deepEqual(w.move.view(), { bot: { id: move.bot.id, name: "Bot 0" }, team: { id: "my-cloud", name: "My Cloud" }, phase: "done", bots: 3 });
 });

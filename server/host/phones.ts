@@ -1,19 +1,17 @@
 // The owner's paired phones as bot tools, wired once by server/index.ts: the registry and the jobs a phone polls, which
 // sends came from a phone, whose turn may reach the phones, what a turn mounts and is told, and the /api/phones routes.
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { cloudHomeLendingRefusal, createCloudRoutineAuthors, type CloudLendingTurn } from "../cloud-lending.ts";
+import { cloudHomeLendingRefusal, type CloudLendingTurn } from "../cloud-lending.ts";
 import { personKey } from "../person-key.ts";
 import type { PhoneBot, PhonePlace } from "../phones/access.ts";
 import { createPhoneHost } from "../phones/host.ts";
 import { PhoneJobs } from "../phones/jobs.ts";
-import { adoptExistingRoutines, desktopLendingTurn, desktopPhonesOffered } from "../phones/owner.ts";
+import { desktopLendingTurn, desktopPhonesOffered } from "../phones/owner.ts";
 import { PhoneRegistry } from "../phones/registry.ts";
 import { createPhoneSends } from "../phones/sends.ts";
 import type { LoopbackTrust, RequestAuth } from "../request-auth.ts";
-import type { Routine } from "../routines.ts";
 import { createPhoneRoutes, PHONE_ACCESS_CHANGED, phoneKey } from "../routes/phones.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { BotRecord, Store } from "../store.ts";
@@ -35,7 +33,6 @@ export interface PhonesDeps {
   sharedMembership(): boolean;
   store: Pick<Store, "appendMessage" | "bot" | "groupByThread" | "messagesFor">;
   sessions: Pick<SessionRegistry, "list" | "isLive" | "onSessionRevoked">;
-  routines(): { listRoutines(): Routine[] } | null;
   ownerOrAdmin(auth: RequestAuth): boolean;
   cloudOwnerSession(auth: RequestAuth): boolean;
   /** The lent-Mac test on a Cloud home: null when the turn may use the owner's things. */
@@ -65,10 +62,6 @@ export function createPhones(deps: PhonesDeps) {
     try { registry.remove(key); } catch {}
     jobs.drop(key, PHONE_ACCESS_CHANGED);
   });
-  const ownerRoutinesFile = join(deps.dataDir, "owner-routines.json");
-  const routineRecordsExisted = existsSync(ownerRoutinesFile);
-  /** Off a Cloud home: the routines the desktop owner wrote, so their runs and reports keep the owner's phones. */
-  const routineAuthors = deps.cloudHome ? null : createCloudRoutineAuthors(ownerRoutinesFile);
   const desktopPhones = () => desktopPhonesOffered({ sharedMembership: deps.sharedMembership(), loopbackTrust: deps.loopbackTrust });
   /** Whose phones this server offers at all, before any turn is looked at. */
   const owner = () => (deps.shared ? null : deps.cloudHome ? deps.cloudOwnerKey : desktopPhones() ? DESKTOP_OWNER : null);
@@ -87,10 +80,6 @@ export function createPhones(deps: PhonesDeps) {
     const lending = desktopLendingTurn({ ...deps.cloudLendingTurn(turn), thread: store.messagesFor(turn.threadId) }, {
       adminPersons: () => new Set(deps.sessions.list().filter((session) => session.scopes.includes("admin")).map((session) => personKey(session))),
       originIsUser: () => deps.originIsUser(turn),
-      ownerWrote: (id) => {
-        const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === id);
-        return Boolean(routine && routineAuthors?.authored(routine.id, routine));
-      },
     });
     return cloudHomeLendingRefusal(lending) === null ? DESKTOP_OWNER : null;
   }
@@ -108,7 +97,6 @@ export function createPhones(deps: PhonesDeps) {
   });
 
   return {
-    routineAuthors,
     fromPhone,
     noteSend: (sendId: string) => sends.note(sendId),
     /** A fresh send id, known as the phone's when one of the owner's registered phones made the send. */
@@ -144,22 +132,6 @@ export function createPhones(deps: PhonesDeps) {
     routes: createPhoneRoutes({ registry, jobs, owner: ownerOf, isAdmin: deps.ownerOrAdmin, live: (auth) => auth.kind !== "session" || deps.sessions.isLive(auth.session.id) }),
     /** How many phones run the phone app here. */
     paired: (): number => registry.list(null, () => false).length,
-    /** Routines written before records were kept are the owner's on a single-person desktop: record them once. */
-    adoptRoutines() {
-      if (!routineAuthors) return;
-      adoptExistingRoutines({
-        recordsExisted: routineRecordsExisted, offered: desktopPhones(),
-        otherPeople: deps.sessions.list().some((session) => !session.scopes.includes("admin")),
-        routines: deps.routines()?.listRoutines() ?? [],
-        record: (routine) => routineAuthors.record(routine.id, routine), persist: () => routineAuthors.persist(),
-      });
-    },
-    /** Anyone else's edit makes the routine no longer the owner's; the owner's keeps or renews it. */
-    routineEdited(auth: RequestAuth, routine: Routine, ownersAgain: boolean) {
-      if (!routineAuthors) return;
-      if (!deps.ownerOrAdmin(auth)) routineAuthors.forget(routine.id);
-      else if (ownersAgain) routineAuthors.record(routine.id, routine);
-    },
     close: () => { unsubscribe(); jobs.close(); },
   };
 }

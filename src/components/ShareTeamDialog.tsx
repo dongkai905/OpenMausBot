@@ -38,7 +38,6 @@ export function ShareTeamContents({ preview, includeMemory, localSkips }: {
     [t("teamShare.part.skills"), String(counts.skills)],
     [t("teamShare.part.playbooks"), String(counts.playbooks)],
     [t("teamShare.part.rooms"), String(counts.rooms)],
-    [t("teamShare.part.routines"), String(counts.routines)],
     [t("teamShare.part.brief"), pkg.team?.brief ? t("teamShare.yes") : t("teamShare.none")],
     [t("teamShare.part.leader"), leader ?? t("teamShare.none")],
     [t("teamShare.part.connections"), String(counts.connections)],

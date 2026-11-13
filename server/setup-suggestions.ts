@@ -9,7 +9,6 @@ import type { AppConfig } from "./config.ts";
 import type { ProviderAdapter } from "./contracts.ts";
 import { hasSetupChoices, setupChoices } from "./initial-greeting.ts";
 import { isPickedBotName } from "./names.ts";
-import { LEARNED_LINE } from "./profile-learned.ts";
 import { openSetupOffer, type SetupRequestStore } from "./setup-request.ts";
 import type { SideJobText } from "./side-jobs.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
@@ -152,10 +151,10 @@ export function parseSetupSuggestions(reply: string, languageCode: string): stri
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
 const PHONE = /\+?\d[\d\s().-]{7,}\d/g;
 
-/** What the prompt may quote of About me: never the lines learned from chats, never secrets, email addresses or phone
- * numbers. `redact` is shared/redact.ts's redactSecretsInText. */
+/** What the prompt may quote of About me: never secrets, email addresses or phone numbers. `redact` is
+ * shared/redact.ts's redactSecretsInText. */
 export function aboutMeExcerpt(text: string | undefined, redact: (text: string) => string): string | undefined {
-  const kept = (text ?? "").split("\n").filter((line) => !LEARNED_LINE.test(line)).join(" ");
+  const kept = text ?? "";
   const clean = factLine(redact(kept).replace(EMAIL, "[email]").replace(PHONE, "[phone]"), 1600);
   if (!clean) return undefined;
   if (clean.length <= 1500) return clean;

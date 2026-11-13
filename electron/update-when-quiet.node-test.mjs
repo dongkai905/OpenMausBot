@@ -143,7 +143,7 @@ test("never while a Live call runs here or on the Cloud the window shows, and My
   assert.deepEqual(asked, ["/api/move/freeze", "/api/live/call"], "a sleeping Cloud is never woken to ask");
 });
 
-test("the server's own answer to the move (a turn, a routine run, a sign-in) holds it by what it is", async () => {
+test("the server's own answer to the move (a turn, a room, a sign-in) holds it by what it is", async () => {
   const reply = (body) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   for (const [answer, held] of [[{ frozen: false, busy: "Ember", what: "bot" }, "bot"], [{ frozen: false, busy: "Launch room", what: "room" }, "room"], [{ frozen: false, busy: "", what: "sign-in" }, "sign-in"]]) {
     const signals = quietSignals({ powerMonitor: { getSystemIdleTime: () => 0, getSystemIdleState: () => "active", on: () => {} }, window: () => null, lastInput: () => 0, busy: () => null,

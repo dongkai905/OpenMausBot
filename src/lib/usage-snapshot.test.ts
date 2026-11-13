@@ -47,8 +47,7 @@ afterEach(() => vi.unstubAllGlobals());
 const DOCUMENTED = [
   "key_providers", "key_count", "has_boat_key", "cloud_computer_source", "cloud_computers", "team_computers", "bots_cloud_boat",
   "bots_cloud_vps", "bots", "bots_local_vm", "bots_this_computer", "bots_browser", "bots_off", "bots_auto", "rooms", "bot_channels",
-  "teams", "routines", "routines_enabled", "routines_cloud", "routines_room_goal", "routines_once", "routines_daily",
-  "routines_interval", "routines_cron", "webhooks", "engines", "engine_count", "trial_credit", "apps",
+  "teams", "engines", "engine_count", "trial_credit", "apps",
   "apps_connected", "connectors_mode", "local_vm_mode", "vps_configured", "voice", "voice_included", "decider", "decider_included",
   "live_calls", "phones_paired", "paired_devices", "phone_paired", "members", "cloud_home", "cloud_plan", "cloud_trial", "edition",
   "org_managed", "onboarded", "first_turn", "platform", "remote_client",
@@ -110,15 +109,6 @@ function hostileState(): SnapshotState {
     ] as unknown as SnapshotState["bots"],
     groups: [{ id: HOSTILE, name: HOSTILE, bulletin: HOSTILE, dm: false }, { id: HOSTILE, name: HOSTILE, dm: true }, { id: HOSTILE, name: HOSTILE }] as unknown as SnapshotState["groups"],
     sections: [HOSTILE, "Ops"],
-    routines: [
-      { name: HOSTILE, prompt: HOSTILE, enabled: true, runOn: "cloud", target: "bot", schedule: { type: "cron", expression: HOSTILE, timeZone: HOSTILE } },
-      { name: HOSTILE, prompt: HOSTILE, enabled: false, runOn: "maus", target: "room-goal", schedule: { type: "daily", time: "09:00", weekdays: [1] } },
-      { name: HOSTILE, prompt: HOSTILE, enabled: true, runOn: "maus", target: "bot", schedule: { type: "once", at: 1 } },
-      { name: HOSTILE, prompt: HOSTILE, enabled: true, runOn: "maus", target: "bot", schedule: { type: "interval", everyMinutes: 60, anchorAt: 0 } },
-    ] as unknown as SnapshotState["routines"],
-    routinesLoadState: "ready",
-    webhooks: [{ id: HOSTILE, name: HOSTILE }] as unknown as SnapshotState["webhooks"],
-    webhookIngress: { url: `https://${HOSTILE}.example.com/hooks` } as unknown as SnapshotState["webhookIngress"],
   };
 }
 
@@ -198,8 +188,7 @@ describe("the daily usage snapshot", () => {
       key_count: 7, has_boat_key: true, cloud_computer_source: "own_key", cloud_computers: 3, team_computers: 1,
       bots_cloud_boat: 2, bots_cloud_vps: 1, bots: 9, bots_local_vm: 1, bots_this_computer: 1, bots_browser: 1, bots_off: 1, bots_auto: 2,
       rooms: 2, bot_channels: 1, teams: 2,
-      routines: 4, routines_enabled: 3, routines_cloud: 1, routines_room_goal: 1, routines_once: 1, routines_daily: 1, routines_interval: 1, routines_cron: 1,
-      webhooks: 1, engines: ["custom_acp", "other"], engine_count: 4, trial_credit: "used_up",
+      engines: ["custom_acp", "other"], engine_count: 4, trial_credit: "used_up",
       apps: ["gmail", "other"], apps_connected: 4, connectors_mode: "self_hosted", local_vm_mode: "per_bot", vps_configured: true,
       voice: "fish", voice_included: false, decider: "jev", decider_included: false, live_calls: true,
       phones_paired: 2, paired_devices: 2, phone_paired: true, members: 1,
@@ -317,7 +306,7 @@ describe("an opted-out install", () => {
 describe("what counts as a key, a computer source and an app", () => {
   const minimal = (config: Partial<ConfigStatus> = {}, input: Partial<UsageInput> = {}): UsageInput => ({
     config: { composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 }, ...config } as ConfigStatus,
-    instances: [], bots: [], groups: [], routines: [], webhooks: 0, apps: null, sessions: null, companionDevices: null, cloud: null,
+    instances: [], bots: [], groups: [], apps: null, sessions: null, companionDevices: null, cloud: null,
     computers: null, platform: "browser", remoteClient: false, ...input,
   });
 
@@ -342,13 +331,10 @@ describe("what counts as a key, a computer source and an app", () => {
   it("leaves out the cloud computer count it was not told, the apps of an inventory it cannot trust, and lists not loaded", () => {
     const services = { gmail: { connected: true } };
     for (const computers of [null, { cloudComputers: null, teamComputers: 2 }]) {
-      const sent = buildUsageSnapshot(minimal({}, { computers, apps: { services, authoritative: false }, routines: null, webhooks: null }));
+      const sent = buildUsageSnapshot(minimal({}, { computers, apps: { services, authoritative: false } }));
       expect(sent).not.toHaveProperty("cloud_computers");
       expect(sent).not.toHaveProperty("apps");
       expect(sent).not.toHaveProperty("apps_connected");
-      expect(sent).not.toHaveProperty("routines");
-      expect(sent).not.toHaveProperty("routines_enabled");
-      expect(sent).not.toHaveProperty("webhooks");
     }
     expect(buildUsageSnapshot(minimal({}, { apps: { services, authoritative: true } }))).toMatchObject({ apps: ["gmail"], apps_connected: 1 });
   });

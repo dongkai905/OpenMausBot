@@ -1,12 +1,7 @@
-import { rmSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { cjkSearchText, cjkTokenParts, ensureSearchIndex, ftsPhrase, SEARCH_MARK, withoutSearchMarks } from "./cjk-search.ts";
-import { DATA_DIR } from "./config.ts";
-import { closeMessageDb } from "./message-db.ts";
-import { memoryPassages, recallQuery } from "./recall.ts";
-import { WORKSPACES_DIR, writeMemoryTopic } from "./workspace.ts";
 
 const SPEC = { table: "messages", fts: "messages_fts", view: "messages_search", triggerPrefix: "messages_fts" };
 
@@ -46,7 +41,6 @@ describe("CJK search text", () => {
   it("leaves out a stretched vowel, so a drawn-out interjection recalls nothing", () => {
     expect(cjkTokenParts("すごーーい")).toEqual({ other: [], bigrams: ["すご"] });
     expect(cjkTokenParts("ｽｺﾞｰｰｲ")).toEqual({ other: [], bigrams: ["ｽｺ", "ｺﾞ"] });
-    expect(recallQuery("うーーーん")).toBeNull();
   });
 });
 
@@ -89,59 +83,5 @@ describe("the search index", () => {
     db.prepare("DELETE FROM messages WHERE id = ?").run("zh");
     expect(match(db, ftsPhrase("图书"))).toEqual([]);
     db.exec("INSERT INTO messages_fts(messages_fts) VALUES ('integrity-check')");
-  });
-});
-
-// Ordinary notes a person's assistant keeps, each asked about later in other words.
-const NOTES: Array<[note: string, question: string]> = [
-  ["净水器的滤芯每六个月更换一次，上次是五月初换的。", "滤芯多久要换一次？"],
-  ["周三下午三点去社区图书馆还书，顺便续借阅卡。", "借的书哪天去图书馆还？"],
-  ["车子的保险在明年三月到期，要提前一个月续保。", "车险什么时候到期"],
-  ["牙医预约在下周五上午十点，地点是人民路口腔诊所。", "牙医预约是几点"],
-  ["每月十五号自动扣视频会员费，二十五元。", "视频会员每个月扣多少钱"],
-  ["妈妈的生日是农历八月十二，记得提前订蛋糕。", "我妈生日是哪天"],
-  ["家里的宽带办在电信，套餐年底到期。", "宽带是哪家运营商办的"],
-  ["护照有效期到2028年，办签证前要确认。", "护照什么时候过期"],
-  ["公司报销需要在每月25日前提交发票。", "发票报销截止是几号"],
-  ["阳台的绿萝每周浇一次水，冬天十天一次。", "绿萝多久浇水"],
-  ["下个月去杭州出差，酒店订在西湖边。", "杭州出差住哪个酒店"],
-  ["孩子的英语辅导班每周六上午九点上课。", "英语辅导班星期几上课"],
-  ["冰箱下层的冷冻室温度设在零下十八度。", "冷冻室温度调到多少"],
-  ["体检报告显示血脂偏高，医生建议少吃油炸食品。", "上次体检报告说了什么"],
-  ["房租每季度交一次，房东微信是老王。", "房租怎么交"],
-  ["电动车每两天充一次电，充电器放在门口柜子里。", "充电器放哪里了"],
-  ["信用卡账单日是每月五号，还款日是二十三号。", "信用卡哪天还款"],
-  ["狗狗的疫苗下次接种时间是十二月十号。", "狗打疫苗是什么时候"],
-  ["楼下快递柜的取件码一般发到短信里。", "快递取件码在哪看"],
-  ["年假还剩六天，打算春节前后一起休。", "我还有几天年假"],
-];
-
-describe("Chinese and Japanese recall", () => {
-  const BOT = "bot-cjk-recall";
-  beforeEach(() => {
-    closeMessageDb();
-    rmSync(DATA_DIR, { recursive: true, force: true });
-    rmSync(WORKSPACES_DIR, { recursive: true, force: true });
-  });
-
-  it("recalls a Chinese note for a paraphrased Chinese question", () => {
-    NOTES.forEach(([note], i) => writeMemoryTopic(BOT, `note-${i}.md`, `${note}\n`));
-    const found = NOTES.filter(([, question], i) =>
-      recallQuery(question) !== null && memoryPassages(BOT, question).some((passage) => passage.label === `memory/note-${i}.md`));
-    expect(found.length).toBe(NOTES.length);
-    const passage = memoryPassages(BOT, "借的书哪天去图书馆还？")[0];
-    expect(passage?.snippet).toContain("社区图书馆还书");
-    expect(passage?.snippet).not.toContain(SEARCH_MARK);
-  });
-
-  it("recalls a note by one Han character asked on its own", () => {
-    writeMemoryTopic(BOT, "cat.md", "家里的猫每天早上吃一次。\n");
-    expect(memoryPassages(BOT, "猫").map((passage) => passage.label)).toContain("memory/cat.md");
-  });
-
-  it("recalls a Japanese note by a katakana word with a long vowel", () => {
-    writeMemoryTopic(BOT, "coffee.md", "好きな飲み物はコーヒー、ブラックで。\n");
-    expect(recallQuery("コーヒーは？")).not.toBeNull();
-    expect(memoryPassages(BOT, "コーヒーは？").map((passage) => passage.label)).toContain("memory/coffee.md");
   });
 });

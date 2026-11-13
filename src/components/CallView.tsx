@@ -21,7 +21,7 @@ import { BotAvatar } from "./Avatar";
 import { navigateThreadMenu } from "./BotProjects";
 import { LiveKeyNeeded } from "./LiveKeyNeeded";
 import { liveLineHeldElsewhere } from "./LiveCallBar";
-import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
+import { isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 import { titledCard } from "./ApprovalCard";
 import { callStarted } from "@/lib/product-events";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -498,7 +498,6 @@ function Call({ bot }: { bot: Bot }) {
 
   const askedApproval = useRef<{
     requestId: string;
-    routine: boolean;
     skill: boolean;
     submitted: boolean;
   } | null>(null);
@@ -612,7 +611,7 @@ function Call({ bot }: { bot: Bot }) {
               ) return;
               pending.submitted = false;
               const detail = error.trim().slice(0, 240);
-              const decision = open.routine ? "routine decision" : "approval";
+              const decision = "approval";
               void sayThenListen(
                 `I couldn't save that ${decision}${detail ? `: ${detail}` : "."} Please try again.`,
               );
@@ -667,9 +666,7 @@ function Call({ bot }: { bot: Bot }) {
 
   useEffect(() => {
     // The card may be resolved elsewhere (the approval UI, another client) while this call is open.
-    let resumeAfterRoutine = false;
     if (askedApproval.current && approval?.requestId !== askedApproval.current.requestId) {
-      resumeAfterRoutine = askedApproval.current.routine && askedApproval.current.submitted;
       askedApproval.current = null;
     }
     if (askedQuestion.current && question?.card?.requestId !== askedQuestion.current.requestId) {
@@ -679,17 +676,12 @@ function Call({ bot }: { bot: Bot }) {
       move("working");
       hush();
     }
-    if (resumeAfterRoutine && !approval && !question && !bot.busy) {
-      listen();
-      return;
-    }
     // Nothing may reopen capture or narrate new work while the server is
     // durably settling this exact decision.
     if (askedApproval.current?.submitted) return;
     if (approval && askedApproval.current?.requestId !== approval.requestId && phase !== "speaking") {
       askedApproval.current = {
         requestId: approval.requestId,
-        routine: isRoutineApproval(approval),
         skill: isSkillApproval(approval),
         submitted: false,
       };

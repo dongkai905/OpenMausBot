@@ -1,28 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { overviewLineText, overviewRoutineText, recentChangeText } from "./bot-overview-text";
+import { overviewLineText, recentChangeText } from "./bot-overview-text";
 import { setLocale } from "./i18n";
 
 afterEach(() => setLocale("en"));
-
-describe("an overview routine line", () => {
-  const at = new Date(2026, 9, 22, 18, 20).getTime();
-
-  it("is worded from its data in the reader's language, with two-digit 24-hour times", () => {
-    setLocale("pt-br");
-    expect(overviewRoutineText({ name: "Paused Sunday", paused: true, schedule: { type: "interval", everyMinutes: 60 } as never })).toBe("Pausada: Paused Sunday.");
-    expect(overviewRoutineText({ name: "Triage", schedule: { type: "interval", everyMinutes: 60 } as never, nextRunAt: at, lastRun: { status: "completed", at } }))
-      .toBe("A cada hora: Triage. Próxima execução às 18:20. Última execução concluída às 18:20.");
-    expect(overviewRoutineText({ name: "Odd", schedule: { type: "cron", expression: "*/20 9-17 * * 1-5", timeZone: "UTC" } as never })).toMatch(/^.+: Odd\.$/);
-  });
-
-  it("leaves English to the server, and a status this build does not know to the server's line", () => {
-    expect(overviewRoutineText({ name: "Triage", schedule: { type: "interval", everyMinutes: 60 } as never })).toBeNull();
-    setLocale("pt-br");
-    expect(overviewRoutineText({ name: "Triage", schedule: { type: "interval", everyMinutes: 60 } as never, lastRun: { status: "paused-forever", at } })).toBeNull();
-    expect(overviewRoutineText(undefined)).toBeNull();
-  });
-});
 
 describe("the server's other overview lines", () => {
   const lines = [
@@ -37,7 +18,6 @@ describe("the server's other overview lines", () => {
     "Can't use a computer.",
     "Profile proposal cards require your approval.",
     "Knows how to triage incoming bug reports.",
-    "Listens for “Orders” webhooks.",
   ];
 
   it("read exactly as the server wrote them in English", () => {
@@ -59,7 +39,6 @@ describe("the server's other overview lines", () => {
       "Não pode usar um computador.",
       "Você precisa aprovar os cartões com propostas de perfil.",
       "Habilidade: triage incoming bug reports.",
-      "Recebe webhooks “Orders”.",
     ]);
     expect(overviewLineText("Computer preference: Local VM, which isn't available on My Cloud.")).toBe("Trabalha em: desktop privado, que não está disponível no Cloud.");
     expect(recentChangeText("soul: 120 → 340 bytes")).toBe("instruções permanentes: 120 → 340 bytes");

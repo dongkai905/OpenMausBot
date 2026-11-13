@@ -3,20 +3,16 @@ import { freshLook } from "../bot-look.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
 import { parseVisibility } from "../bot-visibility.ts";
-import type { createCloudRoutineAuthors } from "../cloud-lending.ts";
 import type { AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
 import type { hostedModelPolicy } from "../hosted-models.ts";
 import { MAX_MCP_SERVERS, mcpServerNameError } from "../mcp-registry.ts";
-import { journalMemoryWrite } from "../memory-journal.ts";
 import { resolveBotCreationDefaults } from "../new-bot-defaults.ts";
 import { PRESET_UNAVAILABLE_MESSAGE, applyPresetToBot, presetOffered, type OrgInstallStatus, type PresetStore } from "../presets.ts";
-import { adminOnlyBotSetting, memberBotCreateViolation, type RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
+import { adminOnlyBotSetting, memberBotCreateViolation } from "../request-auth.ts";
 import { installOrgSkill, installSkill, parseSkillMd, setSkillEnabled } from "../skills.ts";
 import type { BotRecord, Store } from "../store.ts";
 import type { TeamPeople } from "../team-people.ts";
-import { writeMemoryFile, writeMemoryTopic } from "../workspace.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -35,14 +31,10 @@ export interface BotCreateRouteDeps {
   maxWorkspaceBots: number;
   /** Whether this bot is paused: a Starter Cloud keeps only so many awake, and one made past them starts paused. */
   paused(botId: string): boolean;
-  cloudOwnerKey: string | null;
   hostedModels: ReturnType<typeof hostedModelPolicy>;
-  cloudRoutineAuthors: ReturnType<typeof createCloudRoutineAuthors> | null;
-  routines(): RoutineManager | null;
   storedAvatarExists(avatarUrl: string): boolean;
   defaultSelection(): Promise<ModelSelection>;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
-  cloudOwnerSession(auth: RequestAuth): boolean;
   wireBot(bot: BotRecord): WireBot;
   /** A Team Cloud: a new bot records who created it, and may name who it reports to. */
   team?: { name: string; people: Pick<TeamPeople, "has"> } | null;
@@ -79,12 +71,11 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
   const {
     store, cfg, presetStore, orgInstallStatuses,
     hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
-    maxWorkspaceBots: MAX_WORKSPACE_BOTS, cloudOwnerKey: CLOUD_OWNER_KEY,
-    hostedModels, cloudRoutineAuthors,
-    storedAvatarExists, defaultSelection, checkedModelSelection, cloudOwnerSession, wireBot,
+    maxWorkspaceBots: MAX_WORKSPACE_BOTS,
+    hostedModels,
+    storedAvatarExists, defaultSelection, checkedModelSelection, wireBot,
   } = deps;
   return async ({ req, res, path, method, auth, json, readBody }) => {
-    const routines = deps.routines();
     if (method === "POST" && path === "/api/bots") {
       let body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -198,7 +189,6 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         toolScope: settings.toolScope ?? undefined, color: settings.color ?? look?.color, mascotBody: settings.mascotBody ?? look?.mascotBody,
         ...(deps.team && creator ? { createdBy: creator } : {}), ...(reportsTo ? { reportsTo } : {}),
         ...(created?.ok ? { visibility: created.visibility } : {}) }, kept.id ? { ...kept, seedMessages: false } : {});
-      const createdRoutines: Array<{ id: string; enabled: boolean }> = [];
       try {
         const { chiefOfStaff: _chief, managedSections: _managed, toolScope: _toolScope, ...ordinary } = settings;
         store.patchBot(bot.id, {
@@ -213,16 +203,10 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
           autoApprove: ordinary.approvalMode === "auto",
         });
         const presetSkills = new Set(preset?.preset.skills ?? []);
-        const presetNotes = new Set(Object.keys(preset?.preset.seed?.memory ?? {}));
-        for (const [file, text] of Object.entries(template.memory)) {
-          if (presetNotes.has(file)) continue;
-          journalMemoryWrite(bot.id, file, text, { actor: "person", via: "api" });
-        }
         if (preset) {
           applyPresetToBot(bot.id, preset, {
             store,
             skills: { install: installSkill, setEnabled: setSkillEnabled, installOrg: installOrgSkill },
-            memory: { writeIndex: writeMemoryFile, writeTopic: writeMemoryTopic },
           });
         }
         for (const skill of template.skills) {
@@ -236,19 +220,11 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
             if ("error" in enabled) throw Object.assign(new Error(enabled.error), { status: 422 });
           }
         }
-        // On a Cloud home only the owner's devices create bots: its routines are theirs.
-        const ownersRoutines = CLOUD_OWNER_KEY && auth.kind === "session" && cloudOwnerSession(auth) ? CLOUD_OWNER_KEY : null;
-        for (const routine of template.routines) {
-          const created = routines!.create({ ...routine, botId: bot.id, enabled: false });
-          createdRoutines.push({ id: created.id, enabled: routine.enabled !== false });
-          if (ownersRoutines) cloudRoutineAuthors?.wrote(created.id, ownersRoutines);
-        }
       } catch (error) {
-        for (const routine of createdRoutines) routines!.remove(routine.id);
         store.deleteBot(bot.id);
         throw error;
       }
-      // Creation is complete: activation errors must not invite a duplicate retry or delete a bot whose routine may have run.
+      // Creation is complete: activation errors must not invite a duplicate retry.
       const warnings: string[] = [];
       if (settings.chiefOfStaff) {
         try {
@@ -257,10 +233,6 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         } catch {
           warnings.push("Bot created; review its Chief of Staff setting before delegating work.");
         }
-      }
-      for (const routine of createdRoutines) if (routine.enabled) {
-        try { routines!.update(routine.id, { enabled: true }); }
-        catch { warnings.push(`Bot created; routine ${routine.id} could not be activated.`); }
       }
       deps.personaliseSetupCard?.(bot);
       return json(res, 201, {

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AppWindow, CalendarClock, Send, Share2, X } from "lucide-react";
+import { AppWindow, Send, X } from "lucide-react";
 
 import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { cn } from "@/lib/cn";
@@ -8,7 +8,7 @@ import { imeComposing } from "@/lib/send-key";
 import { useStore, type Bot } from "@/state/store";
 import { Select } from "../Select";
 
-export type SetUpKind = "schedule" | "webhook" | "app";
+export type SetUpKind = "app";
 
 /** The bot "+ New" talks to: the one open now, else the one most recently talked to. */
 export function defaultBot(bots: readonly Bot[], selectedId: string): Bot | undefined {
@@ -30,7 +30,6 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself }: {
   const [text, setText] = useState(initialText);
   const [botId, setBotId] = useState(() => defaultBot(bots, state.selectedId)?.id ?? "");
   const [yourself, setYourself] = useState(false);
-  const [kind, setKind] = useState<SetUpKind>("schedule");
   const dialogRef = useRef<HTMLDivElement>(null);
   useModalDialog(dialogRef, onClose);
   const bot = bots.find((candidate) => candidate.id === botId);
@@ -43,30 +42,25 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself }: {
     dispatch({ type: "send", botId: bot.id, text: request, threadId: bot.threadId });
     onClose();
   };
-  const choice = (value: SetUpKind, label: string, Icon: typeof CalendarClock) => (
-    <button type="button" role="radio" aria-checked={kind === value} onClick={() => setKind(value)}
-      className={cn("flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-[14px]", kind === value ? "border-accent/70 bg-accent/10 text-ink" : "border-hairline/50 text-ink-secondary hover:bg-raised")}>
-      <Icon size={16} className="shrink-0 text-accent" />{label}
-    </button>
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-5 pt-[14vh] backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t("automations.newBox.title")} tabIndex={-1} className="w-full max-w-[560px] rounded-2xl border border-hairline/60 bg-panel p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-[17px] font-semibold text-ink">{yourself ? t("automations.newBox.when") : t("automations.newBox.title")}</h2>
-          <button type="button" onClick={onClose} aria-label={t("automations.newBox.cancel")} className="rounded-full p-1.5 text-ink-secondary hover:bg-raised hover:text-ink"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label={t("automations.newBox.cancel")} className="rounded-full p-1.5 text-ink-secondary hover:bg-raised hover:text-ink"><X size={18} /></button>
         </div>
         {yourself ? (
           <>
             <div role="radiogroup" aria-label={t("automations.newBox.when")} className="mt-4 space-y-2">
-              {choice("schedule", t("automations.newBox.onSchedule"), CalendarClock)}
-              {choice("app", t("automations.newBox.whenAppEvent"), AppWindow)}
-              {choice("webhook", t("automations.newBox.whenApp"), Share2)}
+              <button type="button" role="radio" aria-checked="true" onClick={() => setYourself(true)}
+                className={cn("flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-[14px]", "border-accent/70 bg-accent/10 text-ink")}>
+                <AppWindow size={16} className="shrink-0 text-accent" />{t("automations.newBox.whenAppEvent")}
+              </button>
             </div>
             <div className="mt-5 flex items-center justify-between gap-2">
               <button type="button" onClick={() => setYourself(false)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink">{t("automations.newBox.back")}</button>
-              <button type="button" onClick={() => onSetUpYourself(kind, bot?.id ?? "")} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
+              <button type="button" onClick={() => onSetUpYourself("app", bot?.id ?? "")} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
             </div>
           </>
         ) : (
@@ -84,7 +78,7 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself }: {
               </label>
             )}
             <div className="mt-4 flex items-center justify-between gap-2">
-              <button type="button" onClick={() => setYourself(true)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary underline-offset-2 hover:text-ink hover:underline">{t("automations.newBox.yourself")}</button>
+              <button type="button" onClick={() => setYourself(true)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary underline-offset-2 hover:underline hover:underline-offset-2">{t("automations.newBox.yourself")}</button>
               <button type="button" disabled={!text.trim() || !bot} onClick={send} className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110 disabled:opacity-40"><Send size={14} />{t("automations.newBox.send")}</button>
             </div>
           </>

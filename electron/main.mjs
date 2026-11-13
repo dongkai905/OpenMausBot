@@ -308,7 +308,6 @@ const serverSupervisor = createServerSupervisor({
     reportOwnListeners(proc);
     orgLibrary?.runtimeReady();
     if (managedDesktop) void managedDesktop.refresh().catch(() => {});
-    routineWake.start();
     for (const win of appWindows()) {
       if (!serverUnavailableWindows.has(win) || activeRemote(environmentsState)) continue;
       void win.loadURL(`http://127.0.0.1:${SERVER_PORT}`).then(() => {
@@ -322,7 +321,6 @@ const serverSupervisor = createServerSupervisor({
     serverReady = false;
     serverProc = null;
     companyBackupSchedule?.reconcile();
-    routineWake.stop();
   },
   onExhausted() {
     slog("server recovery paused after repeated failures; quit and reopen to retry");
@@ -453,7 +451,6 @@ import { companionAdvertisedHostedUrl, companionEnabledAtRest, companionOriginTa
 import { createDesktopCompanionE2E, deviceCounts } from "./companion-e2e-desktop.mjs";
 import { autoStartCompanion } from "./companion-autostart.mjs";
 import { createPhoneLinkRoutes } from "./phone-link-routes.mjs";
-import { createRoutineWakeHold, rememberRoutineWake, routineWakeSettings } from "./routine-wake.mjs";
 import { CREDENTIAL_PATCH, credentialSaveError } from "./credential-patch.mjs";
 
 /** Second wall after preload's reduced bridge: computer-controlling IPC answers only the local server's UI.
@@ -473,23 +470,6 @@ function syncCompanionKeepAwake(companionEnabled, keepAwake) {
     companionPowerBlocker = null;
   }
 }
-
-const routineWake = createRoutineWakeHold({
-  fetchStatus: () => (serverReady
-    ? fetch(`http://127.0.0.1:${SERVER_PORT}/api/routines/wake`, { signal: AbortSignal.timeout(5_000), redirect: "error", credentials: "omit" })
-      .then((response) => (response.ok ? response.json() : null))
-    : Promise.resolve(null)),
-  isOnBattery: () => {
-    try {
-      return powerMonitor.isOnBatteryPower();
-    } catch {
-      return false;
-    }
-  },
-  blocker: powerSaveBlocker,
-  settings: () => routineWakeSettings(app.getPath("userData")),
-  log: (line) => slog(line),
-});
 
 function slog(line) {
   try {
@@ -2383,11 +2363,6 @@ ipcMain.handle("companion:keep-awake", localOnly("companion:keep-awake", async (
   rememberCompanionKeepAwake(Boolean(enabled));
   return desktopCompanionState();
 }));
-ipcMain.handle("routines:wake-state", localOnly("routines:wake-state", () => routineWake.poll()));
-ipcMain.handle("routines:keep-awake", localOnly("routines:keep-awake", async (_event, enabled) => {
-  rememberRoutineWake(app.getPath("userData"), Boolean(enabled));
-  return routineWake.poll();
-}));
 phoneLinkRoutes.install(ipcMain, localOnly);
 ipcMain.handle("companion:pairing", localOnly("companion:pairing", (_event, open, expectedToken) => {
   const refusal = open ? managedRemoteAccessRefusal() : null;
@@ -3119,7 +3094,6 @@ app.on("before-quit", (e) => {
   // Cancel a scheduled recovery before yielding.
   const stoppingServer = serverSupervisor.shutdown();
   syncCompanionKeepAwake(false, false);
-  routineWake.stop();
   try {
     desktopCompanionRelay?.close?.();
   } catch {}

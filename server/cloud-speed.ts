@@ -127,8 +127,8 @@ export function createCloudSpeed(options: {
       wakeMs = Math.max(0, at - wakeFrom);
     },
     /** A person's message, stored while its thread runs no turn, waits for its turn to start. */
-    noteMessage(threadId: string, message: Pick<Message, "at" | "role" | "kind" | "steered" | "aside" | "from" | "peerAsk" | "automation">) {
-      if (message.role !== "user" || message.kind !== "text" || message.steered || message.aside || message.from?.botId || message.peerAsk || message.automation) return;
+    noteMessage(threadId: string, message: Pick<Message, "at" | "role" | "kind" | "steered" | "aside" | "from" | "peerAsk">) {
+      if (message.role !== "user" || message.kind !== "text" || message.steered || message.aside || message.from?.botId || message.peerAsk) return;
       if ((live.get(threadId) ?? -Infinity) > now() - LIVE_TTL_MS || accepted.has(threadId)) return;
       for (const [id, at] of accepted) if (at < now() - ACCEPTED_TTL_MS || accepted.size >= ACCEPTED_CAP) accepted.delete(id); else break;
       accepted.set(threadId, message.at);

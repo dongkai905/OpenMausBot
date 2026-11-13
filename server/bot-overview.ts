@@ -1,13 +1,9 @@
 import type { BotRecord } from "./store.ts";
-import type { Routine } from "./routines.ts";
-import type { RoutineRequestSchedule } from "../shared/routine-request.ts";
 import { approvalModeFor } from "../shared/approval-mode.ts";
-import { cronScheduleLabel } from "../shared/cron-label.ts";
 
 export interface BotOverview {
   who: { name: string; title: string; blurb: string; soulLead: string };
   does: string[];
-  doesRoutines?: OverviewRoutineLine[];
   /** The departments a Chief of Staff may also coordinate, "" for the unnamed department the English line calls "General". */
   managedSections?: string[];
   reaches: string[];
@@ -17,14 +13,6 @@ export interface BotOverview {
   setup: SetupStep[];
 }
 
-export interface OverviewRoutineLine {
-  name: string;
-  paused?: true;
-  schedule: OverviewFacts["routines"][number]["schedule"];
-  nextRunAt?: number;
-  lastRun?: { status: string; at: number };
-}
-
 export interface BotOverviewGrant {
   slug: string;
   level: "all" | "partial" | "none";
@@ -32,8 +20,8 @@ export interface BotOverviewGrant {
   toolCount: number;
 }
 
-export type SetupStepId = "identity" | "soul" | "folder" | "apps" | "schedule";
-export type SetupStepSection = "identity" | "soul" | "access" | "routines";
+export type SetupStepId = "identity" | "soul" | "folder" | "apps";
+export type SetupStepSection = "identity" | "soul" | "access";
 
 export interface SetupStep {
   id: SetupStepId;
@@ -60,15 +48,6 @@ export interface OverviewFacts {
     | "chiefOfStaff"
     | "managedSections"
   >;
-  routines: Array<{
-    id: string;
-    name: string;
-    enabled: boolean;
-    schedule: RoutineRequestSchedule | Routine["schedule"];
-    nextRunAt: number | null;
-  }>;
-  runs: Array<{ routineId: string; status: string; finishedAt?: number; startedAt?: number; scheduledFor: number }>;
-  webhooks: Array<{ name: string; enabled: boolean }>;
   skills: Array<{ name: string; description: string; enabled: boolean }>;
   engine: { agentsMcp?: boolean; composioMcp?: boolean; browserMcp?: boolean; computerMcp?: boolean } | null;
   browserEnabled?: boolean;
@@ -90,88 +69,11 @@ function lowerFirst(value: string): string {
   return value.length ? value[0]!.toLowerCase() + value.slice(1) : value;
 }
 
-function time(at: number, timeZone: string): string {
-  return new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
-}
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-function clockTime(hhmm: string): string {
-  const [h = 0, m = 0] = hhmm.split(":").map((part) => Number.parseInt(part, 10) || 0);
-  return new Date(Date.UTC(2000, 0, 1, h, m)).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
-}
-
-function schedulePhrase(schedule: OverviewFacts["routines"][number]["schedule"], timeZone: string): string {
-  if (schedule.type === "cron") return cronScheduleLabel(schedule);
-  if (schedule.type === "once") {
-    const date = new Date(schedule.at).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone });
-    return `Once on ${date} at ${time(schedule.at, timeZone)}`;
-  }
-  if (schedule.type === "limit_reset") return schedule.repeat === "every_reset" ? "Each time the AI usage limit resets" : "When the AI usage limit resets";
-  if (schedule.type === "interval") {
-    const minutes = schedule.everyMinutes;
-    if (minutes < 60) return `Every ${minutes} minute${minutes === 1 ? "" : "s"}`;
-    if (minutes === 60) return "Every hour";
-    if (minutes % 60 === 0) return `Every ${minutes / 60} hours`;
-    return `Every ${Math.floor(minutes / 60)} hour${Math.floor(minutes / 60) === 1 ? "" : "s"} ${minutes % 60} minutes`;
-  }
-  const days = schedule.weekdays;
-  const at = ` at ${clockTime(schedule.time)}`;
-  if (days.length === 7) return `Every day${at}`;
-  if (days.join(",") === "1,2,3,4,5") return `Every weekday${at}`;
-  if (days.length === 1) return `Weekly on ${DAY_NAMES[days[0]!]}${at}`;
-  return `${days.map((day) => DAY_NAMES[day]).join(", ")}${at}`;
-}
-
-function latestRunFor(runs: OverviewFacts["runs"], routineId: string): OverviewFacts["runs"][number] | undefined {
-  let best: OverviewFacts["runs"][number] | undefined;
-  let bestAt = -Infinity;
-  for (const run of runs) {
-    if (run.routineId !== routineId) continue;
-    const at = run.finishedAt ?? run.startedAt ?? run.scheduledFor;
-    if (at > bestAt) {
-      bestAt = at;
-      best = run;
-    }
-  }
-  return best;
-}
-
-function routineLines(facts: OverviewFacts): OverviewRoutineLine[] {
-  return facts.routines.map((routine): OverviewRoutineLine => {
-    if (!routine.enabled) return { name: routine.name, paused: true, schedule: routine.schedule };
-    const latest = latestRunFor(facts.runs, routine.id);
-    return {
-      name: routine.name, schedule: routine.schedule, ...(routine.nextRunAt != null ? { nextRunAt: routine.nextRunAt } : {}),
-      ...(latest ? { lastRun: { status: latest.status, at: latest.finishedAt ?? latest.startedAt ?? latest.scheduledFor } } : {}),
-    };
-  });
-}
-
 function doesLines(facts: OverviewFacts): string[] {
   const lines: string[] = [];
-  for (const routine of facts.routines) {
-    if (!routine.enabled) {
-      lines.push(`Paused: ${routine.name}.`);
-      continue;
-    }
-    const nextRun = routine.nextRunAt != null ? ` Next run ${time(routine.nextRunAt, facts.timeZone)}.` : "";
-    const latest = latestRunFor(facts.runs, routine.id);
-    const at = latest ? latest.finishedAt ?? latest.startedAt ?? latest.scheduledFor : undefined;
-    const lastRun = latest ? ` Last run ${latest.status} at ${time(at!, facts.timeZone)}.` : "";
-    lines.push(`${schedulePhrase(routine.schedule, facts.timeZone)}: ${routine.name}.${nextRun}${lastRun}`);
-  }
   for (const skill of facts.skills) {
     if (!skill.enabled) continue;
     lines.push(`Knows how to ${lowerFirst(skill.description || skill.name)}.`);
-  }
-  for (const webhook of facts.webhooks) {
-    if (!webhook.enabled) continue;
-    lines.push(`Listens for “${webhook.name}” webhooks.`);
   }
   return lines;
 }
@@ -259,7 +161,6 @@ function wontLines(facts: OverviewFacts): string[] {
     lines.push("Has no connected apps.");
   }
   if (facts.bot.computer === "off") lines.push("Can't use a computer.");
-  if (!facts.routines.some((routine) => routine.enabled)) lines.push("Won't act on a schedule.");
   if (mode !== "full") lines.push("Profile proposal cards require your approval.");
   return lines;
 }
@@ -273,7 +174,6 @@ export function buildBotOverview(facts: OverviewFacts): BotOverview {
       soulLead: soulLead(facts.bot.soul),
     },
     does: doesLines(facts),
-    doesRoutines: routineLines(facts),
     ...(facts.bot.chiefOfStaff && facts.bot.managedSections?.length ? { managedSections: [...facts.bot.managedSections] } : {}),
     reaches: reachesLines(facts),
     wont: wontLines(facts),
@@ -289,8 +189,6 @@ export function setupSteps(facts: OverviewFacts): SetupStep[] {
   const named = facts.bot.name.trim() !== "" && !DEFAULT_BOT_NAMES.test(facts.bot.name.trim());
   const described = facts.bot.title.trim() !== "" || facts.bot.description.trim() !== "";
   const apps = facts.connectedApps;
-  const routines = facts.routines.some((routine) => routine.enabled);
-  const webhooks = facts.webhooks.some((webhook) => webhook.enabled);
   const steps: SetupStep[] = [
     { id: "identity", label: "Give it a name and a role", done: named && described, section: "identity" },
     { id: "soul", label: "Write its standing instructions", done: (facts.bot.soul ?? "").trim() !== "", section: "soul" },
@@ -304,6 +202,5 @@ export function setupSteps(facts: OverviewFacts): SetupStep[] {
       section: "access",
     });
   }
-  steps.push({ id: "schedule", label: "Add a schedule or a trigger", done: routines || webhooks, section: "routines" });
   return steps;
 }

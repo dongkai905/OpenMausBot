@@ -9,7 +9,7 @@ import { writeFileAtomic } from "./atomic.ts";
 import { cliProbeEnvironment } from "./cli-probe.ts";
 import { DATA_DIR, stripControlPlaneEnv } from "./config.ts";
 import type { AnyProviderDriver, StandaloneRelease } from "./contracts.ts";
-import { startDueTimer, type DueTimer } from "./due-timer.ts";
+import { startDueTimer, type DueTimer } from "./work-timer.ts";
 import { acpHandshake } from "./engine-handshake.ts";
 import { enginesBinDir, enginesPrefix, npmCopyVersion, npmLatestVersion, npmModulesIn, npmPackageOf, npmRunning } from "./engine-install.ts";
 import { EngineInUse, npmCommandNames, removeNpmCopy, sweepNpmLeftovers, updateNpmEngineStaged, type StagedNpmUpdate } from "./engine-npm-update.ts";

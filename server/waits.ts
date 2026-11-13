@@ -7,7 +7,7 @@ import { z } from "zod";
 import { WAIT_HOURS, type WaitKind } from "../shared/waits.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
-import { startDueTimer, type DueTimer } from "./due-timer.ts";
+import { startDueTimer, type DueTimer } from "./work-timer.ts";
 import {
   expandHome,
   fetchPageText,

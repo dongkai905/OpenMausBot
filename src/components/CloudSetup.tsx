@@ -3,22 +3,19 @@ import { ArrowRight, Check, ChevronDown, Cloud, Minus } from "lucide-react";
 import { MausAvatar } from "@/components/Avatar";
 import { engineReady } from "@/components/EngineLibrary";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
-import { withViewTransition } from "@/components/onboarding/view-transition";
 import { productName } from "@/lib/brand";
-import { cloudIntentDue, cloudIntentShown, jobRoutine, reopenCloudIntent, useCloudIntent } from "@/lib/cloud-intent";
+import { cloudIntentDue, cloudIntentShown, useCloudIntent } from "@/lib/cloud-intent";
 import { cn } from "@/lib/cn";
 import { CLOUD_INTENT_GIVEN, CLOUD_SETUP_HIDDEN, cloudSetupItems, cloudSetupStage, cloudWelcomeStage, type CloudSetupItem, type CloudSetupStep } from "@/lib/cloud-setup";
 import { endWelcomeHere, returnToWelcome, saveWelcomeHints, useCloudWelcome, withEarlyHints } from "@/lib/cloud-welcome";
-import { intlLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import type { MausMotion } from "@/lib/mascot";
 import { hintSeen, type WelcomeViewer } from "@/lib/onboarding";
 import type { LocaleKey } from "@/locales";
-import type { Routine } from "@/lib/routines";
-import { useShowThreads } from "@/lib/thread-preferences";
-import { openBot, useStore } from "@/state/store";
+import { useStore } from "@/state/store";
 
 const TITLE: Record<CloudSetupStep, LocaleKey> = {
-  cloud: "cloudSetup.cloud.title", job: "cloudSetup.job.title", engine: "cloudSetup.engine.title", plan: "cloudSetup.plan.title", move: "cloudWelcome.step.bring",
+  cloud: "cloudSetup.cloud.title", engine: "cloudSetup.engine.title", move: "cloudWelcome.step.bring",
   files: "cloudWelcome.step.files",
 };
 const WELCOME_HINT: Partial<Record<CloudSetupStep, LocaleKey>> = {
@@ -36,25 +33,13 @@ function storeCollapsed(collapsed: boolean) {
 const CARD = "fixed bottom-4 left-[calc(var(--rail-beside,0px)_+_1rem)] z-40 max-h-[calc(100dvh-32px)] w-[300px] max-w-[calc(100vw_-_var(--rail-beside,0px)_-_32px)] origin-bottom-left overflow-y-auto rounded-2xl border border-hairline/50 bg-menu text-ink shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55),0_4px_12px_-6px_rgba(0,0,0,0.3)]";
 const PRIMARY = "ui-button ui-button-primary shrink-0 gap-1.5 text-[13px] transition-transform duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none";
 
-function nextRunLabel(at: number | null, now = Date.now()): string | null {
-  if (!at) return null;
-  const when = new Date(at), today = new Date(now);
-  const days = Math.round((new Date(when).setHours(0, 0, 0, 0) - new Date(today).setHours(0, 0, 0, 0)) / 86_400_000);
-  const time = when.toLocaleTimeString(intlLocale(), { hour: "numeric", minute: "2-digit" });
-  if (days === 0) return t("cloudSetup.ready.today", { time });
-  if (days === 1) return t("cloudSetup.ready.tomorrow", { time });
-  return t("cloudSetup.ready.on", { day: when.toLocaleDateString(intlLocale(), { weekday: "long" }), time });
-}
-
-function CloudReady({ routine, onDone }: { routine?: Routine; onDone: () => void }) {
-  const { dispatch } = useStore();
+function CloudReady({ onDone }: { onDone: () => void }) {
   const [motion, setMotion] = useState<{ kind: MausMotion; key: number }>({ kind: "none", key: 0 });
   const [leaving, setLeaving] = useState(false);
-  const [run, setRun] = useState<"idle" | "starting" | "started" | "failed">("idle");
   useEffect(() => {
     // One frame late: a motion issued in the avatar's mounting commit is lost.
     const frame = requestAnimationFrame(() => setMotion({ kind: "celebrate", key: 1 }));
-    const timer = setTimeout(() => setLeaving(true), routine ? 20_000 : 9000);
+    const timer = setTimeout(() => setLeaving(true), 9000);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -64,46 +49,19 @@ function CloudReady({ routine, onDone }: { routine?: Routine; onDone: () => void
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
-  const runNow = () => {
-    if (!routine || run === "starting") return;
-    setRun("starting");
-    dispatch({
-      type: "runRoutine", routineId: routine.id,
-      onStarted: () => { setRun("started"); setTimeout(() => setLeaving(true), 1800); },
-      onError: () => setRun("failed"),
-    });
-  };
-  const next = routine ? nextRunLabel(routine.nextRunAt) : null;
   return <aside aria-labelledby="cloud-ready-title" data-cloud-setup-ready className={cn(CARD, "flex flex-col items-center p-5 pt-6 text-center", leaving ? "animate-pop-out" : "animate-spot-in")}>
     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(60%_100%_at_50%_0%,color-mix(in_oklab,var(--color-success)_16%,transparent),transparent)]" />
     <MausAvatar color="green" state="celebrate" motion={motion.kind} motionKey={motion.key} size={56} label={productName()} />
     <div role="status" className="relative">
       <h2 id="cloud-ready-title" className="mt-3 text-[15px] font-semibold">{t("cloudSetup.ready.title")}</h2>
-      {routine
-        ? <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
-            <span className="font-medium text-ink">{routine.name}</span>
-            {next ? <> {t("cloudSetup.ready.runs", { when: next })}</> : null}
-          </p>
-        : <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("cloudSetup.ready.body")}</p>}
-      {run === "failed" && <p role="alert" className="mt-1.5 text-[12px] text-danger">{t("cloudSetup.ready.runFailed")}</p>}
+      <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("cloudSetup.ready.body")}</p>
     </div>
-    {routine
-      ? <div className="relative mt-4 flex w-full flex-col gap-2">
-          <button type="button" onClick={runNow} disabled={run === "starting" || run === "started"}
-            className={run === "started"
-              ? "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-success/15 text-[13px] font-medium text-success"
-              : cn(PRIMARY, "min-h-9 w-full justify-center")}>
-            {run === "started" ? <><Check size={14} strokeWidth={2.5} aria-hidden="true" />{t("cloudSetup.ready.running")}</> : t("cloudSetup.ready.runNow")}
-          </button>
-          <button type="button" className="py-1 text-[12px] text-ink-secondary transition-colors hover:text-ink" onClick={() => setLeaving(true)}>{t("cloudSetup.ready.later")}</button>
-        </div>
-      : <button type="button" className="ui-button relative mt-4 w-full" onClick={() => setLeaving(true)}>{t("cloudSetup.ready.done")}</button>}
+    <button type="button" className="ui-button relative mt-4 w-full" onClick={() => setLeaving(true)}>{t("cloudSetup.ready.done")}</button>
   </aside>;
 }
 
 export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeViewer | null; welcomeShown?: boolean }) {
   const { state, dispatch } = useStore();
-  const showThreads = useShowThreads();
   const [hidden, setHidden] = useState(false);
   const [collapsed, setCollapsed] = useState(storedCollapsed);
   const [finale, setFinale] = useState(false);
@@ -115,10 +73,9 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
   const early: string[] = [];
   if (intent.pending || intent.sent) early.push(CLOUD_INTENT_GIVEN);
   const onboarding = withEarlyHints(record, early);
-  const routine = jobRoutine(state.routines, intent.sent);
   const facts = {
     viewer, connected: state.connected, enginesKnown: state.instances.length > 0,
-    engineReady: state.instances.some(engineReady), onboarding, planned: Boolean(routine), welcomeShown,
+    engineReady: state.instances.some(engineReady), onboarding, welcomeShown,
   };
   const welcomeStage = cloudWelcomeStage(facts);
   const welcoming = welcomeStage === "pending";
@@ -129,7 +86,7 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
     else if (stage === "shown") wasShown.current = true;
     else if (stage === "done" && wasShown.current) { wasShown.current = false; setFinale(true); }
   }, [stage, welcoming]);
-  if (finale) return <CloudReady routine={routine} onDone={() => setFinale(false)} />;
+  if (finale) return <CloudReady onDone={() => setFinale(false)} />;
   if (!shown) return null;
 
   const items = cloudSetupItems(facts);
@@ -144,13 +101,6 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
     remember(CLOUD_SETUP_HIDDEN);
   };
   const asking = state.activeView === "chat" && cloudIntentShown(cloudIntentDue({ ...facts, reopened: false }), intent);
-  const askAgain = () => withViewTransition(() => { reopenCloudIntent(true); dispatch({ type: "showChat" }); });
-  const jobBot = intent.sent?.botId;
-  const openJobChat = () => {
-    dispatch({ type: "showChat" });
-    const bot = state.bots.find((candidate) => candidate.id === jobBot);
-    if (bot) openBot(dispatch, bot, showThreads);
-  };
   const hint = (key: LocaleKey) => <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t(key)}</p>;
   const action = (label: LocaleKey, onClick: () => void) => <button type="button" className={PRIMARY} onClick={onClick}>{t(label)}<ArrowRight size={13} aria-hidden="true" /></button>;
 
@@ -161,8 +111,6 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
       dispatch({ type: "showChat" });
     }) };
     if (id === "engine") return { body: hint("cloudSetup.engine.hint"), act: state.activeView !== "chat" && action("cloudSetup.engine.action", () => dispatch({ type: "showChat" })) };
-    if (id === "job") return { body: hint("cloudSetup.job.hint"), act: !asking && action("cloudSetup.job.action", askAgain) };
-    if (id === "plan") return { body: hint("cloudSetup.plan.hint"), act: action("cloudSetup.plan.action", openJobChat) };
     return { body: null };
   };
 
@@ -191,8 +139,7 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
     </li>;
   };
   const inChat = state.activeView === "chat" && !asking;
-  const onScreen = (id: CloudSetupStep) => (id === "job" && asking) || (id === "engine" && inChat && !facts.engineReady)
-    || (id === "plan" && inChat && (!jobBot || state.selectedId === jobBot));
+  const onScreen = (id: CloudSetupStep) => id === "engine" && inChat && !facts.engineReady;
   const focus = (id: CloudSetupStep) => {
     const here = onScreen(id);
     const { body, act } = here ? { body: null, act: null } : details(id);

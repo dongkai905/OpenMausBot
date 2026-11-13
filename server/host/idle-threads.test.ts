@@ -2,14 +2,13 @@ import { rmSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DATA_DIR } from "../config.ts";
-import type { RoutineRun } from "../routines.ts";
 import { Store } from "../store.ts";
 import { createIdleThreads } from "./idle-threads.ts";
 import { createPersonStop } from "./person-stop.ts";
 
 type Hold = "setup" | "dispatching" | "engine";
 
-function fixture({ routineRun = false } = {}) {
+function fixture() {
   const store = new Store(() => ({ instanceId: "claude", model: "claude-sonnet-5" }));
   const bot = store.createBot({ name: "Postie" });
   const thread = bot.threadId;
@@ -19,7 +18,7 @@ function fixture({ routineRun = false } = {}) {
   const generations = new Map([[thread, "gen-1"]]);
   const holds = { set: (threadId: string, hold: Hold) => { if (hold === "engine") engines.add(threadId); else claims.set(threadId, { phase: hold }); } };
   const state = { newerTurnDuringInterrupt: false };
-  const settled: string[] = [], released: string[] = [], cancelledRuns: string[] = [];
+  const settled: string[] = [], released: string[] = [];
   let drains = 0;
   const idle = createIdleThreads({
     store, claims, generations,
@@ -33,15 +32,13 @@ function fixture({ routineRun = false } = {}) {
     claims.delete(threadId);
     if (state.newerTurnDuringInterrupt) generations.set(threadId, "gen-2");
   };
-  const run = { id: "run-1", threadId: thread } as RoutineRun;
   const stop = createPersonStop({
     store, handoffs: () => ({ stoppedByPerson: () => {} }) as never,
-    routines: () => (routineRun ? { activeBotRunForBot: () => run, cancelRun: async (id: string) => { cancelledRuns.push(id); interrupt(thread); return null; } } : null),
     interruptDirectThread: async (_botId, threadId) => interrupt(threadId),
     stopping: idle.stopping, clearUnattended: () => {}, markStopped: () => {}, stopGoal: () => {},
     working: () => true, asking: () => false, language: () => undefined,
   });
-  return { store, bot, thread, task, holds, state, settled, released, cancelledRuns, drains: () => drains, idle, stop };
+  return { store, bot, thread, task, holds, state, settled, released, drains: () => drains, idle, stop };
 }
 
 describe("a conversation shown working with nothing running for it (server/host/idle-threads.ts)", () => {
@@ -69,19 +66,9 @@ describe("a conversation shown working with nothing running for it (server/host/
     expect(drains()).toBe(1);
   });
 
-  it("is freed by a Stop that cancels a routine run whose setup never returns", async () => {
-    const { store, bot, thread, task, holds, released, cancelledRuns, stop } = fixture({ routineRun: true });
-    holds.set(thread, "setup");
-    store.setTaskActivity(bot.id, thread, "working");
-    await stop.stopThreadForPerson(bot.id, thread);
-    expect(cancelledRuns).toEqual(["run-1"]);
-    expect(task()).toMatchObject({ activity: "idle", busy: false });
-    expect(released).toEqual([thread]);
-  });
-
   it.each(["dispatching", "engine"] as const)("a Stop leaves a turn an engine has (%s) to that turn's own end", async (hold) => {
-    for (const routineRun of [false, true]) {
-      const { store, bot, thread, task, holds, settled, released, drains, stop } = fixture({ routineRun });
+    {
+      const { store, bot, thread, task, holds, settled, released, drains, stop } = fixture();
       holds.set(thread, hold);
       store.setTaskActivity(bot.id, thread, "working");
       await stop.stopThreadForPerson(bot.id, thread);

@@ -22,7 +22,6 @@ import {
 import { pair, partHash, sha256Hex, type PartPair, type TeamPart } from "./package-parts.ts";
 import { storedPresetObject, type StoredPreset } from "./presets.ts";
 import { applyUpdates, handleWithdrawn, type ReleaseContext } from "./org-library-releases.ts";
-import type { RoutineManager } from "./routines.ts";
 import type { SkillListing, SkillPackageStamp } from "./skills.ts";
 import { sectionKey, type InstalledPackageMetadata, type Store, type StoreChange } from "./store.ts";
 import {
@@ -243,7 +242,6 @@ function noteRemovedParts(install: OrgInstall, next: Pick<LiveRecords, "bots" | 
 export interface OrgLibraryDeps {
   dataDir: string;
   store: Store;
-  routines: Pick<RoutineManager, "packageStamps" | "update" | "listRoutines" | "remove"> & Partial<Pick<RoutineManager, "stampInstalledPackage">>;
   skills: {
     list(botId: string): SkillListing[];
     stamps(botId: string): Array<{ name: string; enabled: boolean; stamp: SkillPackageStamp }>;
@@ -434,9 +432,6 @@ export class OrgLibrary {
     for (const group of store.groups) {
       if (group.installedPackage) entry(group.installedPackage.installId).rooms[group.installedPackage.key] = group.id;
     }
-    for (const routine of this.deps.routines.packageStamps()) {
-      if (store.bot(routine.botId)) entry(routine.stamp.installId).routines[routine.stamp.key] = routine.routineId;
-    }
     return found;
   }
 
@@ -445,7 +440,6 @@ export class OrgLibrary {
       Object.keys(this.state.adding).length > 0 ||
       this.deps.store.bots.some((bot) => bot.installedPackage?.source === "org") ||
       this.deps.store.groups.some((group) => group.installedPackage) ||
-      this.deps.routines.packageStamps().length > 0 ||
       this.orgPresetRows().length > 0;
   }
 
@@ -583,11 +577,8 @@ export class OrgLibrary {
   }
 
   private discardPartial(installId: string, live: LiveRecords): void {
-    const { store, routines } = this.deps;
+    const { store } = this.deps;
     const botIds = new Set(Object.values(live.bots));
-    for (const routine of routines.listRoutines()) {
-      if (botIds.has(routine.botId)) routines.remove(routine.id);
-    }
     const section = mostCommon(live.sections);
     const groups = store.groups.filter((group) => group.installedPackage?.installId === installId ||
       (!group.installedPackage && section !== undefined && sectionKey(group.section) === section &&
@@ -839,7 +830,7 @@ export class OrgLibrary {
         expect: {
           bots: pkg.agents.map((agent) => agent.key),
           rooms: (pkg.rooms ?? []).map((room) => room.key),
-          routines: (pkg.routines ?? []).map((routine) => routine.key),
+          routines: [],
           leader: pkg.team?.leader ?? null,
         },
       };

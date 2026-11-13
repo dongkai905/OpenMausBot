@@ -6,8 +6,6 @@ export interface AuditPlan {
   botId?: string;
   createsBots: boolean;
   deletesBot?: string;
-  createsWebhook: boolean;
-  webhookId?: string;
   sessionId?: string;
   pairing: boolean;
   engineAction?: { id: string; action: string };
@@ -22,14 +20,11 @@ export function adminAuditPlan(method: string, path: string, sharedComputers: bo
   const plan: AuditPlan = {
     config: requiredScope(method, path, { sharedComputers }) === "admin",
     createsBots: method === "POST" && (path === "/api/bots" || path === "/api/teams/import" || path === "/api/org-library/add"),
-    createsWebhook: method === "POST" && path === "/api/webhooks",
     pairing: method === "POST" && path === "/api/auth/pairing",
   };
   let m = /^\/api\/bots\/([\w-]+)(?:\/(always-allow|model|profile))?$/.exec(path);
   if (m && method === (m[2] === "always-allow" ? "POST" : "PATCH")) plan.botId = m[1];
   if (m && !m[2] && method === "DELETE") plan.deletesBot = m[1];
-  m = /^\/api\/webhooks\/([\w-]+)(\/rotate)?$/.exec(path);
-  if (m && ((m[2] && method === "POST") || (!m[2] && (method === "PATCH" || method === "DELETE")))) plan.webhookId = m[1];
   m = /^\/api\/auth\/sessions\/([\w-]+)$/.exec(path);
   if (m && method === "DELETE") plan.sessionId = m[1];
   m = /^\/api\/groups\/([\w-]+)$/.exec(path);
@@ -38,5 +33,5 @@ export function adminAuditPlan(method: string, path: string, sharedComputers: bo
   if (m && method === "POST") plan.engineAction = { id: m[1]!, action: m[2]!.replace("/", "-") };
   const accountAdd = method === "POST" ? ACCOUNT_ADD_ENGINES.get(path) : undefined;
   if (accountAdd) plan.engineAction = { id: accountAdd, action: "account-add" };
-  return plan.config || plan.botId || plan.createsBots || plan.deletesBot || plan.createsWebhook || plan.webhookId || plan.sessionId || plan.pairing || plan.engineAction || plan.roomId ? plan : null;
+  return plan.config || plan.botId || plan.createsBots || plan.deletesBot || plan.sessionId || plan.pairing || plan.engineAction || plan.roomId ? plan : null;
 }

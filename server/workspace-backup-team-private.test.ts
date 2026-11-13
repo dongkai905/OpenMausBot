@@ -8,8 +8,7 @@ import { CLOUD_OUTSIDE_KEY } from "./cloud-sharing.ts";
 import { openRuntimeStore } from "./runtime/store.ts";
 import type { Assignment } from "./runtime/types.ts";
 import { createWorkspaceBackupSnapshot, stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
-import { ensureMemoryIndex } from "./message-db-memory-index.ts";
-import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
+import { omittedAsTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 
 const BOB = "p_bobbobbobbobbobbobbob1";
 const PASSWORD = "correct horse battery staple";
@@ -50,12 +49,8 @@ function teamData(root: string): void {
   db.exec("CREATE TABLE messages(thread_id TEXT, id TEXT, at INTEGER, role TEXT, kind TEXT, text TEXT, json TEXT, PRIMARY KEY(thread_id,id)); CREATE TABLE thread_state(thread_id TEXT PRIMARY KEY, active_leaf_id TEXT);"
     + " CREATE TABLE chat_followups(id TEXT PRIMARY KEY, kind TEXT, owner_id TEXT, thread_id TEXT, send_id TEXT, status TEXT, payload TEXT);"
     + " CREATE TABLE notification_log(id TEXT PRIMARY KEY, at INTEGER, kind TEXT, bot_id TEXT, bot_name TEXT, thread_id TEXT, group_id TEXT, title TEXT, body TEXT, avatar_url TEXT, for_person TEXT, read INTEGER);");
-  ensureMemoryIndex(db);
   db.exec("CREATE TABLE command_receipts(kind TEXT, key TEXT, at INTEGER, result TEXT, PRIMARY KEY (kind, key))");
   db.prepare("INSERT INTO command_receipts VALUES ('memory', 'k', 1, ?)").run("Bob's receipted secret");
-  for (const [bot, text] of [["bot", "team notes"], [`bot--member-${BOB}`, "Bob's noted secret"], ["bobs-own", "Bob's own noted secret"]]) {
-    db.prepare("INSERT INTO memory_files(bot_id, path, text, mtime_ms, bytes) VALUES (?, 'MEMORY.md', ?, 1, 1)").run(bot!, text!);
-  }
   for (const [thread, text] of [["main", "team question"], ["bob-chat", "Bob's secret"], ["bobs-inbox", "Bob's inbox secret"], ["room-thread", "room talk"], ["outside-thread", "webhook event"]]) {
     const attached = thread === "bob-chat" ? ["attachments/bobs.png", "attachments/both.png"] : thread === "main" ? ["attachments/both.png"] : [];
     db.prepare("INSERT INTO messages VALUES (?, ?, 1, 'user', 'text', ?, ?)").run(thread!, `${thread}-m1`, text!, JSON.stringify({ id: `${thread}-m1`, text, attachments: attached.map((path) => ({ path })) }));
@@ -108,21 +103,6 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     expect(withoutTeamPrivate([{ id: "bot", tasks: [{ threadId: "main" }, { threadId: "bob-chat" }] }, { id: "bobs-own", tasks: [] }], privacy)).toEqual([{ id: "bot", tasks: [{ threadId: "main" }] }]);
   });
 
-  it("leaves out the routines that live in a member's private chat and every run that names one", () => {
-    const privacy = { threads: new Set(["bob-chat", "bob-results", "bob-run"]), bots: new Set(["bobs-own"]), attachments: new Set<string>() };
-    const bots = [{ id: "bot", tasks: [{ threadId: "main", title: "Scout" }, { threadId: "bob-chat", title: "Bob's" }, { threadId: "bob-results", title: "Standup · Results" }] }];
-    const routines = { routines: [
-      { id: "made-there", botId: "bot", name: "Kumquat", sourceThreadId: "bob-chat" },
-      { id: "reports-there", botId: "bot", name: "Quince", resultsThreadId: "bob-chat" },
-      { id: "standup", botId: "bot", name: "Standup", resultsThreadId: "bob-results" },
-      { id: "own-bot", botId: "bobs-own", name: "Mine" },
-    ], runs: [
-      { id: "r1", routineId: "made-there", threadId: "other" },
-      { id: "r2", routineId: "standup", threadId: "bob-run" },
-      { id: "r3", routineId: "standup", threadId: "team-run" },
-    ], ownerNotices: [] };
-    expect(routinesWithoutTeamPrivate(routines, bots, privacy)).toEqual({ routines: [routines.routines[2]], runs: [routines.runs[2]], ownerNotices: [] });
-  });
 
   it("strips the private conversations' rows from the snapshot databases and rebuilds them, so no freed page keeps their words", () => {
     const root = directory();

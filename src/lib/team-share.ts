@@ -185,12 +185,11 @@ const FIELD_WORDS: Record<string, LocaleKey> = {
 export function describePart(part: string, document?: PackageDocument): string {
   const pkg = document?.package;
   part = part.replace(/^(presets\[[^\]]+\])\.bot\./, "$1.");
-  const match = /^(agents|rooms|routines|skills|connections|presets|playbooks)\[([^\]]+)\](?:\.([a-zA-Z]+)(?:\[([^\]]+)\])?)?/.exec(part);
+  const match = /^(agents|rooms|skills|connections|presets|playbooks)\[([^\]]+)\](?:\.([a-zA-Z]+)(?:\[([^\]]+)\])?)?/.exec(part);
   if (match) {
     const [, list, key, field, item] = match;
     const named = list === "agents" ? pkg?.agents.find((agent) => agent.key === key)?.name
       : list === "rooms" ? pkg?.rooms?.find((room) => room.key === key)?.name
-      : list === "routines" ? pkg?.routines?.find((routine) => routine.key === key)?.name
       : list === "connections" ? pkg?.connections?.find((connection) => connection.key === key)?.label
       : list === "presets" ? pkg?.presets?.find((preset) => preset.key === key)?.name
       : undefined;

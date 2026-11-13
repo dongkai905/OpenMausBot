@@ -64,7 +64,7 @@ describe("the conversation the server is told about", () => {
     expect(sharedThreadOf(state({ bots: [bot({ threadId: "ben-own" })] }))).toBeNull();
     expect(sharedThreadOf(state({ bots: [bot({ defaultBot: { person: BEN.email } })] }))).toBeNull();
     expect(sharedThreadOf(state({ selectedId: "g1", groups: [{ id: "g1", threadId: "room-1" }] as AppState["groups"] }))).toBe("room-1");
-    expect(sharedThreadOf(state({ activeView: "routines" }))).toBeNull();
+    expect(sharedThreadOf(state({ activeView: "automations" }))).toBeNull();
   });
 
   it("is sent when it changes, and as no conversation in a private chat", async () => {

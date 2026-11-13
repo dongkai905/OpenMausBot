@@ -3,12 +3,12 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import { ThreadLinkContext } from "@/components/ThreadLinkMenu";
 import { useShowThreads } from "@/lib/thread-preferences";
-import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Monitor, RefreshCw, Reply, Square, Webhook } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Monitor, RefreshCw, Reply, Square } from "lucide-react";
 import { WorkingDots } from "@/components/WorkingIndicator";
 import { ACTION_ICON, ChatBusyContext, CopyButton, MESSAGE_ROW, MessageActions, messageActionClass, ReplyAction, type MessageMenuItem } from "@/components/MessageActions";
 import { copyText } from "@/lib/copy-text";
 import { ReactAction, ReactionChips } from "@/components/Reactions";
-import { useBotMessageMenu, userMessageMenu } from "@/components/message-menu"; import { savesToTeamMemory, TEAM_MEMORY_ITEM, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
+import { useBotMessageMenu, userMessageMenu } from "@/components/message-menu";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { localSystemVoiceActive } from "@/lib/local-voice";
 import { computerStartLine, useScreensWhile } from "@/lib/computer-start";
@@ -54,7 +54,7 @@ import { normalizeState, stateForBot } from "@/lib/mascot";
 import { peerLine, peerRequest, type PeerLine } from "@/lib/peer-message";
 import { showWorkingDots } from "@/lib/turn-tail";
 import { lastNonReceipt } from "@/lib/receipts";
-import { useTurnLive } from "@/state/turn-status"; import { isLiveReply, StreamingReplyContext, streamedReply, useHasLiveReply, useLiveTranscript } from "@/state/live-reply"; import { useTurnNow } from "./NowCard"; import { useThreadRoutineRun } from "@/state/older-routine-runs";
+import { useTurnLive } from "@/state/turn-status"; import { isLiveReply, StreamingReplyContext, streamedReply, useHasLiveReply, useLiveTranscript } from "@/state/live-reply"; import { useTurnNow } from "./NowCard";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { LiveToolsContext, useLiveToolIds } from "@/hooks/use-live-tool-ids";
 import { VoiceNoteBubble, type VoiceNoteAttachment } from "./VoiceNoteBubble";
@@ -76,13 +76,13 @@ import { RichMessageRow, UserLineNote, richRowKind } from "./RichMessageRow"; im
 import { Composer } from "./Composer";
 import { ChatErrorBanner, ChatNotice } from "./ChatErrorBanner";
 import { ThreadContextWarning } from "./ContextWarning";
-import { UsageAlert, useLimitResetContinue, usePastLimitNotice } from "./EngineUsage";
+import { UsageAlert, usePastLimitNotice } from "./EngineUsage";
 import { ChatFindBar } from "./ChatFindBar";
 import { ReplyQuote } from "./ReplyQuote";
 import { ConnectorCard } from "./ConnectorCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { SignInRequestCard } from "./SignInRequestCard";
-import { AutomationCaption, RoutineRunRow } from "./RoutineRunCard"; import { InboxAnswers, InboxCaption, RelayLabel } from "./InboxLine"; import { InboxCardSlot } from "./inbox/InboxCard";
+import { InboxAnswers, InboxCaption, RelayLabel } from "./InboxLine"; import { InboxCardSlot } from "./inbox/InboxCard";
 import { CallRecordRow } from "./CallRecordRow";
 import { AttachmentGallery, collectMessageFiles, replyAttachmentGroup, splitMessageAttachments } from "./AttachmentGallery";
 import { ScreenFrame } from "./ScreenFrame";
@@ -109,7 +109,6 @@ import { ActivityRun } from "./ActivityRun";
 import { TurnNarrationRun } from "./TurnNarrationRun";
 import { BubbleEditor } from "./BubbleEditor";
 import { ReplyBlocks } from "./ReplyBlocks";
-import { webhookMessageView } from "@/lib/webhook-message";
 import { splitTranscriptAttachments } from "@/lib/composer-attachments";
 import { useComposerDockPad } from "@/lib/composer-dock";
 import { GlassBar, GlassScrollFrame } from "./GlassScrollFrame";
@@ -254,7 +253,6 @@ function TrialCreditFailedRow({ kind, onRetry }: { kind: TrialCreditRefusal; onR
 }
 
 export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageAt }: { tool: NonNullable<Message["tool"]>; engine: InstanceInfo | undefined; onRetry?: () => void; botId?: string; threadId?: string; messageAt?: number }) {
-  const resume = useLimitResetContinue(botId, threadId, tool.limitResetsAt);
   const past = usePastLimitNotice(tool, messageAt);
   if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} />;
   const credit = trialCreditKind(failedTurnCause(tool.name) ?? "");
@@ -268,7 +266,6 @@ export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageA
       message={notice ?? cause}
       headline={signedOut ? t("chat.error.signedOut", { name: signedOut.displayName }) : notice ?? plainErrorLine(cause)}
       onRetry={onRetry}
-      action={resume}
       setupInstance={tool.setup ? engine : undefined}
     />
   );
@@ -369,20 +366,19 @@ const Bubble = memo(function Bubble({
   const blocks = useMemo(() => simple && !user && !peer && !viewRaw && !split && text ? splitReplyBlocks(text) : null, [simple, user, peer, viewRaw, split, text]);
   const tabled = Boolean(blocks?.some((block) => block.kind === "table"));
   const formatted = !simple && !user && !split && isFormattedReply(text);
-  const webhookView = user ? webhookMessageView(text) : null;
-  const cited = user && !webhookView ? splitTranscriptCitations(text) : null;
-  const attachments = user && !webhookView ? splitTranscriptAttachments(cited?.display ?? text) : null;
-  const visibleText = webhookView?.task ?? attachments?.display ?? text;
+  const cited = user ? splitTranscriptCitations(text) : null;
+  const attachments = user ? splitTranscriptAttachments(cited?.display ?? text) : null;
+  const visibleText = attachments?.display ?? text;
   const hasAttachments = Boolean(cited?.citations.length || (attachments && (attachments.images.length || attachments.files.length)));
-  const attachmentsOnly = !webhookView && !replyTarget && !visibleText.trim() &&
+  const attachmentsOnly = !replyTarget && !visibleText.trim() &&
     (user ? hasAttachments : generatedPaths.length + linkedFiles.length > 0);
   const collapsible =
-    user && !webhookView && !expanded && (visibleText.length > USER_COLLAPSE_CHARS || visibleText.split("\n").length > USER_COLLAPSE_LINES);
+    user && !expanded && (visibleText.length > USER_COLLAPSE_CHARS || visibleText.split("\n").length > USER_COLLAPSE_LINES);
   useEffect(() => {
     if (focusedSearch && collapsible) setExpanded(true);
   }, [focusedSearch, collapsible, focus?.nonce]);
 
-  if (user && editing && !webhookView && !hasAttachments) {
+  if (user && editing && !hasAttachments) {
     return (
       <div className="flex w-full justify-end">
         <BubbleEditor initial={text} bubbleStyle={bubbleStyle} onCancel={onCancelEdit} onSubmit={(edited) => onSubmitEdit(message.id, edited)} />
@@ -418,8 +414,8 @@ const Bubble = memo(function Bubble({
             menu={[
               ...(simple ? replyAndCopy(() => onReply(message), visibleText) : []),
               ...userMessageMenu({
-                messageId: message.id, save: botMenu.filter((item) => item.key === TEAM_MEMORY_ITEM),
-                onEdit: !speaker && message.kind === "text" && !webhookView && !hasAttachments && !message.id.startsWith("optimistic-")
+                messageId: message.id,
+                onEdit: !speaker && message.kind === "text" && !hasAttachments && !message.id.startsWith("optimistic-")
                   ? () => onStartEdit(message.id) : undefined,
                 pin: remoteClient ? undefined : { pinned, onToggle: togglePin },
               }),
@@ -435,18 +431,16 @@ const Bubble = memo(function Bubble({
             tabled ? "w-full" : "w-fit",
             simple ? !tabled && SIMPLE_BUBBLE_MAX : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl text-[15px] leading-relaxed",
             emerging && !streamedReply(message.id) && "turn-answer",
-            user && webhookView
-              ? cn("overflow-hidden border border-accent/25 bg-card text-ink", simple ? cn("rounded-[18px]", SIMPLE_BUBBLE_TEXT) : "shadow-[0_10px_30px_rgba(0,0,0,0.18)]")
-              : attachmentsOnly || split || tabled
-                ? cn("text-ink", simple && SIMPLE_BUBBLE_TEXT)
-                : user
-                  ? cn("whitespace-pre-wrap [overflow-wrap:anywhere] text-ink", simple ? SIMPLE_USER_BUBBLE : "bg-bubble-user px-4 py-2.5", ownBubbleStyle && "user-bubble-colored", simple && ownBubbleStyle && "antialiased")
-                  : formatted
-                    ? cn(formattedReplyWidth(text), "px-1 text-ink")
-                    : simple ? SIMPLE_BOT_BUBBLE : "bg-card px-4 py-2.5 text-ink",
+            attachmentsOnly || split || tabled
+              ? cn("text-ink", simple && SIMPLE_BUBBLE_TEXT)
+              : user
+                ? cn("whitespace-pre-wrap [overflow-wrap:anywhere] text-ink", simple ? SIMPLE_USER_BUBBLE : "bg-bubble-user px-4 py-2.5", ownBubbleStyle && "user-bubble-colored", simple && ownBubbleStyle && "antialiased")
+                : formatted
+                  ? cn(formattedReplyWidth(text), "px-1 text-ink")
+                  : simple ? SIMPLE_BOT_BUBBLE : "bg-card px-4 py-2.5 text-ink",
             simple && join && !split && !attachmentsOnly && !tabled && joinedCorners(user ? "end" : "start", join),
           )}
-          style={user && !webhookView && !attachmentsOnly ? ownBubbleStyle : undefined}
+          style={user && !attachmentsOnly ? ownBubbleStyle : undefined}
           title={workedFor === undefined ? new Date(message.at).toLocaleString(intlLocale()) : `${workedLabel(workedFor)} · ${new Date(message.at).toLocaleString(intlLocale())}`}
         >
           {replyTarget && (
@@ -461,21 +455,7 @@ const Bubble = memo(function Bubble({
               />
             </div>
           )}
-          {user && webhookView ? (
-            <div className="min-w-[300px] max-w-[520px]">
-              <div className="flex items-center gap-2 border-b border-accent/15 bg-accent/[0.055] px-4 py-2.5 text-[12px] font-medium text-accent">
-                <Webhook size={13} />
-                <span>{t("chat.webhookTask")}</span>
-              </div>
-              <div className="chat-text px-4 py-3 whitespace-pre-wrap">{webhookView.task}</div>
-              {webhookView.payload && (
-                <details className="border-t border-hairline/30 bg-inset/25 px-4 py-2.5 text-[12px] text-ink-secondary">
-                  <summary className="cursor-pointer select-none hover:text-ink">{t("chat.viewPayload")}</summary>
-                  <pre className="mt-2 max-h-48 overflow-auto rounded-lg border border-hairline/25 bg-black/25 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-ink-secondary">{webhookView.payload}</pre>
-                </details>
-              )}
-            </div>
-          ) : user ? (
+          {user ? (
             <>
               {attachments && <AttachmentGallery images={attachments.images} files={attachments.files} message={{ threadId, messageId: message.id }} eager={eagerAttachments} className={!visibleText ? "mb-0" : undefined} />}
               {visibleText && (
@@ -719,8 +699,6 @@ const MessagesList = memo(function MessagesList({
             case "widget":
             case "app":
               return <RichMessageRow botId={botId} botName={botName} threadId={threadId} message={m} />;
-            case "routine.run":
-              return <RoutineRunRow message={m} botId={botId} />;
             case "call":
               return m.call ? <CallRecordRow message={m} transcript={transcript} botName={botName} threadId={threadId} busy={busy} hasMore={hasMore} /> : null;
             case "activity": {
@@ -765,7 +743,7 @@ const MessagesList = memo(function MessagesList({
                   onStartEdit={onStartEdit}
                   onCancelEdit={onCancelEdit}
                   onSubmitEdit={onSubmitEdit}
-                  onRegenerate={m.id === lastBotTextId && !m.automation && canRetryLast ? onRegenerate : undefined}
+                  onRegenerate={m.id === lastBotTextId && canRetryLast ? onRegenerate : undefined}
                   replyTarget={lookups.replyTarget(m)}
                   onReply={onReply}
                 />
@@ -778,7 +756,7 @@ const MessagesList = memo(function MessagesList({
           <div key={m.id} className="contents" data-mid={m.id} data-tuck={layout?.tucks[i] ? "" : undefined}>
             {newDay && <DaySeparator at={m.at} today={today} simple={simple} />}
             {divider}
-            {m.automation && <AutomationCaption message={m} line={m.automation} botId={botId} />}{m.inbox && <InboxCaption message={m} />}
+            {m.inbox && <InboxCaption message={m} />}
             {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
           </div>
         );
@@ -975,12 +953,6 @@ export const ChatView = memo(function ChatView({ bot: profile }: { bot: Bot }) {
     ? { link: currentLink, assign: (link: string | null) => dispatch({ type: "updateTask", botId: bot.id, threadId: bot.threadId, patch: { link } }) }
     : null, [canWrite, currentLink, bot.id, bot.threadId, dispatch]);
 
-  const routineRun = useThreadRoutineRun(bot.id, bot.threadId);
-  // A run inside its own results conversation (a wait finishing in this chat) is no execution thread: no banner.
-  const routineExecution = routineRun && (routineRun.resultsThreadId ?? routineRun.sourceThreadId) !== bot.threadId ? routineRun : undefined;
-  const resultsThreadId = routineExecution?.resultsThreadId ?? routineExecution?.sourceThreadId;
-  const canOpenResults = useStoreSelector((s) => Boolean(resultsThreadId) && [...s.bots, ...s.groups].some((owner) => owner.threadId === resultsThreadId || owner.tasks?.some((task) => task.threadId === resultsThreadId)));
-
   return (
     <ThreadLinkContext value={threadLink}>
     <main className="relative flex h-full min-w-0 flex-1 flex-col bg-app">
@@ -1111,11 +1083,6 @@ export const ChatView = memo(function ChatView({ bot: profile }: { bot: Bot }) {
       </div>
 
       {(advanced || remoteClient) && <BotActivityPicker bot={bot} />}{privateChat && team && <TeamPrivateFirstLine key={team.id} team={team} />}
-      {routineExecution && <div className="mx-5 mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[12px] text-ink-secondary">
-        <span className="min-w-0 flex-1 truncate">{t("routines.executionDetails", { name: routineExecution.routineName })}</span>
-        {canOpenResults && resultsThreadId && <button type="button" onClick={() => openThread(dispatch, { botId: bot.id, threadId: resultsThreadId }, store.state(), showThreads)} className="rounded px-2 py-1 text-accent hover:bg-raised">{t("routines.results.back")}</button>}
-        <button type="button" onClick={() => dispatch({ type: "showRoutines", section: "logs", routineId: routineExecution.routineId, botId: bot.id })} className="rounded px-2 py-1 hover:bg-raised hover:text-ink">{t("routines.logs")}</button>
-      </div>}
       {findOpen && <ChatFindBar threadId={bot.threadId} onClose={() => setFindOpen(false)} />}
 
       <ChatErrorBanner message={state.error} onDismiss={() => dispatch({ type: "error", message: null })} />
@@ -1163,7 +1130,7 @@ export const ChatView = memo(function ChatView({ bot: profile }: { bot: Bot }) {
             <div ref={topSentinelRef} className="h-2 w-full pointer-events-none" aria-hidden="true" />
           ) : null}
           {windowedMessages.length === 0 && !bot.busy && <EmptyChat bot={bot} />}
-          <ChatRowsContext.Provider value={rows}><TeamMemorySavesContext value={savesToTeamMemory(bot, Boolean(team))}><LiveToolsContext value={liveTools}><ChatBusyContext value={busy}><PagePaneContext value={pagePane}>
+          <ChatRowsContext.Provider value={rows}><LiveToolsContext value={liveTools}><ChatBusyContext value={busy}><PagePaneContext value={pagePane}>
             <MessagesList
               messages={windowedMessages}
               transcript={messages}
@@ -1184,7 +1151,7 @@ export const ChatView = memo(function ChatView({ bot: profile }: { bot: Bot }) {
               onRegenerate={regenerate}
               onReply={selectReply}
             />
-          </PagePaneContext></ChatBusyContext></LiveToolsContext></TeamMemorySavesContext></ChatRowsContext.Provider>
+          </PagePaneContext></ChatBusyContext></LiveToolsContext></ChatRowsContext.Provider>
           {stopNoticeDue(messages, stoppedAt, busy) && <CancelledTurnRow name={PERSON_STOPPED_TURN_NAME} />}
           {laterCount > 0 && (
             <div className="flex justify-center">

@@ -25,7 +25,7 @@ describe("shownChatIsUnread", () => {
   });
 
   it("is false away from the chat view or with nothing selected", () => {
-    expect(shownChatIsUnread(state({ selectedId: group.id, activeView: "routines" }))).toBe(false);
+    expect(shownChatIsUnread(state({ selectedId: group.id, activeView: "automations" }))).toBe(false);
     expect(shownChatIsUnread(state({ selectedId: "" }))).toBe(false);
   });
 });

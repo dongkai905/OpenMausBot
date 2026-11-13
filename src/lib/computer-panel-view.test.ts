@@ -24,11 +24,11 @@ describe("computer panel view persistence", () => {
     expect(() => writeComputerPanelView("sprout", "browser", { setItem })).not.toThrow();
   });
 
-  it("remembers a bot's routines tab without changing another bot's view", () => {
+  it("remembers a bot's browser tab without changing another bot's view", () => {
     const values = new Map<string, string>();
     const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
-    writeComputerPanelView("scout", "routines", storage);
-    expect(readComputerPanelView("scout", storage)).toBe("routines");
+    writeComputerPanelView("scout", "browser", storage);
+    expect(readComputerPanelView("scout", storage)).toBe("browser");
     expect(readComputerPanelView("other", storage)).toBe("computer");
   });
 
@@ -47,7 +47,7 @@ describe("computer panel view availability", () => {
   });
 
   it("drops the tabs the current mode does not render", () => {
-    expect(resolveComputerPanelView("routines", { advanced: false, androidConnected: false })).toBe("computer");
+    expect(resolveComputerPanelView("browser", { advanced: false, androidConnected: false })).toBe("computer");
     expect(resolveComputerPanelView("files", { advanced: true, androidConnected: true })).toBe("computer");
   });
 

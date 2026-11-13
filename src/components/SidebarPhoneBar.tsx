@@ -20,9 +20,9 @@ export function SidebarPhoneBar({ query, onQuery }: { query: string; onQuery: (q
       key: "automations",
       label: t("sidebar.nav.automations"),
       icon: <Zap size={18} />,
-      active: state.activeView === "routines",
+      active: state.activeView === "automations",
       attention: automationsNeedYou,
-      onSelect: () => dispatch({ type: "showRoutines", view: "list" }),
+      onSelect: () => dispatch({ type: "showAutomations" }),
     },
     {
       key: "team-map",

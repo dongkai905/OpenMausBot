@@ -1,5 +1,4 @@
 import { api, desktopApprovalBridge, persistBotUpdate, persistTaskApproval, type Bot } from "@/state/store";
-import type { Routine } from "./routines";
 import type { BotCreationDraft } from "./bot-creation-draft";
 import { imageAttachmentFromFile } from "./composer-attachments";
 import type { BotVisibility } from "../../shared/wire";
@@ -18,7 +17,7 @@ export async function preparedBotTemplate(draft: BotCreationDraft) {
   return template;
 }
 
-/** File setup and native consent finish before Chief handover or routine activation can affect other work. */
+/** File setup and native consent finish before a Chief handover can affect other work. */
 export async function createConfiguredBot(
   draft: BotCreationDraft,
   request: typeof api = api,
@@ -40,7 +39,6 @@ export async function createConfiguredBot(
       ...(preset ? { preset: preset.id } : {}) }),
   });
   let bot = response.bot;
-  const routines: Array<{ id: string; enabled: boolean }> = [];
   const warnings: string[] = [];
   try {
     const patched = await update(bot.id, { ...profile, ...draft.consent }, new AbortController().signal,
@@ -58,34 +56,18 @@ export async function createConfiguredBot(
         throw new Error(t("newBot.threadApprovalNotGranted"));
       }
     }
-    for (const [path, text] of Object.entries(template.memory)) {
-      if (preset?.notes.includes(path)) continue;
-      await request(`/api/bots/${bot.id}/memory/file`, {
-        method: "PUT", body: JSON.stringify({ path, text }),
-      });
-    }
     for (const skill of template.skills) {
       if (preset?.skills.includes(skill.name)) continue;
       await request(`/api/bots/${bot.id}/skill-template`, { method: "POST", body: JSON.stringify(skill) });
     }
-    for (const routine of template.routines) {
-      const result = await request<{ routine: Routine }>("/api/routines", {
-        method: "POST", body: JSON.stringify({ ...routine, botId: bot.id, enabled: false }),
-      });
-      routines.push({ id: result.routine.id, enabled: routine.enabled !== false });
-    }
   } catch (error) {
     const cleanup: string[] = [];
-    for (const routine of routines) {
-      try { await request(`/api/routines/${routine.id}`, { method: "DELETE" }); }
-      catch { cleanup.push(`routine ${routine.id}`); }
-    }
     try { await request(`/api/bots/${bot.id}`, { method: "DELETE" }); }
     catch { cleanup.push(`bot ${bot.name} (${bot.id})`); }
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(cleanup.length ? `${message}. Cleanup failed for ${cleanup.join(", ")}; remove them before retrying.` : message);
   }
-  // Creation is complete: never delete a bot whose routine may have run, undo a Chief handover, or invite a duplicate retry.
+  // Creation is complete: never undo a Chief handover, or invite a duplicate retry.
   if (chiefOfStaff) {
     try {
       const result = await request<{ bot: Bot }>(`/api/bots/${bot.id}`, {
@@ -95,10 +77,6 @@ export async function createConfiguredBot(
     } catch (error) {
       warnings.push(t("newBot.warning.chiefOfStaff", { error: error instanceof Error ? error.message : String(error) }));
     }
-  }
-  for (const routine of routines.filter(routine => routine.enabled)) {
-    try { await request(`/api/routines/${routine.id}`, { method: "PATCH", body: JSON.stringify({ enabled: true }) }); }
-    catch (error) { warnings.push(t("newBot.warning.routine", { error: error instanceof Error ? error.message : String(error) })); }
   }
   return { bot, warnings, ...(response.paused ? { paused: true as const } : {}) };
 }

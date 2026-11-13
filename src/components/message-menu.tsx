@@ -1,11 +1,9 @@
-import { BookmarkPlus, Code, Copy, Eye, Pencil, Pin, PinOff, RefreshCw, Square, Volume2 } from "lucide-react";
+import { Code, Copy, Eye, Pencil, Pin, PinOff, RefreshCw, Square, Volume2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
-import { useContext } from "react";
 import type { ConfigStatus, Group, Message, useStore } from "@/state/store";
 import { ACTION_ICON, type MessageMenuItem } from "@/components/MessageActions";
 import { useSpeakAction } from "@/components/SpeakButton";
-import { openConversationDialog, TEAM_MEMORY_ITEM, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
 
 export type PinAction = { pinned: boolean; onToggle: () => void; hint?: string };
 
@@ -32,14 +30,6 @@ function pinItem(pin: PinAction | undefined): MessageMenuItem[] {
 
 function idItem(messageId: string): MessageMenuItem {
   return { key: "copy-id", icon: <Copy {...ACTION_ICON} />, label: t("chat.copyMessageId"), onSelect: () => { void copyText(messageId); } };
-}
-
-/** "Save to team memory" on a message of a team bot's conversation; nothing in a group chat or off a team. */
-function useTeamMemoryItem(text: string, messageId: string, botId?: string, threadId?: string): MessageMenuItem[] {
-  const offered = useContext(TeamMemorySavesContext);
-  if (!offered || !botId || !threadId || !text.trim() || messageId.startsWith("optimistic-")) return [];
-  return [{ key: TEAM_MEMORY_ITEM, icon: <BookmarkPlus {...ACTION_ICON} />, label: t("teamMemorySave.menu"),
-    onSelect: () => openConversationDialog({ kind: "memory", botId, threadId, messageId, text }) }];
 }
 
 export function useBotMessageMenu({
@@ -71,7 +61,6 @@ export function useBotMessageMenu({
   pin?: PinAction;
 }): MessageMenuItem[] {
   const speak = useSpeakAction({ text, botId, messageId, voiceId, tts, localVoice });
-  const teamMemory = useTeamMemoryItem(text, messageId, botId, threadId);
   const items: MessageMenuItem[] = [];
   if (canSpeak && text) {
     items.push({
@@ -92,15 +81,13 @@ export function useBotMessageMenu({
     });
   }
   if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate });
-  items.push(...teamMemory, ...pinItem(pin), idItem(messageId));
+  items.push(...pinItem(pin), idItem(messageId));
   return items;
 }
 
-/** `save`: the message's "Save to team memory", as the bot menu's hook made it. */
-export function userMessageMenu({ messageId, onEdit, pin, save = [] }: { messageId: string; onEdit?: () => void; pin?: PinAction; save?: MessageMenuItem[] }): MessageMenuItem[] {
+export function userMessageMenu({ messageId, onEdit, pin }: { messageId: string; onEdit?: () => void; pin?: PinAction }): MessageMenuItem[] {
   return [
     ...(onEdit ? [{ key: "edit", icon: <Pencil {...ACTION_ICON} />, label: t("chat.editMessage"), onSelect: onEdit, idleOnly: true }] : []),
-    ...save,
     ...pinItem(pin),
     idItem(messageId),
   ];

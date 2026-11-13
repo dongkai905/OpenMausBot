@@ -1,7 +1,7 @@
-import type { BotRoutineTemplate, NewBotDefaults } from "../../shared/new-bot-defaults";
+import type { NewBotDefaults } from "../../shared/new-bot-defaults";
+import { tFromServer } from "@/lib/i18n";
 import type { MascotBodyId } from "../../shared/mascot-bodies";
 import type { MausColor } from "../../shared/wire";
-import { t, tFromServer } from "@/lib/i18n";
 
 export type ReadyBotCategory = "everyday" | "work" | "writing" | "design" | "sales" | "personal";
 
@@ -18,14 +18,7 @@ export interface ReadyBot {
   tryAsking: string[];
   /** Connected apps the bot works best with; suggested, never connected for the person. */
   apps: string[];
-  notes?: Record<string, string>;
-  routines?: BotRoutineTemplate[];
 }
-
-const WEEKDAYS = [1, 2, 3, 4, 5];
-
-const paused = (name: string, prompt: string, time: string, weekdays: number[]): BotRoutineTemplate =>
-  ({ name, prompt, schedule: { type: "daily", time, weekdays }, enabled: false, overlap: "skip" });
 
 export const READY_BOTS: ReadyBot[] = [
   {
@@ -61,7 +54,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "blue", mascotBody: "squircle" },
     tryAsking: ["What in my inbox needs me today?", "Draft replies to the three most urgent emails", "Who have I not answered in over a week?"],
     apps: ["gmail"],
-    routines: [paused("Morning inbox triage", "Triage my unread email and draft replies for anything that needs one.", "08:30", WEEKDAYS)],
   },
   {
     id: "research",
@@ -110,7 +102,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "orange", mascotBody: "shield" },
     tryAsking: ["What did the community ask about since yesterday?", "List open bug reports from this week", "Which question keeps coming up?"],
     apps: ["discord", "slack"],
-    routines: [paused("Community digest", "Summarise what happened in my community channels since the last digest.", "17:00", WEEKDAYS)],
   },
   {
     id: "social",
@@ -132,11 +123,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "coral", mascotBody: "star" },
     tryAsking: ["Plan next week's posts for LinkedIn and X", "Draft three posts about our launch and add them to Postiz", "What is scheduled in Postiz this week?"],
     apps: ["postiz"],
-    notes: {
-      "MEMORY.md": "- Voice, topics and channels for social posts live in memory/social.md; read it before writing a post.\n",
-      "memory/social.md": "---\ntitle: Social media\naliases: [social, posts, brand voice, channels, postiz]\n---\n\n- Channels and who each is for:\n- Voice (words to use, words to avoid):\n- Topics, and what never to post about:\n- Good times to post:\n",
-    },
-    routines: [paused("Weekly post plan", "Plan next week's social posts from memory/social.md and add them to Postiz as drafts for me to review.", "10:00", [1])],
   },
   {
     id: "ops",
@@ -153,7 +139,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "yellow", mascotBody: "capsule" },
     tryAsking: ["What's on today, and what's overdue?", "Find an hour for deep work this week", "Which follow-ups am I late on?"],
     apps: ["googlecalendar", "notion", "linear"],
-    routines: [paused("Daily plan", "Give me today's commitments, anything overdue, and the next action for each.", "08:00", WEEKDAYS)],
   },
   {
     id: "writer",
@@ -221,9 +206,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "blue", mascotBody: "star" },
     tryAsking: ["Plan four relaxed days in Lisbon in May", "What should I book now for a Japan trip in autumn?", "Make a packing list for a rainy week in Scotland"],
     apps: ["googlecalendar"],
-    notes: {
-      "memory/travel.md": "---\ntitle: Travel preferences\naliases: [trips, holidays, flights, hotels]\n---\n\n- Home airport:\n- Budget style (budget / mid / comfort):\n- Pace (relaxed / balanced / packed):\n- Seat, diet, and accessibility needs:\n",
-    },
   },
   {
     id: "study",
@@ -241,9 +223,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "purple", mascotBody: "blob" },
     tryAsking: ["Explain recursion like I'm new to programming", "Quiz me on the French Revolution", "Make a one-week revision plan for my exam"],
     apps: [],
-    notes: {
-      "memory/study.md": "---\ntitle: Study progress\naliases: [revision, exam, quiz, weak topics]\n---\n\n- Subjects:\n- Exam dates:\n- Topics to review:\n",
-    },
   },
   {
     id: "humanizer",
@@ -261,9 +240,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "pink", mascotBody: "blob" },
     tryAsking: ["Make this email sound less robotic", "Rewrite this landing page intro in my voice", "Here are three posts I wrote; learn my style"],
     apps: [],
-    notes: {
-      "memory/voice.md": "---\ntitle: My writing voice\naliases: [tone, style, voice]\n---\n\n- Words and phrases I use:\n- Words and phrases I avoid:\n- Formality (casual / neutral / formal):\n",
-    },
   },
   {
     id: "design-critic",
@@ -315,11 +291,6 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "green", mascotBody: "drop" },
     tryAsking: ["Add my monstera: living room, bright indirect light", "I watered the fern and the pothos today", "Why are my snake plant's leaves going yellow?"],
     apps: [],
-    notes: {
-      "MEMORY.md": "- Plant entries live in memory/plants.md; update them whenever the user waters, moves, or repots a plant.\n",
-      "memory/plants.md": "---\ntitle: My plants\naliases: [plants, watering, houseplants, garden]\n---\n\n<!-- One entry per plant: name · species · location · light · water every N days · last watered -->\n",
-    },
-    routines: [paused("Weekly plant check", "Check memory/plants.md and tell me which plants are due or overdue for water or care.", "09:00", [6])],
   },
 ];
 
@@ -341,11 +312,6 @@ export function readyBotTemplate(defaults: NewBotDefaults, bot: ReadyBot): NewBo
     color: bot.look.color,
     mascotBody: bot.look.mascotBody,
   };
-  for (const [path, text] of Object.entries(bot.notes ?? {})) {
-    const own = template.memory[path]?.trimEnd();
-    template.memory[path] = own ? `${own}\n${text}` : text;
-  }
-  template.routines = [...template.routines, ...(bot.routines ?? []).map((routine) => ({ ...routine, ...(bot.id === "social" ? { name: t("readyBots.routine.socialWeekly") } : {}), enabled: false }))];
   return template;
 }
 

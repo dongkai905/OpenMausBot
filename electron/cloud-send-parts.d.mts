@@ -1,4 +1,4 @@
-export type MoveKind = "routine" | "call" | "webhook" | "app-event" | "imported-skill" | "library-skill";
+export type MoveKind = "imported-skill" | "library-skill";
 export type SendKind = "bot" | "skill" | "login" | "1password" | "secret" | "setting" | MoveKind;
 
 export interface SendItem {
@@ -39,7 +39,6 @@ export declare const MOVE_LINE: string;
 export declare const TEAM_MOVE_LINE: "team-move";
 export declare const BOT_MOVE_LINE: "bot-move";
 export declare const MOVE_BOT_PARTS: Readonly<Record<string, readonly string[]>>;
-export declare const AUTOMATION_KINDS: readonly MoveKind[];
 export declare const MOVE_KINDS: readonly MoveKind[];
 export declare const PICTURE_PART: "picture";
 export declare const SETTINGS: readonly ["profile", "language"];

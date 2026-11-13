@@ -1,25 +1,16 @@
-import type { NewBotDefaults, BotDefaultsProfile, BotRoutineTemplate } from "../../shared/new-bot-defaults";
+import type { NewBotDefaults, BotDefaultsProfile } from "../../shared/new-bot-defaults";
 import { api, type Bot, type ModelSelection } from "@/state/store";
 import type { BotUpdatePatch } from "@/state/bot-patch-queue";
-import type { Routine, RoutineInput } from "./routines";
 import type { ChosenPreset } from "./bot-presets";
 import { t } from "@/lib/i18n";
 import { randomUuid } from "./random-uuid";
 
-export const EMPTY_BOT_DEFAULTS: NewBotDefaults = { profile: {}, memory: {}, skills: [], routines: [] };
-
-const routineTemplate = (routine: Routine): BotRoutineTemplate => ({
-  name: routine.name, prompt: routine.prompt, schedule: routine.schedule,
-  enabled: routine.enabled, runOn: routine.runOn, durationMinutes: routine.durationMinutes,
-  timeoutMinutes: routine.timeoutMinutes, overlap: routine.overlap,
-  attachments: routine.attachments,
-});
+export const EMPTY_BOT_DEFAULTS: NewBotDefaults = { profile: {}, memory: {}, skills: [] };
 
 export class BotCreationDraft {
   readonly id = `draft-${randomUuid()}`;
   template: NewBotDefaults;
   consent: Pick<BotUpdatePatch, "acknowledgeLocalAuto"> & { acknowledgePeerScope?: boolean } = {};
-  routines: Routine[];
   preset?: ChosenPreset;
   role?: string;
   avatarFile?: File;
@@ -27,7 +18,6 @@ export class BotCreationDraft {
 
   constructor(defaults: NewBotDefaults, readonly changed: () => void, private network: typeof api = api) {
     this.template = structuredClone(defaults);
-    this.routines = defaults.routines.map(routine => this.routine({ ...routine, botId: this.id }));
   }
 
   get bot(): Bot {
@@ -63,23 +53,7 @@ export class BotCreationDraft {
     this.changed();
   }
 
-  setMemory(path: string, text: string | null) {
-    if (text === null) delete this.template.memory[path];
-    else this.template.memory[path] = text;
-    this.changed();
-  }
-
-  setRoutineEnabled(id: string, enabled: boolean) {
-    this.routines = this.routines.map(routine => routine.id === id ? { ...routine, enabled } : routine);
-    this.changed();
-  }
-
-  removeRoutine(id: string) {
-    this.routines = this.routines.filter(routine => routine.id !== id);
-    this.changed();
-  }
-
-  export(): NewBotDefaults { return structuredClone({ ...this.template, routines: this.routines.map(routineTemplate) }); }
+  export(): NewBotDefaults { return structuredClone(this.template); }
 
   uploadAvatar = async (file: File): Promise<string> => {
     if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) throw new Error(t("newBot.avatar.invalidType"));
@@ -91,22 +65,6 @@ export class BotCreationDraft {
   };
 
   dispose() { if (this.avatarObjectUrl) URL.revokeObjectURL(this.avatarObjectUrl); }
-
-  private routine(input: RoutineInput, previous?: Routine): Routine {
-    const { groupId: _group, resultsThreadId: _results, checks: _checks, access: _access, deliver: _deliver, modelSelection: _model, schedule, ...fields } = input;
-    const normalizedSchedule = schedule.type === "interval" ? {
-      ...schedule, weekdays: schedule.weekdays ?? undefined,
-      window: schedule.window ?? undefined, endsAt: schedule.endsAt ?? undefined,
-    } : schedule.type === "limit_reset" ? { ...schedule, repeat: schedule.repeat ?? "once", at: schedule.at ?? null } : schedule;
-    return {
-      id: previous?.id ?? `draft-${randomUuid()}`, createdAt: previous?.createdAt ?? Date.now(),
-      updatedAt: Date.now(), nextRunAt: null, runOn: "maus", ...previous, ...fields,
-      enabled: input.enabled ?? previous?.enabled ?? true, target: "bot", botId: this.id,
-      timeoutMinutes: input.timeoutMinutes ?? undefined,
-      durationMinutes: input.durationMinutes ?? previous?.durationMinutes ?? 30,
-      schedule: normalizedSchedule,
-    };
-  }
 
   request: typeof api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const method = init?.method ?? "GET";
@@ -142,14 +100,6 @@ export class BotCreationDraft {
       const blob = await (await fetch(dataUrl)).blob();
       const avatarUrl = await this.uploadAvatar(new File([blob], "avatar.png", { type: blob.type }));
       result = { avatarUrl, bot: { ...this.bot, avatarUrl, avatarCrop: "circle" } };
-    } else if ((path === "/api/routines" && method === "POST") || (path.startsWith("/api/routines/draft-") && method === "PATCH")) {
-      if (body.target && body.target !== "bot") throw new Error("A new bot's routine must target that bot");
-      if (body.botId !== this.id) throw new Error("Routine belongs to another bot");
-      const previous = this.routines.find(routine => path === `/api/routines/${routine.id}`);
-      if (method === "PATCH" && !previous) throw new Error("No such draft routine");
-      const routine = this.routine(body, previous);
-      this.routines = [...this.routines.filter(item => item.id !== routine.id), routine];
-      this.changed(); result = { routine };
     } else throw new Error("This operation requires a created bot");
     return result as T;
   };

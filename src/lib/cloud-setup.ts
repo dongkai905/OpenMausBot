@@ -17,7 +17,7 @@ const WELCOME_FINISHED: Record<WelcomeStep, string> = { bring: "cloud-welcome-br
 export const welcomeStepHint = (step: WelcomeStep): string => WELCOME_FINISHED[step];
 export const welcomeStepFinished = (onboarding: OnboardingStatus | undefined, step: WelcomeStep): boolean => hintSeen(onboarding, WELCOME_FINISHED[step]);
 
-export type CloudSetupStep = "cloud" | "job" | "engine" | "plan" | "move" | "files";
+export type CloudSetupStep = "cloud" | "engine" | "move" | "files";
 export type CloudSetupStatus = "todo" | "done" | "skipped";
 export interface CloudSetupItem { id: CloudSetupStep; status: CloudSetupStatus }
 
@@ -27,7 +27,6 @@ export interface CloudSetupFacts {
   enginesKnown: boolean;
   engineReady: boolean;
   onboarding: OnboardingStatus | undefined;
-  planned?: boolean;
   /** The welcome fills the main pane right now. */
   welcomeShown?: boolean;
 }
@@ -63,8 +62,7 @@ export function cloudSetupStage(facts: CloudSetupFacts): "none" | "waiting" | "h
   if (hintSeen(facts.onboarding, CLOUD_SETUP_HIDDEN)) return "hidden";
   const welcome = cloudWelcomeStage(facts);
   if (welcome === "pending") return facts.welcomeShown ? "welcome" : "shown";
-  const given = hintSeen(facts.onboarding, CLOUD_INTENT_GIVEN);
-  const worked = given ? Boolean(facts.planned) : welcome === "ended" || Boolean(facts.onboarding.firstTurnAt);
+  const worked = welcome === "ended" || Boolean(facts.onboarding.firstTurnAt);
   if (facts.engineReady && worked) return "done";
   return "shown";
 }
@@ -76,7 +74,6 @@ function welcomeBringStatus(onboarding: OnboardingStatus | undefined): CloudSetu
 
 /** On a Cloud with the welcome, the compact form of its steps; on one set up before it, the first-job checklist. */
 export function cloudSetupItems(facts: CloudSetupFacts): CloudSetupItem[] {
-  const given = hintSeen(facts.onboarding, CLOUD_INTENT_GIVEN);
   const welcome = cloudWelcomeStage(facts);
   if (welcome === "pending") {
     return [
@@ -87,10 +84,7 @@ export function cloudSetupItems(facts: CloudSetupFacts): CloudSetupItem[] {
     ];
   }
   const items: CloudSetupItem[] = [{ id: "cloud", status: "done" }];
-  if (welcome !== "ended") items.push({ id: "job", status: given || facts.onboarding?.firstTurnAt ? "done" : "todo" });
-  else if (given) items.push({ id: "job", status: "done" });
   items.push({ id: "engine", status: facts.engineReady ? "done" : "todo" });
-  if (given) items.push({ id: "plan", status: facts.planned ? "done" : "todo" });
   const move = welcome === "ended" ? welcomeBringStatus(facts.onboarding) : null;
   if (move) items.push({ id: "move", status: move });
   return items;

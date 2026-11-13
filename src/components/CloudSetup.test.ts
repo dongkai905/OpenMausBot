@@ -65,7 +65,7 @@ beforeEach(() => {
   f.dispatch = action => { dispatched.push(action); };
   f.state = {
     connected: true, instances: [signedOut], activeView: "chat", selectedId: "b1",
-    bots: [{ id: "b1", threadId: "t1", name: "Maus" }], routines: [],
+    bots: [{ id: "b1", threadId: "t1", name: "Maus" }],
     config: { cloudHome: true, onboarding: { ...EMPTY_ONBOARDING } },
   };
   vi.stubGlobal("window", { ogb: { platform: "darwin" }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
@@ -129,7 +129,7 @@ it("when the person steps away from the welcome, it is the welcome's steps in sh
   expect(statuses()).toEqual({ cloud: "done", move: "skipped", engine: "todo", files: "todo" });
   expect(html).toContain("2 of 4 done");
   expect(html).toContain("You&#x27;re on this step");
-  f.state.activeView = "routines";
+  f.state.activeView = "automations";
   ({ html } = render());
   expect(html).toContain("Required. Cloud bots use your own Claude or ChatGPT account, or an API key.");
   button("Continue setup")!.props.onClick!();
@@ -177,7 +177,7 @@ it("connecting an AI is done when any engine can run; its action shows the exist
   f.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [CLOUD_INTENT_ASKED, CLOUD_INTENT_GIVEN] };
   await mount();
   expect(button("Connect")).toBeUndefined();
-  f.state.activeView = "routines";
+  f.state.activeView = "automations";
   button("Connect")!.props.onClick!();
   expect(dispatched).toEqual([{ type: "showChat" }]);
   f.state.instances = [signedOut, ready];
@@ -255,11 +255,11 @@ it("fills its progress from the left by how many steps are done, whichever they 
   const filled = () => render().nodes
     .filter(node => String((node.props as { className?: string }).className ?? "").includes("progress-fill"))
     .map(node => (node.props as Record<string, unknown>)["data-filled"] === "");
-  expect(statuses()).toEqual({ cloud: "done", job: "done", engine: "todo", plan: "todo" });
-  expect(filled()).toEqual([true, true, false, false]);
-  expect(render().html).toContain('aria-valuenow="2"');
-  expand("Approve its plan");
-  expect(filled()).toEqual([true, true, false, false]);
+  expect(statuses()).toEqual({ cloud: "done", engine: "todo" });
+  expect(filled()).toEqual([true, false]);
+  expect(render().html).toContain('aria-valuenow="1"');
+  expand("Connect your AI");
+  expect(filled()).toEqual([true, false]);
 });
 
 // These send a first job, which stays sent in the module's store: keep them last.
@@ -268,15 +268,14 @@ it("counts a job as given the moment it is sent, before the Cloud's record answe
   f.state.instances = [ready];
   markIntentSent("b1");
   await mount();
-  expect(statuses()).toMatchObject({ job: "done", engine: "done", plan: "todo" });
-  expect(render().html).toContain("Approve its plan");
+  expect(statuses()).toMatchObject({ engine: "done" });
 });
 
 it("opens the chat the job went to as the bot's row does: with threads hidden at its main thread, not where an activity row left it", async () => {
   setUpBeforeWelcome();
   f.state.instances = [ready];
   markIntentSent("b1");
-  f.state.activeView = "routines";
+  f.state.activeView = "automations";
   f.state.bots = [{ id: "b1", threadId: "t1", mainThreadId: "main", name: "Maus",
     tasks: [{ threadId: "t1", title: "Routine report", createdAt: 1 }, { threadId: "main", title: "Set up", createdAt: 2 }] }];
   await mount();
@@ -288,20 +287,13 @@ it("opens the chat the job went to as the bot's row does: with threads hidden at
   expect(dispatched).toEqual([{ type: "showChat" }, { type: "switchTask", botId: "b1", threadId: "main" }]);
 });
 
-it("is ready only once the job's routine exists, not when the bot's first turn asks its questions, and offers to run it now", async () => {
+it("is ready once the bot has worked, not when its first turn asks its questions", async () => {
   f.state.instances = [ready];
   f.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [CLOUD_INTENT_ASKED, CLOUD_INTENT_GIVEN], firstTurnAt: "2026-10-06T08:00:00.000Z" };
-  f.state.routines = [];
   await mount();
   expect(render().html).toContain("Set up MausBot Cloud");
-  expect(statuses().plan).toBe("todo");
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(8, 0, 0, 0);
-  f.state.routines = [{ id: "r1", name: "Morning news digest", botId: "b1", createdAt: Date.now(), nextRunAt: tomorrow.getTime() }];
   render(); for (const effect of f.effects) effect();
   f.values.splice(f.ownHooks);
   const { html } = render();
   expect(html).toContain("The Cloud is ready");
-  expect(html).toContain("Morning news digest");
-  expect(html).toContain("runs tomorrow at");
-  expect(html).toContain("Run it now");
 });

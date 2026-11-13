@@ -120,11 +120,6 @@ export function memoryFiles(workspace: string, workingFolders: readonly string[]
     const described = describe(file);
     if (described !== undefined) files[name] = described;
   };
-  add("MEMORY.md", join(workspace, "MEMORY.md"));
-  add("memory", join(workspace, "memory"));
-  for (const name of [...listing(join(workspace, "memory"), Infinity)?.names ?? []].sort()) if (name !== "log") add(`memory/${name}`, join(workspace, "memory", name));
-  add("memory/log", join(workspace, "memory", "log"));
-  for (const name of [...listing(join(workspace, "memory", "log"), Infinity)?.names ?? []].sort()) add(`memory/log/${name}`, join(workspace, "memory", "log", name));
   const present = (dir: string, wanted: readonly string[], listed = listing(dir, ROOT_ENTRY_CAP)) =>
     listed ? wanted.filter((name) => listed.overflow || listed.names.has(name)) : [];
   const harnessLink = (entry: string, path: string) =>

@@ -144,7 +144,7 @@ describe("the Bot API card", () => {
     expect(find("bot-api-calls")).toBeNull();
     expect(find("bot-api-webhooks")!.textContent).toBe("Webhooks: 2 triggers");
     await click("bot-api-webhooks");
-    expect(fixture.dispatched).toEqual([{ type: "showRoutines", view: "list" }]);
+    expect(fixture.dispatched).toEqual([{ type: "showAutomations" }]);
   });
 
   it("says when the address only works on this computer, and lists calls in plain words", async () => {

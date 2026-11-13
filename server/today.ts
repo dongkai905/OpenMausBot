@@ -8,8 +8,7 @@ import { isClientCancellation } from "../shared/client-cancel.ts";
 import { failedTurnCause } from "../shared/failed-turn.ts";
 import type { PlaceRow, PlaceState } from "../shared/place-view.ts";
 import type { ServerTextParams } from "../shared/server-text.ts";
-import type { RoutineRunReport, RoutineRunStatus, RoutineRunTrigger } from "../shared/routines.ts";
-import { classifyToolCall, isReportRoutine, minutesSaved, OUTCOME_CATEGORIES, toolApps, type OutcomeCategory, type OutcomeCounts } from "../shared/today-outcomes.ts";
+import { classifyToolCall, minutesSaved, OUTCOME_CATEGORIES, toolApps, type OutcomeCategory, type OutcomeCounts } from "../shared/today-outcomes.ts";
 import { NEEDS_YOU_WINDOW_MS, TODAY_MAX_LINES, TODAY_MAX_WINDOW_MS, type NeedsYouItem, type TodayLine, type TodayReport, type TodayStarter } from "../shared/today.ts";
 import { trialCreditKind } from "../shared/trial-credit.ts";
 import { toolkitName } from "./activity.ts";
@@ -20,33 +19,14 @@ export interface TodayViewer {
   /** Engines, plans and connected apps are an admin's to fix; anyone else sees only their bots' questions. */
   admin: boolean;
   thread(threadId: string): boolean;
-  routine(run: { botId?: unknown; groupId?: unknown }): boolean;
   /** A Team Cloud: whether an ask in this conversation is this viewer's. It then holds approvals too, since each one
    * waits on the one person it is for. */
   asks?(botId: string | undefined, threadId: string): boolean;
 }
 
-interface RunRecord {
-  id: string;
-  routineId: string;
-  routineName: string;
-  botId: string;
-  groupId?: string;
-  status: RoutineRunStatus;
-  manual: boolean;
-  triggerSource?: RoutineRunTrigger;
-  threadId?: string;
-  scheduledFor: number;
-  startedAt?: number;
-  finishedAt?: number;
-  error?: string;
-  report?: RoutineRunReport;
-}
-
 export interface TodaySources {
   bots: ReadonlyArray<{ id: string; threadId: string; tasks?: ReadonlyArray<{ threadId: string }>; modelSelection?: { instanceId: string } }>;
   groups: ReadonlyArray<{ id: string; threadId: string; tasks?: ReadonlyArray<{ threadId: string }> }>;
-  routines: { listRoutines(): ReadonlyArray<{ botId: string; groupId?: string }>; listRuns(from?: number): readonly RunRecord[] } | null;
   engines: ReadonlyArray<{ instanceId: string; snapshot?: { state: string; authenticated?: boolean } }>;
   /** Work parked on a question for the person (a NEEDS INPUT line rather than a card); one its requester decides
    * (`decide`) waits on no person. */
@@ -61,12 +41,10 @@ const OWNER_PLACES: ReadonlySet<PlaceState> = new Set([
 /** A connected app refusing for want of a working sign-in, as Composio and the apps behind it word it. */
 const BROKEN_CONNECTION = /\b(?:401|unauthori[sz]ed|invalid[_ ]grant|(?:token|credentials?) (?:has |have )?(?:expired|been revoked)|expired (?:token|credentials?)|re-?authori[sz]e|re-?authenticate|reconnect|no (?:active )?connected account|connected ?account (?:not found|is (?:inactive|expired|disabled))|connection (?:is )?(?:inactive|expired|revoked|not found)|insufficient[_ ](?:scopes?|permissions?)|ACCESS_TOKEN_SCOPE_INSUFFICIENT|not connected)\b/i;
 const KIND_ORDER: Record<NeedsYouItem["kind"], number> = { "signed-out": 0, "out-of-credit": 1, "usage-limit": 2, connection: 3, place: 4, question: 5, message: 6 };
-const DAY_MS = 24 * 60 * 60_000;
 const TITLE_CHARS = 160;
 /** A failed row and the summary its turn ends with are written this close together. */
 const FAILURE_SETTLES_MS = 30_000;
 /** A run's last turn summary lands this soon after the run is marked finished. */
-const RUN_SETTLES_MS = 60_000;
 /** Enough of an app's name to find its calls however a tool spells it (GOOGLEDRIVE_…, claude_ai_Google_Drive). */
 const APP_WORD_CHARS = 5;
 
@@ -117,12 +95,6 @@ function starter(sender: { role: string; peer: number; via: string | null; relay
   return "person";
 }
 
-function runEnd(run: RunRecord, now: number): number | null {
-  if (run.status === "completed" || run.status === "failed") return run.finishedAt ?? run.startedAt ?? run.scheduledFor;
-  if (run.status === "missed") return run.finishedAt ?? run.scheduledFor;
-  return run.status === "cancelled" ? null : now;
-}
-
 function approvalText(card: QuestionCard & { tool?: string }) {
   const text = plainTitle(`Approve: ${card.subtitle || card.tool || card.title || ""}`);
   return text === "Approve:" ? { text } : noticeLine("chat.notice.approve", { what: text.slice("Approve: ".length) });
@@ -168,41 +140,8 @@ export function todayReport(sources: TodaySources, viewer: TodayViewer, requeste
   }
 
   const lines: TodayLine[] = [];
-  const routines = { ok: 0, failed: 0 };
-  const runWindows = new Map<string, Array<{ start: number; end: number }>>();
-  for (const run of sources.routines?.listRuns(since - 2 * DAY_MS) ?? []) {
-    const end = runEnd(run, now);
-    if (end === null || !viewer.routine(run)) continue;
-    if (run.threadId && run.startedAt !== undefined) {
-      const windows = runWindows.get(run.threadId) ?? [];
-      windows.push({ start: run.startedAt, end: (run.finishedAt ?? now) + RUN_SETTLES_MS });
-      runWindows.set(run.threadId, windows);
-    }
-    if (end < since || end > now || !["completed", "failed", "missed"].includes(run.status)) continue;
-    const ok = run.status === "completed";
-    if (ok) routines.ok += 1;
-    else routines.failed += 1;
-    if (run.report?.state === "quiet") continue;
-    const reported = run.report?.state === "posted" && seen(run.report.threadId) ? run.report.threadId : undefined;
-    const outcomes: OutcomeCounts = {};
-    for (const event of run.threadId && run.startedAt !== undefined ? byThread.get(run.threadId) ?? [] : []) {
-      if (event.at >= run.startedAt! && event.at <= end) for (const category of event.categories) add(outcomes, category);
-    }
-    if (ok && isReportRoutine(run.routineName)) {
-      add(counts, "report");
-      add(outcomes, "report");
-    }
-    lines.push({
-      id: run.id, at: end, botId: run.botId, ...(reported ?? seen(run.threadId) ? { threadId: reported ?? run.threadId } : {}), routineId: run.routineId,
-      title: plainTitle(run.routineName), ok, ...(!ok && run.error ? { error: plainTitle(run.error) } : {}),
-      startedBy: run.triggerSource ?? (run.manual ? "manual" : "schedule"), outcomes,
-    });
-  }
-
-  const inRun = (threadId: string, at: number) => (runWindows.get(threadId) ?? []).some((window) => at >= window.start && at <= window.end);
   const turnLines: Array<TodayLine & { requestMessageId?: string; turn?: string }> = [];
   for (const { row, digest } of digests) {
-    if (inRun(row.threadId, row.at)) continue;
     const botId = digest.botId || row.fromBotId || owners.get(row.threadId)?.botId;
     if (!botId) continue;
     const turn = digest.turnId || row.turnId || "";
@@ -213,7 +152,6 @@ export function todayReport(sources: TodaySources, viewer: TodayViewer, requeste
     });
   }
   for (const { row, cause } of failures) {
-    if (inRun(row.threadId, row.at)) continue;
     const settledBy = turnLines.find((line) => line.threadId === row.threadId &&
       (row.turnId ? line.turn === row.turnId : line.at >= row.at && line.at - row.at <= FAILURE_SETTLES_MS));
     if (settledBy) {
@@ -240,11 +178,9 @@ export function todayReport(sources: TodaySources, viewer: TodayViewer, requeste
     until: now,
     tiles: OUTCOME_CATEGORIES.flatMap((category) => counts[category] ? [{ category, count: counts[category]! }] : []),
     minutesSaved: minutesSaved(counts),
-    routines,
     needsYou: needsYou(sources, viewer, owners, seen, now),
     lines: finished,
     moreLines: Math.max(0, lines.length - shown.length),
-    routineCount: (sources.routines?.listRoutines() ?? []).filter((routine) => viewer.routine(routine)).length,
   };
 }
 

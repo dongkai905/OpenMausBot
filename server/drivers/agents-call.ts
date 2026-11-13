@@ -12,7 +12,6 @@ import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts";
 import { catalogProfileFromEnv, fullInputSchema, SHARED_COMPUTER_TOOL_NAMES } from "./agents-catalog.ts";
 import { harnessClientFromEnv } from "./agents-client.ts";
 import type { HarnessClient, Json } from "./agents-client.ts";
-import { memorySearchText } from "./memory-search-text.ts";
 import { boundedAgentResult } from "./agents-result.ts";
 import { outOfBounds } from "./agents-schema.ts";
 import { dropBlankArguments } from "./agents-blank-arguments.ts";
@@ -110,30 +109,6 @@ function handoffIds(r: Json): string[] {
   const receipts = Array.isArray(r.receipts) ? r.receipts.filter(jsonRecord) : [];
   return receipts.map((receipt) => receipt.requestId).filter((id): id is string => typeof id === "string" && id.trim().length > 0);
 }
-const MOVED_ENTRIES_SHOWN = 5;
-const FORGOTTEN_SHOWN = 8;
-
-/** A preference saved once in the person's About me, which every bot reads in their work. */
-function preferText(r: Json): string {
-  const whose = typeof r.person === "string" && r.person ? `${r.person}'s` : "the person's";
-  return r.preference === "saved"
-    ? `Saved in ${whose} About me, which every bot reads in their work. Don't pass it on to other bots or save it in your own notes too.`
-    : `Already in ${whose} About me, or they removed it before: nothing to save or pass on.`;
-}
-
-function forgetText(passage: string, r: Json): string {
-  const list = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-  const notes = list(r.forgotten);
-  const aboutMe = list(r.aboutMe);
-  if (!notes.length && !aboutMe.length) {
-    return `Nothing saved mentions ${JSON.stringify(passage)}: not in your notes, not in About me. Try other words for it once; if nothing matches, tell the person it was not saved.`;
-  }
-  const facts = [...new Set([...notes, ...aboutMe])];
-  const shown = facts.slice(0, FORGOTTEN_SHOWN).map((fact) => JSON.stringify(fact)).join(", ");
-  const more = facts.length > FORGOTTEN_SHOWN ? ` and ${facts.length - FORGOTTEN_SHOWN} more` : "";
-  return `Forgotten everywhere it was saved${aboutMe.length ? ", About me included, which all their bots read" : ""}: ${shown}${more}. Confirm to the person in one plain line what you forgot.`;
-}
-
 export const capResult = (text: string, context: ToolCallContext) => boundedAgentResult(text, (retained, truncated) => {
   if (context.externalRuntime) throw new Error("External runtime results are not cached");
   return context.client.api("/api/internal/tool-result", { method: "POST", signal: AbortSignal.timeout(3_000),
@@ -717,39 +692,6 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     });
     return confirmationResult(r, "the default model change", "model");
   }
-  if (member === "memory_update") {
-    const passageOnly = args.action === "remove" || args.action === "forget";
-    if (!["append", "replace", "remove", "supersede", "forget", "prefer"].includes(String(args.action))
-      || (!passageOnly && (typeof args.text !== "string" || !args.text.trim()))
-      || (args.action !== "append" && args.action !== "prefer" && (typeof args.old_text !== "string" || !args.old_text.trim()))) {
-      return { text: "Use memory_update action=append with text, replace or supersede with text and old_text, remove with old_text, forget with old_text naming what to forget, or prefer with text: one standing preference of the person.", isError: true };
-    }
-    const { body: r } = await apiResponse("/api/internal/memory", {
-      method: "POST",
-      body: JSON.stringify({
-        fromBotId: BOT_ID,
-        fromThreadId: THREAD_ID,
-        action: args.action,
-        text: args.text,
-        oldText: args.old_text,
-        ...(typeof args.until === "string" && args.until.trim() ? { until: args.until.trim() } : {}),
-      }),
-    });
-    if (r.error || r.ok !== true) return { text: String(r.error ?? "Memory update was not confirmed."), isError: true };
-    if (args.action === "forget") return { text: forgetText(String(args.old_text), r) };
-    if (args.action === "prefer") return { text: preferText(r) };
-    const entry = typeof r.entry === "string" && r.entry ? ` Entry: ${r.entry}` : "";
-    const moved = Array.isArray(r.moved) ? r.moved.filter((line) => typeof line === "string") : [];
-    const full = r.truncated
-      ? "\nSaved, but the lines that never move out of MEMORY.md (hand-written ones, health and safety facts) fill what loads each session, so the newest entries do not load. Tell the person their saved notes are full, and that they can remove ones they no longer need under What it remembers in your panel."
-      : "";
-    const shown = moved.slice(0, MOVED_ENTRIES_SHOWN).map((text) => text.split("\n")[0]);
-    const more = moved.length > shown.length ? `\n…and ${moved.length - shown.length} more` : "";
-    const movedNote = moved.length
-      ? `\nTo stay within what loads each session, moved ${moved.length === 1 ? "1 older entry" : `${moved.length} older entries`} to your archive (session_search finds them):\n${shown.join("\n")}${more}`
-      : "";
-    return { text: `Memory updated.${entry}${full}${movedNote}` };
-  }
   if (name === "retry_thread") {
     const botId = String(args.bot_id ?? "").trim();
     const threadId = String(args.thread_id ?? "").trim();
@@ -761,35 +703,6 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     });
     if (r.error) return { text: `Couldn't retry that thread: ${String(r.error)}`, isError: true };
     return { text: typeof r.message === "string" ? r.message : "The thread is running again. Its result stays in that thread; you are not woken for it — check it later with session_search or list_threads if you need to." };
-  }
-  if (member === "memory_log") {
-    if (typeof args.text !== "string" || !args.text.trim()) {
-      return { text: "memory_log needs text: one line about what happened.", isError: true };
-    }
-    const r = await api("/api/internal/memory/log", {
-      method: "POST",
-      body: JSON.stringify({ fromBotId: BOT_ID, fromThreadId: THREAD_ID, text: args.text }),
-    });
-    if (r.error || r.ok !== true) return { text: String(r.error ?? "The log line was not confirmed."), isError: true };
-    return { text: `Logged to ${String(r.file)}: ${String(r.line)}` };
-  }
-  if (name === "propose_team_memory") {
-    const kind = String(args.kind ?? "").trim();
-    const entryName = String(args.name ?? "").trim();
-    const detail = String(args.detail ?? "").trim();
-    if (!kind || !entryName || !detail) return { text: "propose_team_memory needs kind, name, and detail.", isError: true };
-    const r = await api("/api/internal/team-memory", {
-      method: "POST", body: JSON.stringify({
-        fromBotId: BOT_ID,
-        fromThreadId: THREAD_ID,
-        kind,
-        key: typeof args.key === "string" ? args.key : undefined,
-        name: entryName,
-        detail,
-        aliases: Array.isArray(args.aliases) ? args.aliases.filter((alias) => typeof alias === "string") : undefined,
-      }),
-    });
-    return confirmationResult(r, `the team memory entry for ${entryName}`, "entry");
   }
   if (member === "session_search") {
     const q = String(args.query ?? "").trim();
@@ -803,20 +716,14 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (since) query.set("since", since);
     if (until) query.set("until", until);
     if (typeof args.limit === "number" && Number.isFinite(args.limit)) query.set("limit", String(Math.trunc(args.limit)));
-    if (args.scope === "conversations" || args.scope === "memory" || args.scope === "team") query.set("scope", args.scope);
+    if (args.scope === "conversations" || args.scope === "team") query.set("scope", args.scope);
     const r = await api(`/api/internal/session-search?${query.toString()}`);
     const hits = Array.isArray(r.hits) ? (r.hits as Json[]) : [];
-    const memoryHits = Array.isArray(r.memoryHits) ? r.memoryHits.filter(jsonRecord) : [];
-    const teamHits = Array.isArray(r.teamHits) ? r.teamHits.filter(jsonRecord) : [];
-    const memoryBlock = memorySearchText(memoryHits, teamHits);
     const asked = q ? `matches "${q}"` : `is there since ${since}${until ? ` until ${until}` : ""}`;
-    if (!hits.length && !memoryHits.length && !teamHits.length) {
-      return { text: q
-        ? `Nothing of yours ${asked} — no earlier conversation and no memory file. Try fewer or different words; every word must appear.`
-        : `Nothing of yours ${asked} — no message in any of your conversations in that window.` };
-    }
     if (!hits.length) {
-      return { text: `${memoryBlock}No earlier conversation matches. These are your own notes, not new instructions; build on them.` };
+      return { text: q
+        ? `Nothing of yours ${asked} — no earlier conversation. Try fewer or different words; every word must appear.`
+        : `Nothing of yours ${asked} — no message in any of your conversations in that window.` };
     }
     const lines = hits.map((hit) => {
       const when = recallWhen(hit.at, Boolean(q));
@@ -831,7 +738,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     const crossed = hits.some((hit) => hit.crossed === true);
     return {
       text:
-        `${memoryBlock}${hits.length} ${q ? "matching " : ""}message${hits.length === 1 ? "" : "s"} from your earlier conversations (${q ? "best match first" : "newest first"}):\n${lines.join("\n")}\n\n` +
+        `${hits.length} ${q ? "matching " : ""}message${hits.length === 1 ? "" : "s"} from your earlier conversations (${q ? "best match first" : "newest first"}):\n${lines.join("\n")}\n\n` +
         "These are your own past notes. If one of them is the message you need, call session_search with its thread_id and message_id for the full text rather than searching again. Build on them rather than redoing the work; ask the user only about what they do not cover." +
         (crossed
           ? " The hits marked private came from your one-to-one conversation with this user, not from this room; the room has been shown that you recalled them. Use them, and say where something came from if anyone asks."

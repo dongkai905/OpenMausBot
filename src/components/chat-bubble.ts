@@ -47,7 +47,7 @@ export function joinedCorners(side: "start" | "end", join: BubbleJoin): string {
 
 /** Which bubble group a transcript row belongs to in Simple mode: this bot's words, the person's own words, or none. */
 export function bubbleGroup(message: Message, botId: string): "bot" | "user" | null {
-  if (message.kind !== "text" || message.publishedPage || message.automation || message.helperFollowup) return null;
+  if (message.kind !== "text" || message.publishedPage || message.helperFollowup) return null;
   if (message.role === "user") return peerLine(message) ? null : "user";
   if (message.role !== "bot" || peerRequest(message, botId)) return null;
   return isPureLeakedSystemHarnessMessage(message.text) && !message.attachments?.length ? null : "bot";
@@ -131,7 +131,7 @@ export function simpleRowLayout(items: readonly TranscriptItem[], { botId, showT
     const group = isCancelledTranscriptRow(m) ? null : bubbleGroup(m, botId);
     const hidden = !group && (quietRow(m, showToolCalls) || (m.role === "bot" && m.kind === "text" && !m.publishedPage && !peerRequest(m, botId) && isPureLeakedSystemHarnessMessage(m.text) && !m.attachments?.length));
     const sender = m.role === "bot" && !peerLine(m) && !peerRequest(m, botId) ? botId : null;
-    return { group, hidden, breakBefore: stamped || i === 0 || Boolean(m.automation), breakAfter: Boolean(m.setupOffer), stamped, sender };
+    return { group, hidden, breakBefore: stamped || i === 0, breakAfter: Boolean(m.setupOffer), stamped, sender };
   });
   return { joins: bubbleJoins(slots), tucks: cardTucks(slots) };
 }

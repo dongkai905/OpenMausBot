@@ -162,8 +162,6 @@ export function installCloudSend({ ipcMain, cloudPage, server, local, home, cook
      * stops, and the check of what arrived. */
     move: (options) => send.send({ reason: "move", final: options?.final === true, ...(options?.scope ? { scope: options.scope } : {}) }),
     check: (options) => send.check(options),
-    /** Each automation the move carried, and whether it was on here when it went. */
-    switches: () => send.switches(),
     snapshot: () => send.snapshot(),
     /** The move's line changed: both pages get it again. */
     publish: () => deliver(send.snapshot()),

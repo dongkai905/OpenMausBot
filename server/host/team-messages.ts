@@ -25,7 +25,6 @@ import type { PresenceAnswer } from "./brief.ts";
 import type { BotRecord, GroupRecord, Message, Store, StoreChange } from "../store.ts";
 import type { TeamPeople } from "../team-people.ts";
 import { currentTimeZone } from "../time-zone.ts";
-import { loadMemory } from "../workspace.ts";
 import { OUTSIDE_REFUSAL } from "./outside-fence.ts";
 import type { PlaceInbox } from "./place-inbox.ts";
 import { createPersonInbox, type Delivery, type Item, type Passed, type PersonInbox, type PersonInboxDeps } from "./person-inbox.ts";
@@ -67,7 +66,7 @@ export interface TeamMessagesDeps {
   /** The inbox of a place that is no team's. */
   place?: PlaceInbox | null;
   /** What the inbox needs from the server: whose asks are whose, hand-offs, a bot carrying on, the assistant's reads. */
-  inbox: Pick<PersonInboxDeps, "askedPerson" | "handedFrom" | "continueTurn"> & Partial<Pick<PersonInboxDeps, "notes" | "ensureOwnBot" | "changed" | "delivered">> & {
+  inbox: Pick<PersonInboxDeps, "askedPerson" | "handedFrom" | "continueTurn"> & Partial<Pick<PersonInboxDeps, "ensureOwnBot" | "changed" | "delivered">> & {
     representative?: Omit<RepresentativeDeps, "timeZone"> & Partial<Pick<RepresentativeDeps, "timeZone">>;
   };
   now?: () => number;
@@ -103,7 +102,7 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
 
   const { representative, ...wiring } = deps.inbox;
   const inbox = createPersonInbox({
-    notes: (botId) => loadMemory(botId)?.text ?? "", ...wiring, ...(deps.confined ? { confined: deps.confined } : {}), team, dataDir: deps.dataDir, store, starters: deps.starters, audienceOf: deps.audienceOf, personKeyOf: keyOf,
+    ...wiring, ...(deps.confined ? { confined: deps.confined } : {}), team, dataDir: deps.dataDir, store, starters: deps.starters, audienceOf: deps.audienceOf, personKeyOf: keyOf,
     send: deps.notify, now, person: (key) => byKey(key),
     sees: (key, threadId) => { const one = byKey(key); return one ? deps.sees(one).thread(threadId) : false; },
     ...(representative ? { representative: createRepresentative({ now, timeZone: () => currentTimeZone(), ...representative }) } : {}),

@@ -22,7 +22,6 @@ import { promptWithReply, type PersonName } from "../replies.ts";
 import { clientGroupPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts";
 import type { RoomContextTracker } from "../room-context.ts";
 import { parseConversationTurnTimeout } from "../room-turn-timeout.ts";
-import type { RoutineManager } from "../routines.ts";
 import { acceptedSendMatch, parseSendId, sendFingerprint, type SendSequencer } from "../send-idempotency.ts";
 import type { SkillReview } from "../skill-review.ts";
 import { assertWithinBudget } from "../spend.ts";
@@ -52,7 +51,6 @@ export interface ChannelRouteDeps {
   userName(threadId: string): PersonName;
   /** The desktop app owns this server, so a loopback caller is its owner. */
   desktopManaged: boolean;
-  routines(): Pick<RoutineManager, "disableForGroup"> | null;
   broadcast(payload: Record<string, unknown>): void;
   notificationListed: NotificationListed;
   actorKey(auth: RequestAuth & { kind: "session" }): string;
@@ -140,7 +138,6 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     const own = (group: WireGroup) => deps.groupFor?.(auth, group) ?? group;
     let m: RegExpMatchArray | null = null;
-    const routines = deps.routines();
 
     m = path.match(/^\/api\/groups\/([\w-]+)\/tasks$/);
     if (m && method === "POST") {
@@ -312,7 +309,6 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
         clearTurnDigestState(threadId);
         skillReview.dropThread(threadId);
       }
-      routines!.disableForGroup(group.id);
       store.deleteGroup(group.id);
       rejectDeletedThreadSkillStages(stagedSkillCleanups);
       return json(res, 200, { ok: true });

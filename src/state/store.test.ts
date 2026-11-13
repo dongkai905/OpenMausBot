@@ -42,7 +42,6 @@ import { transcriptLookups } from "@/lib/transcript-derivations";
 import { openLiveEvents, type LiveEventSourceLike, type LiveEventsPlatform } from "../lib/live-events";
 import type { ModelVariantState, RuntimeEvent } from "../../shared/runtime-events";
 import type { ConnectorToolGrant } from "../../shared/wire";
-import type { RoutineRun } from "../lib/routines";
 
 describe("api refusals", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
@@ -791,7 +790,7 @@ describe("replacement snapshot boundary", () => {
         onSnapshotRequired: async () => {
           const chatReady = await loadSnapshotBoundary(
             async () => {},
-            [{ key: "webhooks", load: async () => Promise.reject(new Error("webhooks unavailable")) }],
+            [{ key: "instances", load: async () => Promise.reject(new Error("instances unavailable")) }],
             (part, error) => scheduleRetry(part.key, error),
           );
           if (chatReady) {
@@ -820,7 +819,7 @@ describe("replacement snapshot boundary", () => {
     expect(applied).toEqual([
       { kind: "message", threadId: "bot-thread", message: { id: "user-1" } },
     ]);
-    expect(scheduleRetry).toHaveBeenCalledWith("webhooks", expect.any(Error));
+    expect(scheduleRetry).toHaveBeenCalledWith("instances", expect.any(Error));
     expect(sources).toHaveLength(1);
     expect(sources[0]!.close).not.toHaveBeenCalled();
     stop();
@@ -941,7 +940,7 @@ describe("notification routing", () => {
       expect(opened({ ...bot, threadId: "later-chat" }, false)).toEqual([{ type: "select", id: "bot-1" }]);
       expect(opened({ ...bot, tasks: undefined }, false)).toEqual([{ type: "select", id: "bot-1" }]);
       expect(opened({ ...bot, mainThreadId: undefined }, false)).toEqual([{ type: "select", id: "bot-1" }]);
-      const switched = reducer({ ...initialState, bots: [bot], selectedId: "other", activeView: "routines" }, opened(bot, false)[0] as Action);
+      const switched = reducer({ ...initialState, bots: [bot], selectedId: "other", activeView: "automations" }, opened(bot, false)[0] as Action);
       expect(switched).toMatchObject({ selectedId: "bot-1", activeView: "chat" });
       expect(switched.bots[0]!.tasks!.find((task) => task.threadId === "routine-report")!.unread).toBe(true);
     });
@@ -1008,7 +1007,7 @@ describe("notification routing", () => {
       groups,
     })).toBe("room-thread");
     expect(visibleNotificationThread({
-      activeView: "routines",
+      activeView: "automations",
       selectedId: "bot-1",
       bots,
       groups,
@@ -1146,14 +1145,14 @@ describe("config status", () => {
   });
 
   it("replaces the config without moving the person off their current view", () => {
-    const onRoutines = reducer(initialState, { type: "showRoutines" });
-    expect(onRoutines.activeView).toBe("routines");
+    const onAutomations = reducer(initialState, { type: "showAutomations" });
+    expect(onAutomations.activeView).toBe("automations");
 
-    const next = reducer(onRoutines, {
+    const next = reducer(onAutomations, {
       type: "configStatus",
       config: { ...config, features: { skillAuthoring: false } },
     });
-    expect(next.activeView).toBe("routines");
+    expect(next.activeView).toBe("automations");
     expect(next.config?.features).toEqual({ skillAuthoring: false });
   });
 });
@@ -1421,78 +1420,13 @@ describe("cross-client bot creation", () => {
   });
 });
 
-describe("routine receipt retention", () => {
-  it("opens a bot's logs without retaining stale filters on a later global visit", () => {
-    const focused = reducer(initialState, { type: "showRoutines", section: "logs", view: "list", botId: "echo", routineId: "routine-1" });
-    expect(focused.activeView).toBe("routines");
-    expect(focused.routinesFocus).toEqual({ section: "logs", view: "list", botId: "echo", routineId: "routine-1", nonce: 1 });
-    const all = reducer(focused, { type: "showRoutines" });
-    expect(all.routinesFocus).toEqual({ section: undefined, view: undefined, botId: undefined, routineId: undefined, nonce: 2 });
-    const failures = reducer(focused, { type: "showRoutines", section: "logs" });
-    expect(failures.routinesFocus).toEqual({ section: "logs", view: undefined, botId: undefined, routineId: undefined, nonce: 2 });
-  });
-
-  it("carries the problems filter from the errors pill and drops it on a plain visit", () => {
-    const focused = reducer(initialState, { type: "showRoutines", section: "logs", runStatus: "problems" });
-    expect(focused.routinesFocus).toEqual({ section: "logs", view: undefined, botId: undefined, routineId: undefined, runStatus: "problems", nonce: 1 });
-    const plain = reducer(focused, { type: "showRoutines", section: "logs" });
-    expect(plain.routinesFocus).toEqual({ section: "logs", view: undefined, botId: undefined, routineId: undefined, runStatus: undefined, nonce: 2 });
-  });
-
-  it("leaves the bulk-seen sweep to the server's emitted receipts", () => {
-    expect(reducer(initialState, { type: "markAllRoutineRunsSeen" })).toBe(initialState);
-  });
-
-  it("distinguishes a failed load from an empty schedule and recovers on hydration", () => {
-    expect(initialState.routinesLoadState).toBe("loading");
-    const failed = reducer(initialState, { type: "routinesLoadFailed" });
-    expect(failed.routinesLoadState).toBe("error");
-    const ready = reducer(failed, { type: "routinesHydrated", routines: [], runs: [] });
-    expect(ready.routinesLoadState).toBe("ready");
-    expect(ready.routines).toEqual([]);
-  });
-
-  const run = (id: string, scheduledFor: number, status: RoutineRun["status"]): RoutineRun => ({
-    id,
-    routineId: "routine",
-    routineName: "Check inbox",
-    target: "bot",
-    botId: "echo",
-    runOn: "maus",
-    scheduledFor,
-    status,
-    manual: false,
-    createdAt: scheduledFor,
-  });
-
-  it("trims finished history without hiding older active work", () => {
-    const waiting = run("waiting", 0, "waiting");
-    const history = Array.from({ length: 2_000 }, (_, index) =>
-      run(`finished-${index}`, index + 1, "completed"),
-    );
-
-    const hydrated = reducer(initialState, {
-      type: "routinesHydrated",
-      routines: [],
-      runs: [waiting, ...history],
-    });
-    expect(hydrated.routineRuns).toHaveLength(2_000);
-    expect(hydrated.routineRuns).toContainEqual(waiting);
-
-    const running = { ...waiting, status: "running" as const, startedAt: 2_000 };
-    const activePatched = reducer(hydrated, {
-      type: "routineRunPatched",
-      run: running,
-    });
-    expect(activePatched.routineRuns).toContainEqual(running);
-
-    const next = reducer(activePatched, {
-      type: "routineRunPatched",
-      run: run("newest", 2_001, "completed"),
-    });
-    expect(next.routineRuns).toHaveLength(2_000);
-    expect(next.routineRuns).toContainEqual(running);
-    expect(next.routineRuns[0]?.id).toBe("newest");
+describe("the automations view", () => {
+  it("opens one automation without retaining a stale focus on a later global visit", () => {
+    const focused = reducer(initialState, { type: "showAutomations", botId: "echo", id: "automation-1" });
+    expect(focused.activeView).toBe("automations");
+    expect(focused.automationsFocus).toEqual({ botId: "echo", id: "automation-1", nonce: 1 });
+    const all = reducer(focused, { type: "showAutomations" });
+    expect(all.automationsFocus).toEqual({ botId: undefined, id: undefined, nonce: 2 });
   });
 });
 
@@ -2528,9 +2462,9 @@ describe("activity panel", () => {
     expect(next.computerOpen).toBe(true);
   });
 
-  it("switching to routines or the team map closes the activity panel", () => {
+  it("switching to automations or the team map closes the activity panel", () => {
     const open = { ...initialState, activityOpen: true };
-    expect(reducer(open, { type: "showRoutines" }).activityOpen).toBe(false);
+    expect(reducer(open, { type: "showAutomations" }).activityOpen).toBe(false);
     expect(reducer(open, { type: "showTeamMap" }).activityOpen).toBe(false);
   });
 
@@ -2881,8 +2815,6 @@ describe("restoring the open conversation", () => {
       const answers: Record<string, unknown> = {
         "/api/instances": { instances: [] },
         "/api/config": {},
-        "/api/routines": { routines: [], runs: [] },
-        "/api/webhooks": { webhooks: [], attempts: [], ingress: null },
       };
       vi.stubGlobal("localStorage", storage ?? {
         getItem: (key: string) => stored.get(key) ?? null,
@@ -2917,7 +2849,7 @@ describe("restoring the open conversation", () => {
       expect(seen.selectedId).toBe("bot-1");
     });
 
-    it("keeps the UI mounted when a reconnect receives a malformed routines snapshot", async () => {
+    it("keeps the UI mounted when a reconnect receives a malformed config snapshot", async () => {
       const { stream } = await boot();
       stream.send(hello());
       await settle();
@@ -2927,10 +2859,10 @@ describe("restoring the open conversation", () => {
       stream.send(hello());
       await settle();
       expect(container?.querySelector("#snapshot-crash")).toBeNull();
-      expect(seen.routinesLoadState).toBe("error");
+      expect(seen.config).not.toBeNull();
     });
 
-    it("keeps the engines and webhooks it had when a reconnect receives empty answers for them", async () => {
+    it("keeps the engines it had when a reconnect receives empty answers for them", async () => {
       const { stream } = await boot();
       stream.send(hello());
       await settle();
@@ -2941,7 +2873,6 @@ describe("restoring the open conversation", () => {
       await settle();
       expect(container?.querySelector("#snapshot-crash")).toBeNull();
       expect(Array.isArray(seen.instances)).toBe(true);
-      expect(Array.isArray(seen.webhooks)).toBe(true);
     });
 
     it("the provider remembers each non-empty selection and never an empty one", async () => {
@@ -3102,9 +3033,9 @@ describe("notifications feed", () => {
     expect(state.notifications[0].read).toBe(false);
   });
 
-  it("showRoutines closes the feed so its rail is reachable again", () => {
+  it("showAutomations closes the feed so its rail is reachable again", () => {
     const open = reducer(initialState, { type: "toggleNotifications", open: true });
-    expect(reducer(open, { type: "showRoutines" }).notificationsOpen).toBe(false);
+    expect(reducer(open, { type: "showAutomations" }).notificationsOpen).toBe(false);
   });
 
   it("marks one or all read without touching the rest", () => {
@@ -3235,20 +3166,6 @@ describe("notifications feed", () => {
     ]) {
       expect(reducer(open, action).notificationsOpen).toBe(false);
     }
-  });
-});
-
-describe("a routine's answer and its broadcast", () => {
-  it("applies whichever arrives first and never steps back to an older edit", () => {
-    const routine = { id: "r1", name: "Daily", prompt: "Summarize", target: "bot", botId: "b1", runOn: "maus", enabled: true,
-      schedule: { type: "daily", time: "09:00", weekdays: [1] }, durationMinutes: 30, nextRunAt: 5, createdAt: 1, updatedAt: 10 } as AppState["routines"][number];
-    const paused = { ...routine, enabled: false, nextRunAt: null, updatedAt: 11 };
-    const resumed = { ...routine, updatedAt: 12 };
-    let state = reducer({ ...initialState, routines: [routine] }, { type: "routinePatched", routine: paused });
-    state = reducer(state, { type: "routinePatched", routine: resumed });
-    state = reducer(state, { type: "routinePatched", routine: paused });
-    expect(state.routines).toEqual([resumed]);
-    expect(reducer(state, { type: "routinePatched", routine: { ...resumed, failureStreak: 1 } }).routines[0]).toMatchObject({ failureStreak: 1 });
   });
 });
 

@@ -663,7 +663,7 @@ function DraftWorksOn({ bot, patch, seat }: { bot: Bot; patch: ReturnType<typeof
   </>;
 }
 
-export type AccessPart = "worksOn" | "folder" | "apps" | "phone" | "xResearch" | "mcp" | "tools" | "browser" | "webhooks" | "always";
+export type AccessPart = "worksOn" | "folder" | "apps" | "phone" | "xResearch" | "mcp" | "tools" | "browser" | "api" | "always";
 
 export function AccessSection({
   bot,
@@ -701,7 +701,6 @@ export function AccessSection({
   const connectedSlugs = apps.connectedSlugs;
   const appLabels = Object.fromEntries(apps.apps.map((app) => [app.slug, app.label]));
 
-  const webhooks = state.webhooks.filter((webhook) => webhook.botId === bot.id);
   const alwaysAllow = bot.alwaysAllow ?? [];
   const shows = (part: AccessPart) => !parts || parts.includes(part);
 
@@ -832,35 +831,7 @@ export function AccessSection({
 
       {!draft && shows("xResearch") && <ResearchCard bot={bot} patch={patch} />}
 
-      {!draft && shows("webhooks") && <BotApiCard bot={bot} />}
-
-      {!draft && shows("webhooks") && <div className="rounded-xl bg-card p-4">
-        <div className="text-[15px] font-medium text-ink">{t("botAccess.webhooks.title")}</div>
-        <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.webhooks.description")}</div>
-        <ProposalStatus bot={bot} kind="owner" />
-        {webhooks.length === 0 ? (
-          <div className="mt-3 rounded-lg bg-inset px-3 py-2 text-[12px] text-ink-secondary">{t("botAccess.webhooks.empty")}</div>
-        ) : (
-          <div className="mt-3 divide-y divide-hairline/40 overflow-hidden rounded-lg border border-hairline/40">
-            {webhooks.map((webhook) => (
-              <div key={webhook.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{webhook.name}</span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    webhook.enabled ? "bg-accent/15 text-accent-text" : "bg-control text-ink-secondary",
-                  )}
-                >
-                  {webhook.enabled ? t("botAccess.webhooks.active") : t("botAccess.webhooks.paused")}
-                </span>
-                <span className="shrink-0 text-[12px] tabular-nums text-ink-secondary">
-                  {t("botAccess.webhooks.deliveries", { count: webhook.deliveryCount })}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>}
+      {!draft && shows("api") && <BotApiCard bot={bot} />}
 
       {!draft && shows("always") && <div className="rounded-xl bg-card p-4">
         <div className="text-[15px] font-medium text-ink">{t("botAccess.always.title")}</div>

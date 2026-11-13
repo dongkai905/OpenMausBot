@@ -158,11 +158,11 @@ describe("what the page knows", () => {
   });
 
   it("the conditions a tip may ask for", () => {
-    const state = (config: unknown, bots: unknown[], routines: unknown[], ready = true) =>
-      announcementConditions({ config: config as never, bots: bots as never, routines: routines as never, routinesLoadState: ready ? "ready" : "loading" });
-    expect(state({ anthropic: { configured: false } }, [{}], [])).toEqual({ no_api_key: true, one_bot_only: true, no_routine: true });
-    expect(state({ openrouter: { configured: true } }, [{}, {}, { hidden: true }], [{}])).toEqual({ no_api_key: false, one_bot_only: false, no_routine: false });
-    expect(state(null, [], [], false)).toEqual({ no_api_key: false, one_bot_only: false, no_routine: false });
+    const state = (config: unknown, bots: unknown[]) =>
+      announcementConditions({ config: config as never, bots: bots as never });
+    expect(state({ anthropic: { configured: false } }, [{}])).toEqual({ no_api_key: true, one_bot_only: true, no_routine: false });
+    expect(state({ openrouter: { configured: true } }, [{}, {}, { hidden: true }])).toEqual({ no_api_key: false, one_bot_only: false, no_routine: false });
+    expect(state(null, [])).toEqual({ no_api_key: false, one_bot_only: false, no_routine: false });
   });
 
   it("an organization that limits providers gets no sponsor's card; a Team Cloud's own rules do not count", () => {

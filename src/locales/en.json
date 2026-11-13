@@ -5201,6 +5201,7 @@
   "routines.goal.failed": "Failed",
   "routines.title": "Routines",
   "automations.title": "Automations",
+  "automations.unavailableBot": "Bot unavailable",
   "automations.new": "New",
   "automations.view": "Show as",
   "automations.list": "List",

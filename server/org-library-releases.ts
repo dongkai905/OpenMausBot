@@ -8,8 +8,8 @@
 import type { PackageAgent, PackageDocument } from "../shared/package-format.ts";
 import type { OrgInstall, OrgLibraryDeps, OrgLibraryEntry } from "./org-library.ts";
 import {
-  agentReleaseValues, pair, partHash, playbookValues, roomReleaseValues, routineReleaseValues, scheduleValue,
-  type AgentPart, type PartPair, type RoomPart, type RoutinePart,
+  agentReleaseValues, pair, partHash, playbookValues, roomReleaseValues,
+  type AgentPart, type PartPair, type RoomPart,
 } from "./package-parts.ts";
 import { profileSnapshot } from "./profile-revision.ts";
 import { recordProfileChange } from "./profile-versions.ts";
@@ -62,14 +62,6 @@ function switchOff(deps: OrgLibraryDeps, installId: string): void {
       if ("error" in result) console.warn(`[org-library] could not switch off ${skill.name}: ${result.error}`);
     }
   }
-  for (const routine of deps.routines.packageStamps()) {
-    if (routine.stamp.installId !== installId || !routine.enabled) continue;
-    try {
-      deps.routines.update(routine.routineId, { enabled: false });
-    } catch (error) {
-      console.warn(`[org-library] could not pause a routine: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
 }
 
 /** Brings each added team up to its catalog release; the ids of the installs it moved to a new release. */
@@ -87,7 +79,6 @@ export function applyUpdates(context: ReleaseContext): string[] {
     try {
       update.bots();
       update.rooms();
-      update.routines();
       update.brief();
     } catch (error) {
       // The parts written so far carry their new stamps, so the next catalog picks up from here.
@@ -105,7 +96,6 @@ export function applyUpdates(context: ReleaseContext): string[] {
 /** The parts the update writes; the others stay as they were added (see docs/org-library.md). */
 const AGENT_UPDATED = ["name", "title", "description", "soul", "playbooks"] as const satisfies readonly AgentPart[];
 const ROOM_UPDATED = ["name", "bulletin"] as const satisfies readonly RoomPart[];
-const ROUTINE_UPDATED = ["name", "prompt", "schedule"] as const satisfies readonly RoutinePart[];
 
 /** Whether a part should take the new release's value: the publisher changed it and the person did not. */
 function takesRelease(stamp: PartPair | undefined, released: unknown, now: unknown): stamp is PartPair {
@@ -217,37 +207,6 @@ class InstallUpdate {
     }
   }
 
-  routines(): void {
-    if (!this.deps.routines.stampInstalledPackage) return;
-    const stamps = new Map(this.deps.routines.packageStamps().map((routine) => [routine.routineId, routine.stamp]));
-    for (const released of this.pkg.routines ?? []) {
-      const id = this.install.routines[released.key] ?? "";
-      const stamp = stamps.get(id);
-      const routine = this.deps.routines.listRoutines().find((candidate) => candidate.id === id);
-      if (!stamp || !routine || stamp.installId !== this.installId) continue;
-      const values = routineReleaseValues(released);
-      const now: Record<(typeof ROUTINE_UPDATED)[number], unknown> = { name: routine.name, prompt: routine.prompt, schedule: scheduleValue(routine) };
-      const take = ROUTINE_UPDATED.filter((part) => takesRelease(stamp.parts[part], values[part], now[part]));
-      if (!take.length) continue;
-      const timeoutMinutes = released.timeoutMinutes === undefined ? undefined : Math.min(240, Math.max(5, released.timeoutMinutes));
-      const updated = this.deps.routines.update(id, {
-        ...(take.includes("name") ? { name: released.name } : {}),
-        ...(take.includes("prompt") ? { prompt: released.prompt } : {}),
-        ...(take.includes("schedule") ? {
-          runOn: released.runOn, schedule: released.schedule, durationMinutes: released.durationMinutes,
-          ...(timeoutMinutes === undefined ? {} : { timeoutMinutes }),
-          ...(released.overlap ? { overlap: released.overlap } : {}),
-          ...(released.continuity && released.room === undefined ? { continuity: true } : {}),
-          ...(released.runOnStartup ? { runOnStartup: true } : {}),
-        } : {}),
-      });
-      if (!updated) continue;
-      const written: Record<(typeof ROUTINE_UPDATED)[number], unknown> = { name: updated.name, prompt: updated.prompt, schedule: scheduleValue(updated) };
-      const parts = { ...stamp.parts };
-      for (const part of take) parts[part] = pair(values[part], written[part]);
-      this.deps.routines.stampInstalledPackage(id, { ...stamp, parts });
-    }
-  }
 
   brief(): void {
     const stamp = this.install.team?.parts.brief;

@@ -20,13 +20,6 @@ export function redactBotAuthored<T extends Omit<WireMessage, "id" | "at"> & { a
     if (out.tool.summary) out.tool.summary = redactSecretsInText(out.tool.summary);
     if (out.tool.summaryParams) out.tool.summaryParams = redactParams(out.tool.summaryParams);
   }
-  if (out.routineRun) {
-    const routineRun = { ...out.routineRun };
-    routineRun.routineName = redactSecretsInText(routineRun.routineName);
-    if (routineRun.summary) routineRun.summary = redactSecretsInText(routineRun.summary);
-    if (routineRun.error) routineRun.error = redactSecretsInText(routineRun.error);
-    out.routineRun = routineRun;
-  }
   if (out.goalRun) {
     out.goalRun = {
       ...out.goalRun,
@@ -62,35 +55,6 @@ export function redactBotAuthored<T extends Omit<WireMessage, "id" | "at"> & { a
             ...(option.description ? { description: redactSecretsInText(option.description) } : {}),
           })),
         })),
-      };
-    }
-    if (card.routineRequest) {
-      const operation = card.routineRequest.operation;
-      card.routineRequest = {
-        ...card.routineRequest,
-        operation: operation.action === "create"
-          ? {
-              ...operation,
-              routine: {
-                ...operation.routine,
-                name: redactSecretsInText(operation.routine.name),
-                instructions: redactSecretsInText(operation.routine.instructions),
-              },
-            }
-          : operation.action === "update"
-            ? {
-                ...operation,
-                changes: {
-                  ...operation.changes,
-                  ...(typeof operation.changes.name === "string"
-                    ? { name: redactSecretsInText(operation.changes.name) }
-                    : {}),
-                  ...(typeof operation.changes.instructions === "string"
-                    ? { instructions: redactSecretsInText(operation.changes.instructions) }
-                    : {}),
-                },
-              }
-            : { ...operation },
       };
     }
     if (card.skillRequest) card.skillRequest = scrubbedSkillRequest(card.skillRequest);

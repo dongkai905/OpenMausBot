@@ -78,9 +78,7 @@ async function installation(from?: string) {
   vi.stubEnv("USERPROFILE", home);
   vi.stubEnv("OMB_DATA_DIR", join(home, ".openmausbot"));
   const { Store } = await import("./store.ts");
-  const { RoutineManager } = await import("./routines.ts");
   const skills = await import("./skills.ts");
-  const workspace = await import("./workspace.ts");
   const sections = await import("./section-context.ts");
   const { saveImage } = await import("./attachments.ts");
   const { botAvatarUrlFromStoredPath } = await import("../shared/bot-avatar.ts");
@@ -89,19 +87,10 @@ async function installation(from?: string) {
   const parts = await import("./package-parts.ts");
   const presetStore = (await import("./presets.ts")).createPresetStore(join(DATA_DIR, "org-library", "presets.json"));
   const store = new Store(() => ({ instanceId: "claude", model: "default-model" }));
-  const routines = new RoutineManager({
-    file: join(DATA_DIR, "routines.json"),
-    botState: (id) => (store.bot(id) && !store.bot(id)!.hidden ? "ready" : "missing"),
-    goalState: (groupId, botId) => (store.group(groupId ?? "")?.memberIds.includes(botId) ? "ready" : "missing"),
-    createTask: () => null,
-    startTurn: async () => {},
-  });
   const mcp = { servers: {} as Record<string, unknown> };
   const importDeps = {
     store,
-    routines,
     skills: { install: skills.installSkill, setEnabled: skills.setSkillEnabled, installOrg: skills.installOrgSkill },
-    memory: { writeIndex: workspace.writeMemoryFile, writeTopic: workspace.writeMemoryTopic },
     mcp: { servers: () => mcp.servers, refusal: () => undefined, persist: (next: Record<string, unknown>) => { mcp.servers = next; } },
     sections: { writeBrief: (section: string, text: string) => void sections.writeSectionContext(section, text) },
     images: { save: (bytes: Uint8Array, mime: string) => botAvatarUrlFromStoredPath(saveImage(Buffer.from(bytes), mime).path)! },
@@ -113,7 +102,6 @@ async function installation(from?: string) {
   const open = (over: { read?: (botId: string, name: string) => string | null; installOrg?: typeof skills.installOrgSkill } = {}) => new OrgLibrary({
     dataDir: DATA_DIR,
     store,
-    routines,
     skills: { list: skills.listSkills, stamps, setEnabled: skills.setSkillEnabled, installOrg: over.installOrg ?? skills.installOrgSkill, read: over.read ?? skills.readSkillFile, remove: skills.removeSkill },
     sections: { read: (section) => sections.readSectionContext(section)?.text ?? "", write: (section, text) => void sections.writeSectionContext(section, text) },
     presets: presetStore,
@@ -125,7 +113,7 @@ async function installation(from?: string) {
   };
   const statePath = join(DATA_DIR, "org-library", "state.json");
   const readState = () => JSON.parse(readFileSync(statePath, "utf8"));
-  return { store, routines, skills, stamps, parts, sections, DATA_DIR, importDeps, mcp, posted, open, writeBlob, statePath, readState, parseOrgLibraryCatalog };
+  return { store, skills, stamps, parts, sections, DATA_DIR, importDeps, mcp, posted, open, writeBlob, statePath, readState, parseOrgLibraryCatalog };
 }
 
 afterEach(async () => {
@@ -272,7 +260,7 @@ describe("the relay", () => {
 });
 
 describe("adding from the shelf", () => {
-  it("adds a team with skills on, routines paused, and every record stamped", async () => {
+  it("adds a team with skills on and every record stamped", async () => {
     const app = await installation();
     app.store.createBot({ name: "Scout" });
     const library = app.open();
@@ -315,16 +303,6 @@ describe("adding from the shelf", () => {
     expect(app.skills.listSkills(scout.id)[0]).not.toHaveProperty("package");
     expect(app.skills.skillPackageStamps(scout.id)).toContainEqual({ name: "pricing-policy", enabled: true,
       stamp: { installId, key: "pricing-policy", release: "1.3.0", r: expect.stringMatching(hex), w: expect.stringMatching(hex) } });
-
-    expect(result.routines).toHaveLength(2);
-    expect(app.routines.listRoutines().every((routine) => !routine.enabled && !("installedPackage" in routine))).toBe(true);
-    const stamps = app.routines.packageStamps();
-    expect(stamps.map((routine) => routine.stamp.key).sort()).toEqual(["daily-digest", "weekly-review"]);
-    for (const routine of stamps) {
-      expect(routine.stamp.installId).toBe(installId);
-      for (const part of app.parts.ROUTINE_PARTS) expect(routine.stamp.parts[part]).toEqual({ r: expect.stringMatching(hex), w: expect.stringMatching(hex) });
-      for (const part of ["name", "prompt", "schedule"] as const) expect(routine.stamp.parts[part].w, part).toBe(routine.stamp.parts[part].r);
-    }
 
     const room = app.store.group(result.groups[0]!.id)!;
     expect(room.installedPackage).toMatchObject({ installId, key: "desk", memberKeys: ["lead", "scout", "writer"] });
@@ -383,7 +361,7 @@ describe("adding from the shelf", () => {
     expect(library.list().packages[0]!.installed).toMatchObject({ installId, status: "installed" });
   });
 
-  it("switches off a withdrawn release's skills, pauses its routines, and reports it once", async () => {
+  it("switches off a withdrawn release's skills and reports it once", async () => {
     const app = await installation();
     const library = app.open();
     const team = release("full-team.v2.json");
@@ -392,14 +370,11 @@ describe("adding from the shelf", () => {
     await library.settled();
     const added = library.add(TEAM_ID, app.importDeps) as any;
     const scout = added.value.result.bots.find((bot: any) => bot.installedPackage.agentKey === "scout");
-    const daily = app.routines.packageStamps().find((routine) => routine.stamp.key === "daily-digest")!;
-    app.routines.update(daily.routineId, { enabled: true });
 
     const withdrawn = entry(TEAM_ID, team, { release: null, withdrawnReleases: [{ version: "1.3.0", sha256: team.sha256 }] });
     library.applyRelay(relay(catalog([withdrawn])));
     await library.settled();
     expect(app.skills.listSkills(scout.id).every((skill) => !skill.enabled)).toBe(true);
-    expect(app.routines.listRoutines().every((routine) => !routine.enabled)).toBe(true);
     const installId = added.value.result.installId;
     expect(app.readState().installs[installId].status).toBe("withdrawn");
     expect(app.posted.at(-1).packages).toEqual([
@@ -507,33 +482,26 @@ describe("adding from the shelf", () => {
     const body = catalog([entry(TEAM_ID, team)]);
     library.applyRelay(relay(body));
     await library.settled();
-    // The app stops as the first routine is about to be written: bots, group chat and brief are on disk.
+    // The app stops just before the leader is set: bots, group chat and brief are on disk.
     let crash: string | null = null;
-    const deps = {
-      ...app.importDeps,
-      routines: {
-        create: (input: any) => {
-          crash ??= snapshot();
-          return app.routines.create(input);
-        },
-        remove: (id: string) => app.routines.remove(id),
-        stampInstalledPackage: (id: string, stamp: any) => app.routines.stampInstalledPackage(id, stamp),
-      },
-    };
-    const installId = (library.add(TEAM_ID, deps) as any).value.result.installId;
+    const setChief = app.store.setChiefOfStaff.bind(app.store);
+    vi.spyOn(app.store, "setChiefOfStaff").mockImplementation((...args) => {
+      crash ??= snapshot();
+      return setChief(...args);
+    });
+    const installId = (library.add(TEAM_ID, app.importDeps) as any).value.result.installId;
     library.dispose();
 
     const crashed = await installation(crash!);
     expect(crashed.store.bots).toHaveLength(3);
     expect(crashed.store.groups).toHaveLength(1);
     expect(crashed.readState().adding[installId]).toMatchObject({ packageId: TEAM_ID, release: "1.3.0",
-      expect: { bots: ["lead", "scout", "writer"], rooms: ["desk"], routines: ["daily-digest", "weekly-review"], leader: "lead" } });
+      expect: { bots: ["lead", "scout", "writer"], rooms: ["desk"], leader: "lead" } });
     expect(crashed.readState().installs).toEqual({});
 
     const restarted = crashed.open();
     expect(crashed.store.bots).toEqual([]);
     expect(crashed.store.groups).toEqual([]);
-    expect(crashed.routines.listRoutines()).toEqual([]);
     expect(crashed.store.sections).not.toContain("Sales desk");
     expect(crashed.sections.readSectionContext("Sales desk")).toBeNull();
     expect(crashed.readState()).toMatchObject({ installs: {}, adding: {} });
@@ -548,47 +516,11 @@ describe("adding from the shelf", () => {
     expect(again).toMatchObject({ ok: true, status: 201, value: { result: { section: "Sales desk" } } });
     expect(crashed.store.bots).toHaveLength(3);
     expect(crashed.store.groups).toHaveLength(1);
-    expect(crashed.routines.listRoutines()).toHaveLength(2);
     expect(crashed.store.bots.find((bot) => bot.installedPackage?.agentKey === "lead")!.chiefOfStaff).toBe(true);
     expect(crashed.sections.readSectionContext("Sales desk")!.text).toContain("49 per seat");
     expect(crashed.readState()).toMatchObject({ installs: { [installId]: { status: "installed" } }, adding: {} });
     expect(crashed.posted.at(-1).packages).toEqual([{ packageId: TEAM_ID, release: "1.3.0", sha256: team.sha256, state: "installed" }]);
     restarted.dispose();
-  });
-
-  it("removes a team the app stopped adding just before its leader was set", async () => {
-    const app = await installation();
-    const library = app.open();
-    const team = release("full-team.v2.json");
-    app.writeBlob(team.bytes);
-    library.applyRelay(relay(catalog([entry(TEAM_ID, team)])));
-    await library.settled();
-    // Every bot, group chat and routine is written; the leader, the importer's last write, is not.
-    let crash: string | null = null;
-    let stamped = 0;
-    const deps = {
-      ...app.importDeps,
-      routines: {
-        create: (input: any) => app.routines.create(input),
-        remove: (id: string) => app.routines.remove(id),
-        stampInstalledPackage: (id: string, stamp: any) => {
-          const done = app.routines.stampInstalledPackage(id, stamp);
-          if (++stamped === 2) crash = snapshot();
-          return done;
-        },
-      },
-    };
-    library.add(TEAM_ID, deps);
-    library.dispose();
-
-    const crashed = await installation(crash!);
-    expect(crashed.routines.listRoutines()).toHaveLength(2);
-    expect(crashed.store.bots.some((bot) => bot.chiefOfStaff)).toBe(false);
-    crashed.open().dispose();
-    expect(crashed.store.bots).toEqual([]);
-    expect(crashed.store.groups).toEqual([]);
-    expect(crashed.routines.listRoutines()).toEqual([]);
-    expect(crashed.readState()).toMatchObject({ installs: {}, adding: {} });
   });
 
   it("keeps a team the app stopped adding only after its last record", async () => {
@@ -615,7 +547,6 @@ describe("adding from the shelf", () => {
     const restarted = crashed.open();
     expect(crashed.store.bots).toHaveLength(3);
     expect(crashed.store.groups).toHaveLength(1);
-    expect(crashed.routines.listRoutines()).toHaveLength(2);
     expect(crashed.readState()).toMatchObject({
       adding: {},
       installs: { [installId]: { packageId: TEAM_ID, release: "1.3.0", sha256: team.sha256, status: "installed", kind: "team", section: "Sales desk" } },
@@ -725,21 +656,18 @@ describe("parts the person deleted (removedLocally)", () => {
     expect(app.posted.at(-1).packages).toEqual([{ packageId: TEAM_ID, release: "1.3.0", sha256: team.sha256, state: "installed" }]);
     app.store.deleteBot(bot("scout").id);
     await afterStoreChange(library);
-    expect(install()).toMatchObject({ status: "installed", removedLocally: ["agent:writer", "agent:scout", "routine:daily-digest"] });
+    expect(install()).toMatchObject({ status: "installed", removedLocally: ["agent:writer", "agent:scout"] });
   });
 
-  it("notes a deleted group chat and a deleted routine", async () => {
+  it("notes a deleted group chat", async () => {
     const { app, library, body, install } = await addedTeam();
     app.store.deleteGroup(app.store.groups[0]!.id);
     await afterStoreChange(library);
     expect(install()).toMatchObject({ status: "installed", removedLocally: ["room:desk"] });
     expect(install().rooms).toEqual({});
-    // Deleting a routine is not a store change; the next relayed catalog's rebuild notes it.
-    app.routines.remove(app.routines.packageStamps().find((routine) => routine.stamp.key === "weekly-review")!.routineId);
     library.applyRelay(relay(body));
     await library.settled();
-    expect(install()).toMatchObject({ status: "installed", removedLocally: ["room:desk", "routine:weekly-review"] });
-    expect(Object.keys(install().routines)).toEqual(["daily-digest"]);
+    expect(install()).toMatchObject({ status: "installed", removedLocally: ["room:desk"] });
   });
 
   it("notes each part once, however often the index is rebuilt", async () => {
@@ -772,7 +700,7 @@ describe("parts the person deleted (removedLocally)", () => {
     writeFileSync(app.statePath, JSON.stringify(state));
     app.store.deleteBot(bot("scout").id);
     app.open().dispose();
-    expect(install()).toMatchObject({ status: "installed", removedLocally: ["agent:writer", "agent:scout", "routine:daily-digest"] });
+    expect(install()).toMatchObject({ status: "installed", removedLocally: ["agent:writer", "agent:scout"] });
   });
 
   it("notes every part of a team deleted at once, and a new Add starts the list again", async () => {
@@ -782,7 +710,7 @@ describe("parts the person deleted (removedLocally)", () => {
     await afterStoreChange(library);
     expect(install()).toMatchObject({ status: "removed", bots: {}, rooms: {}, routines: {} });
     expect([...install().removedLocally].sort()).toEqual([
-      "agent:lead", "agent:scout", "agent:writer", "room:desk", "routine:daily-digest", "routine:weekly-review",
+      "agent:lead", "agent:scout", "agent:writer", "room:desk",
     ]);
     expect(library.add(TEAM_ID, app.importDeps)).toMatchObject({ ok: true, status: 201 });
     expect(install()).toMatchObject({ status: "installed", removedLocally: [] });
@@ -981,7 +909,6 @@ describe("a newer release of an added team", () => {
     pkg.playbooks[0].instructions = `${pkg.playbooks[0].instructions} Then confirm the seat count.`;
     pkg.skills.entries.find((skill: any) => skill.name === "pricing-policy").instructions += "\nSeats are 59 from January.";
     pkg.rooms[0].bulletin = "Cite sources. Lead answers first.";
-    pkg.routines.find((routine: any) => routine.key === "daily-digest").prompt = "Summarise yesterday's deals, biggest first.";
     pkg.team.brief = "We sell a team plan at 59 per seat.";
   };
 
@@ -994,18 +921,17 @@ describe("a newer release of an added team", () => {
     await library.settled();
     const added = library.add(TEAM_ID, app.importDeps) as any;
     const botOf = (key: string) => app.store.bots.find((bot) => bot.installedPackage?.agentKey === key)!;
-    const routineOf = (key: string) => app.routines.packageStamps().find((routine) => routine.stamp.key === key)!;
     const update = async (next = release("full-team.v2.json", NEXT), patch: Record<string, unknown> = {}, write = true) => {
       if (write) app.writeBlob(next.bytes);
       library.applyRelay(relay(catalog([entry(TEAM_ID, next, patch)], { libraryVersion: 4 })));
       await library.settled();
       return next;
     };
-    return { app, library, first, installId: added.value.result.installId as string, botOf, routineOf, update };
+    return { app, library, first, installId: added.value.result.installId as string, botOf, update };
   }
 
   it("takes every part the publisher changed and the person did not, and moves the install to the new release", async () => {
-    const { app, library, installId, botOf, routineOf, update } = await addedTeam();
+    const { app, library, installId, botOf, update } = await addedTeam();
     const before = botOf("lead");
     const next = await update();
     const lead = botOf("lead");
@@ -1016,8 +942,6 @@ describe("a newer release of an added team", () => {
     expect(app.skills.readSkillFile(lead.id, "pricing-policy")).toMatch(/Seats are 59 from January\./);
     expect(app.skills.skillPackageStamps(lead.id).find((skill) => skill.name === "pricing-policy")!.stamp.release).toBe("1.4.0");
     expect(app.store.groups[0]!.bulletin).toBe("Cite sources. Lead answers first.");
-    const daily = app.routines.listRoutines().find((routine) => routine.id === routineOf("daily-digest").routineId)!;
-    expect(daily).toMatchObject({ prompt: "Summarise yesterday's deals, biggest first.", enabled: false });
     expect(app.sections.readSectionContext(lead.section)?.text).toBe("We sell a team plan at 59 per seat.");
     expect(app.readState().installs[installId]).toMatchObject({ release: "1.4.0", sha256: next.sha256, status: "installed" });
     expect(app.posted.at(-1).packages).toEqual([{ packageId: TEAM_ID, release: "1.4.0", sha256: next.sha256, state: "installed" }]);
@@ -1031,19 +955,16 @@ describe("a newer release of an added team", () => {
 
   it("keeps every part the person changed, and takes the rest", async () => {
     const edited = "My own pricing notes.";
-    const { app, botOf, routineOf, update } = await addedTeam({ read: (botId, name) => (name === "pricing-policy" ? edited : app.skills.readSkillFile(botId, name)) });
+    const { app, botOf, update } = await addedTeam({ read: (botId, name) => (name === "pricing-policy" ? edited : app.skills.readSkillFile(botId, name)) });
     const lead = botOf("lead");
     app.store.patchBotProfile(lead.id, { soul: "My own instructions." });
     app.store.patchGroup(app.store.groups[0]!.id, { bulletin: "Our own room rules." });
-    const daily = routineOf("daily-digest").routineId;
-    app.routines.update(daily, { prompt: "My own digest.", enabled: true });
     await update();
     const after = botOf("lead");
     expect(after.soul).toBe("My own instructions.");
     expect(after.title).toBe("Desk lead");
     expect(app.skills.readSkillFile(after.id, "pricing-policy")).not.toMatch(/Seats are 59/);
     expect(app.store.groups[0]!.bulletin).toBe("Our own room rules.");
-    expect(app.routines.listRoutines().find((routine) => routine.id === daily)).toMatchObject({ prompt: "My own digest.", enabled: true });
 
     // A later release that changes the soul again still leaves the person's version alone.
     await update(release("full-team.v2.json", (document) => { NEXT(document); document.package.release = "1.5.0"; document.package.agents[0].soul = "Third version."; }));

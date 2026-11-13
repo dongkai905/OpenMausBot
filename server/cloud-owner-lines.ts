@@ -4,19 +4,16 @@
 import type { CardAnswerer, WireMessage as Message } from "../shared/wire.ts";
 import { BLOCK_OPEN as APP_EVENT_DATA } from "./app-events.ts";
 import { answeredByPerson } from "./cloud-lending.ts";
-import { routinePrompt } from "./routine-execution.ts";
-import { WEBHOOK_EVENT_DATA } from "./webhooks.ts";
 
 /** My Cloud's owner as the owner's own session is: their person key, and the name their lines read as. */
 export interface CloudOwner { person: string; name: string }
 
 /** Security invariant: only a user line nobody else's words or no automation made. A peer's ask or aside, a line a
- * script or an outside interface relayed, and a routine's, webhook's or app event's own prompt are never the owner's,
- * however they arrive; a webhook's post is a bot's line. */
+ * script or an outside interface relayed, and an app event's own prompt are never the owner's, however they arrive. */
 export function ownersOwnLine(row: Message): boolean {
   if (row.role !== "user" || row.sender || row.peerAsk || row.aside || row.relayed || row.via === "api") return false;
   const text = typeof row.text === "string" ? row.text : "";
-  return !routinePrompt(text) && !text.includes(WEBHOOK_EVENT_DATA) && !text.includes(APP_EVENT_DATA);
+  return !text.includes(APP_EVENT_DATA);
 }
 
 /** Security invariant: a card counts as the owner's only when the owner answered it in that computer's own window. */

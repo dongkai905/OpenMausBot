@@ -587,14 +587,12 @@ describe("rules for every bot", () => {
 describe("a heavy bot", () => {
   const section = (id: string, bytes: number): PromptSection => ({ id, label: id, text: "", bytes });
 
-  it("counts only what the person's words fill, and needs enough memory for a tidy-up to help", () => {
-    expect(heavyPrompt([section("memory", HEAVY_PROMPT_BYTES)])).toBe(true);
-    expect(heavyPrompt([section("memory", HEAVY_PROMPT_BYTES - 1)])).toBe(false);
-    expect(heavyPrompt([section("memory", HEAVY_PROMPT_BYTES / 3), section("every-bot-rules", HEAVY_PROMPT_BYTES / 3), section("soul", HEAVY_PROMPT_BYTES / 3)])).toBe(true);
+  it("counts only what the person's words fill", () => {
+    expect(heavyPrompt([section("soul", HEAVY_PROMPT_BYTES)])).toBe(true);
+    expect(heavyPrompt([section("soul", HEAVY_PROMPT_BYTES - 1)])).toBe(false);
+    expect(heavyPrompt([section("every-bot-rules", HEAVY_PROMPT_BYTES / 3), section("soul", HEAVY_PROMPT_BYTES / 3), section("user-profile", HEAVY_PROMPT_BYTES / 3)])).toBe(true);
     // the app's own text is not the person's to trim
-    expect(heavyPrompt([section("memory", HEAVY_PROMPT_BYTES / 2), section("browser", HEAVY_PROMPT_BYTES)])).toBe(false);
-    // a long Soul with little memory: tidying would not help
-    expect(heavyPrompt([section("memory", 1_000), section("soul", HEAVY_PROMPT_BYTES)])).toBe(false);
+    expect(heavyPrompt([section("soul", HEAVY_PROMPT_BYTES / 2), section("browser", HEAVY_PROMPT_BYTES)])).toBe(false);
   });
 });
 

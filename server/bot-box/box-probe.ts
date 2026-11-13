@@ -128,7 +128,7 @@ export async function runProbe(spec: ProbeSpec, env: Record<string, string | und
   try { listing = readdirSync(spec.dataDir); } catch {}
   const leaked = listing.filter((name) => spec.serverFiles.includes(name));
   add("data-dir-empty", leaked.length === 0, leaked.length ? `sees ${leaked.join(",")}` : `sees ${listing.length} entries`);
-  hidden("other-bot-folder-hidden", join(spec.otherWorkspace, "MEMORY.md"));
+  hidden("other-bot-folder-hidden", join(spec.otherWorkspace, ".claude", "settings.json"));
   hidden("other-task-folder-hidden", join(spec.otherTaskWorkspace, "notes.md"));
   add("fly-api-hidden", !existsSync("/.fly"), existsSync("/.fly") ? "/.fly visible" : "absent");
   // The spec itself names the marker; every other value must not.

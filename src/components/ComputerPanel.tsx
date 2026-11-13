@@ -1,11 +1,11 @@
-import { boatCapableEngine, cloudEngineOf } from "@/lib/remote-desktop";
+import { cloudEngineOf } from "@/lib/remote-desktop";
 import { canWorkOnCloud } from "../../shared/cloud-computer";
 import { viewerTargetId } from "../../shared/desktop-viewer";
 import { Switch } from "./SettingsPrimitives";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { waitForLocalVmReady } from "@/lib/local-vm-readiness";
-import { CalendarClock, ChevronRight, Columns2, Globe, Hand, Loader2, Maximize2, Monitor, Moon, Power, Settings, X } from "lucide-react";
+import { Columns2, Globe, Hand, Loader2, Maximize2, Monitor, Moon, Power, Settings, X } from "lucide-react";
 import { api, ApiError, currentTaskBot, useStore, type Bot, type ConfigStatus } from "@/state/store";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
@@ -23,8 +23,6 @@ import { CloudBackendPicker } from "./CloudBackendPicker";
 import { SimpleVpsChoices } from "./SimpleVpsChoices";
 import { placeManagedBy, worksOnChoices, WorksOnGrid, worksOnSelected } from "./WorksOnGrid";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
-import { RoutinesSection } from "./bot-settings/RoutinesSection";
-import { routineRunLabel, routineRunTone } from "@/lib/routine-display";
 import { AndroidDevicePanel, useAndroidUsbDevices } from "./AndroidDevicePanel";
 import { BrowserPanel } from "./BrowserPanel";
 import { usePanelPage, type PanelPage } from "@/lib/page-open";
@@ -366,16 +364,6 @@ export function ComputerPanel({
       selectedInstance.capabilities?.computerMcp,
   );
   const cloudSupported = canWorkOnCloud(cloudEngineOf(selectedInstance));
-  const botRoutines = state.routines
-    .filter((routine) => routine.botId === bot.id)
-    .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
-  const cloudRoutineReady = Boolean(
-    state.config?.box.configured &&
-      boatCapableEngine(state.instances, bot.modelSelection.instanceId)?.snapshot.state === "available",
-  );
-  const activeRoutineRun = state.routineRuns.find(
-    (run) => run.botId === bot.id && ["queued", "running", "waiting"].includes(run.status),
-  );
   useEffect(() => {
     if (panelView !== "computer") return;
     let alive = true;
@@ -1255,11 +1243,7 @@ export function ComputerPanel({
         </div>
       </div>
 
-      {panelView === "routines" ? (
-        <div {...tabPanelProps("routines")} className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4", TAB_PANEL_FOCUS)}>
-          <RoutinesSection key={bot.id} bot={bot} routines={botRoutines} runs={state.routineRuns} defaultRunOn={cloudRoutineReady ? "cloud" : "maus"} />
-        </div>
-      ) : panelView === "browser" && browserEnabled ? (
+      {panelView === "browser" && browserEnabled ? (
         <div {...tabPanelProps("browser")} className={cn("flex min-h-0 flex-1 flex-col px-4 pb-4", TAB_PANEL_FOCUS)}>
           {browserSwitchRow}
           {signInHelp?.place === "browser" && <div className="-mt-1 mb-3">{signInBanner()}</div>}
@@ -1692,14 +1676,6 @@ export function ComputerPanel({
           )}
         </div>
 
-        <button type="button" onClick={() => selectPanelView("routines")} className="mt-4 flex w-full items-start gap-3 rounded-xl bg-card p-4 text-left hover:bg-raised">
-          <CalendarClock size={17} className="mt-0.5 shrink-0 text-accent" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-medium text-ink">{t("computer.tab.routines")} <span className="ml-1 text-[11px] text-ink-secondary">{botRoutines.length}</span></span>
-            <span className={cn("mt-1 block truncate text-[12px]", activeRoutineRun ? routineRunTone(activeRoutineRun) : "text-ink-secondary")}>{activeRoutineRun ? `${activeRoutineRun.routineName} · ${routineRunLabel(activeRoutineRun)}` : t("computer.routines.openTitle")}</span>
-          </span>
-          <ChevronRight size={14} className="shrink-0 text-ink-secondary rtl:-scale-x-100" aria-hidden="true" />
-        </button>
         </> : (
           <div className="mt-4 rounded-xl bg-card p-4" data-testid="where-works">
             <div className="text-[15px] font-medium text-ink">{t("computer.simple.whereWorks", { name: bot.name })}</div>

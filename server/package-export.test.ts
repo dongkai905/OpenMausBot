@@ -2,30 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { redactSecretsInText } from "./redact.ts";
 import { createBotPackageExport, createTeamPackageExport, shareableAddress, TEAM_TOO_LARGE_MESSAGE, TeamExportError } from "./package-export.ts";
-import { parseBotPackage, renderBotPackageMarkdown } from "./bot-package.ts";
-import type { Routine } from "./routines.ts";
 import type { BotRecord, GroupRecord } from "./store.ts";
 import { includedSkills, requestedSkills, startingTicks } from "../src/lib/team-share-skills.ts";
 
 describe("package export", () => {
-  it("preserves the exact cron and timezone through export and import", () => {
-    const schedule = { type: "cron" as const, expression: "0 9 L * *", timeZone: "America/New_York" };
-    const exported = createBotPackageExport({
-      name: "Monthly team", authorName: "Tester", groups: [],
-      bots: [{ id: "b1", threadId: "t1", name: "Lead", color: "green", createdAt: 1 } as BotRecord],
-      routines: [{ id: "r1", name: "Close the month", prompt: "Prepare a report", target: "bot", botId: "b1",
-        runOn: "maus", enabled: true, schedule, durationMinutes: 30, nextRunAt: 1, createdAt: 1, updatedAt: 1,
-        overlap: "queue", skippedRuns: 4, lastSkippedAt: 1, failureStreak: 2 }],
-    });
-    expect(exported.package.routines?.[0]).toMatchObject({ schedule, enabledAfterInstall: false });
-    expect(parseBotPackage(renderBotPackageMarkdown(exported)).package.routines?.[0]?.schedule).toEqual(schedule);
-    const imported = parseBotPackage(renderBotPackageMarkdown(exported)).package.routines?.[0];
-    expect(imported?.overlap).toBe("queue");
-    expect(imported).not.toHaveProperty("skippedRuns");
-    expect(imported).not.toHaveProperty("lastSkippedAt");
-    expect(imported).not.toHaveProperty("failureStreak");
-  });
-
   it("keeps collaboration structure while excluding runtime authority and state", () => {
     const exported = createBotPackageExport({
       name: "Launch Crew",
@@ -70,66 +50,6 @@ describe("package export", () => {
         unread: false,
         createdAt: 1,
       }],
-      routines: [
-        {
-          id: "private-routine-id",
-          name: "Release check",
-          prompt: "Verify release readiness.",
-          target: "bot",
-          botId: "private-id",
-          runOn: "maus",
-          enabled: true,
-          schedule: { type: "daily", time: "09:00", weekdays: [1] },
-          durationMinutes: 30,
-          attachments: [{
-            id: "private-attachment",
-            kind: "file",
-            name: "private.txt",
-            path: "/private/calendar/context.txt",
-            size: 42,
-          }],
-          nextRunAt: 123,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        {
-          id: "private-room-routine-id",
-          name: "Team release review",
-          prompt: "Review the release together.",
-          target: "room-goal",
-          groupId: "private-room-id",
-          botId: "private-id",
-          runOn: "maus",
-          enabled: true,
-          schedule: { type: "daily", time: "10:00", weekdays: [1] },
-          durationMinutes: 30,
-          nextRunAt: 456,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        {
-          id: "private-interval-routine-id",
-          name: "Frequent release check",
-          prompt: "Watch release readiness.",
-          target: "bot",
-          botId: "private-id",
-          runOn: "maus",
-          enabled: true,
-          schedule: {
-            type: "interval",
-            everyMinutes: 15,
-            anchorAt: 1_788_254_400_000,
-            weekdays: [1, 3, 5],
-            window: { start: "09:00", end: "17:00" },
-            endsAt: 1_790_843_400_000,
-          },
-          durationMinutes: 30,
-          timeoutMinutes: 20,
-          nextRunAt: 789,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ],
       skillsByBot: new Map([[
         "private-id",
         [{
@@ -140,17 +60,7 @@ describe("package export", () => {
         }],
       ]]),
     });
-    expect(exported.package.routines).toHaveLength(2);
     expect(exported.package.agents[0].soul).toBe("Preserve the mission.\n");
-    expect(exported.package.routines?.[1]?.schedule).toEqual({
-      type: "interval",
-      everyMinutes: 15,
-      anchorAt: 1_788_254_400_000,
-      weekdays: [1, 3, 5],
-      window: { start: "09:00", end: "17:00" },
-      endsAt: 1_790_843_400_000,
-    });
-    expect(exported.package.routines?.[1]?.timeoutMinutes).toBe(20);
 
     expect(exported).toMatchObject({
       format: "openmaus.package",
@@ -158,10 +68,6 @@ describe("package export", () => {
         chiefOfStaff: "lead",
         requirements: { apps: [{ slug: "github" }] },
         rooms: [{ members: ["lead"], defaultResponder: { kind: "agent", agent: "lead" } }],
-        routines: [
-          { agent: "lead", enabledAfterInstall: false },
-          { agent: "lead", enabledAfterInstall: false },
-        ],
         playbooks: [{ key: "launch" }],
         skills: { entries: [{ name: "source-check" }] },
         agents: [{ skills: ["source-check"] }],
@@ -191,7 +97,6 @@ describe("package export", () => {
       name: "Conflicting Skills",
       bots: [bot("one"), bot("two")],
       groups: [],
-      routines: [],
       skillsByBot: new Map([
         ["one", [{ name: "shared", description: "Shared", instructions: "---\nname: shared\ndescription: Shared\n---\none" }]],
         ["two", [{ name: "shared", description: "Shared", instructions: "---\nname: shared\ndescription: Shared\n---\none", ...patch }]],
@@ -226,7 +131,6 @@ describe("package export", () => {
       name: "Lead Crew",
       bots: [bot("one", "Scout"), bot("two", "Reviewer")],
       groups: [],
-      routines: [],
     });
 
     expect(exported.package.playbooks).toHaveLength(1);
@@ -250,10 +154,6 @@ describe("whole-team export (package v2)", () => {
     id, threadId: `room-thread-${id}`, name, memberIds, defaultResponder: { kind: "mentions" }, bulletin: "",
     unread: false, createdAt: 1, section: "Sales desk", ...extra,
   });
-  const routine = (id: string, name: string, botId: string, extra: Partial<Routine> = {}): Routine => ({
-    id, name, prompt: `${name} prompt`, target: "bot", botId, runOn: "maus", enabled: true,
-    schedule: { type: "daily", time: "09:00", weekdays: [1] }, durationMinutes: 30, nextRunAt: 5, createdAt: 1, updatedAt: 1, ...extra,
-  });
   const skill = (name: string) => ({
     name, description: `${name} description`, instructions: `---\nname: ${name}\ndescription: ${name} description\n---\n\n# ${name}\n`,
   });
@@ -271,13 +171,8 @@ describe("whole-team export (package v2)", () => {
       room("dm", "DM", ["lead", "scout"], { dm: true }),
       room("foreign-only", "Only outsiders", ["other"]),
     ];
-    const routines = [
-      routine("digest", "Daily digest", "scout", { continuity: true, runOnStartup: true, attachments: [{ id: "a", kind: "file", name: "x.txt", path: "/private/x.txt", size: 1 }] }),
-      routine("review", "Weekly review", "lead", { target: "room-goal", groupId: "desk", enabled: false }),
-      routine("elsewhere", "Support digest", "other"),
-    ];
     return {
-      team: "Sales desk", authorName: "Mira", bots, groups, routines, published: null,
+      team: "Sales desk", authorName: "Mira", bots, groups, published: null,
       brief: "Quote list prices only.",
       skillsByBot: new Map([["lead", [skill("pricing")]], ["scout", [skill("pricing"), skill("research")]]]),
       mcpServers: {
@@ -301,10 +196,6 @@ describe("whole-team export (package v2)", () => {
     });
     expect(pkg.rooms).toEqual([{ key: "deal-desk", name: "Deal desk", members: ["morgan", "scout"], bulletin: "Cite sources.",
       defaultResponder: { kind: "agent", agent: "morgan" } }]);
-    expect(pkg.routines).toEqual([
-      expect.objectContaining({ key: "daily-digest", agent: "scout", continuity: true, runOnStartup: true, enabledAfterInstall: true }),
-      expect.objectContaining({ key: "weekly-review", agent: "morgan", room: "deal-desk", runOn: "maus", enabledAfterInstall: false }),
-    ]);
     expect(pkg.connections).toEqual([{ key: "crm", label: "crm", reason: "Used by Morgan, Scout",
       mcp: { transport: "http", url: "https://mcp.example.com/crm", valueNames: ["Authorization"] } }]);
     expect(pkg.skills?.entries.map((entry) => entry.name)).toEqual(["pricing", "research"]);
@@ -313,7 +204,6 @@ describe("whole-team export (package v2)", () => {
     expect(result.skipped).toEqual([
       { part: "connections[local-tool]", reason: "stdio_server" },
       { part: "connections[plain-http]", reason: "insecure_address" },
-      { part: "routines[daily-digest].attachments", reason: "files_not_shared" },
     ]);
     expect(result.filename).toBe("sales-desk-1.0.0.openmaus.json");
   });
@@ -358,20 +248,18 @@ describe("whole-team export (package v2)", () => {
     expect(gif.skipped).toContainEqual({ part: "agents[morgan].appearance.avatar", reason: "picture_invalid" });
   });
 
-  it("keeps every key after renaming a bot, a group chat, a routine and the team", () => {
+  it("keeps every key after renaming a bot, a group chat and the team", () => {
     const first = createTeamPackageExport(fixture());
     const renamed = fixture();
     renamed.team = "Revenue desk";
     for (const record of [...renamed.bots, ...renamed.groups]) if (record.section === "Sales desk") record.section = "Revenue desk";
     renamed.bots[0] = { ...renamed.bots[0]!, name: "Morgan Lee" };
     renamed.groups[0] = { ...renamed.groups[0]!, name: "Pipeline room" };
-    renamed.routines[0] = { ...renamed.routines[0]!, name: "Morning digest" };
     const second = createTeamPackageExport({ ...renamed, published: first.published });
     expect(second.document.package.id).toBe("sales-desk");
     expect(second.document.package.release).toBe("1.0.1");
     expect(second.document.package.agents.map((agent) => agent.key)).toEqual(["morgan", "scout"]);
     expect(second.document.package.rooms?.map((room) => room.key)).toEqual(["deal-desk"]);
-    expect(second.document.package.routines?.map((routine) => routine.key)).toEqual(["daily-digest", "weekly-review"]);
     expect(second.filename).toBe("sales-desk-1.0.1.openmaus.json");
   });
 

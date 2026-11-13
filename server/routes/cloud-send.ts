@@ -1,8 +1,8 @@
 // GET /api/cloud-send: Send to My Cloud's comparison of this server (server/cloud-send.ts), or of one item with `item`;
 // /api/cloud-send/chats/*: its chats, by row (server/cloud-send-chats.ts); GET /api/cloud-send/manifest: all a move
 // carries, to check it by (server/cloud-send-manifest.ts); on a Cloud home, POST /api/cloud-send/verify-secrets: the
-// credentials' fingerprints (server/cloud-send-verify.ts); a move's own kinds, memory and bot files
-// (server/cloud-send-kinds.ts, cloud-send-memory.ts, cloud-send-files.ts), and what My Cloud keeps once a move is done and
+// credentials' fingerprints (server/cloud-send-verify.ts); a move's own kinds and bot files
+// (server/cloud-send-kinds.ts, cloud-send-files.ts), and what My Cloud keeps once a move is done and
 // what this computer says once the bots came home (server/cloud-send-arrived.ts), and the lease that lets one computer at a
 // time move in (server/cloud-send-lease.ts). Admin scope (request-auth's default):
 // the owner's app reads them on this computer and on their own Cloud.
@@ -14,9 +14,8 @@ import { arrivedRoute, automationsOffRoute, homeRoute } from "../cloud-send-arri
 import { moveFilesRoute } from "../cloud-send-files.ts";
 import { createMoveLeases, moveLeaseRoute } from "../cloud-send-lease.ts";
 import { createMoveScopes, moveScopeRoute } from "../cloud-send-scope.ts";
-import { automatedBot, moveBotParts, moveItems, moveKindsRoute, type MoveKindsDeps } from "../cloud-send-kinds.ts";
+import { moveBotParts, moveItems, moveKindsRoute, type MoveKindsDeps } from "../cloud-send-kinds.ts";
 import { cloudSendManifest } from "../cloud-send-manifest.ts";
-import { moveMemoryRoute, type MoveMemoryDeps } from "../cloud-send-memory.ts";
 import { cloudSendSummary, partHash, type CloudSendSources } from "../cloud-send.ts";
 import { cloudSendChatsRoute, type CloudSendChatsDeps } from "../cloud-send-chats.ts";
 import { loginFingerprints, VERIFY_NONCE } from "../cloud-send-verify.ts";
@@ -45,8 +44,8 @@ export interface CloudSendRouteDeps extends Pick<CloudSendSources, "appVersion" 
   connectionFingerprints?(nonce: string): Record<string, string>;
   /** The move ended: the person hears which connections stayed on the computer it came from. */
   connectionsMoved?(language?: string): void;
-  /** What only a move carries: automations, skill extras and bot fields, memory, and bot files. */
-  move?: MoveKindsDeps & Omit<MoveMemoryDeps, "bot" | "owner">;
+  /** What only a move carries: skill extras and bot fields, and bot files. */
+  move?: MoveKindsDeps;
   /** This server's automations, which a Cloud home stops for a computer whose bots go home to it. */
   automations?: MoveAutomations;
   /** A team's server: nothing of one person's computer moves in, and every send or move route answers this but to a
@@ -65,7 +64,6 @@ export function createCloudSendRoutes(deps: CloudSendRouteDeps): RouteHandler {
       return !tail.hasMore && tail.messages.length === 1 && tail.messages[0]!.role === "bot" && Boolean(tail.messages[0]!.text?.includes(name));
     },
     inRoom: (botId) => (deps.chats?.store.groups ?? []).some((group) => !group.dm && group.memberIds.includes(botId)),
-    automated: (botId) => Boolean(deps.move && automatedBot(deps.move, botId)),
     skills: deps.skills,
     picture: (avatarUrl) => botAvatarUrlSchema.safeParse(avatarUrl).success ? readAttachment(avatarUrl.slice("/api/attachments/".length))?.bytes ?? null : null,
     logins: () => deps.logins.changes(),
@@ -94,18 +92,17 @@ export function createCloudSendRoutes(deps: CloudSendRouteDeps): RouteHandler {
     if (await moveScopeRoute(scopes, ctx)) return;
     if (deps.chats && await cloudSendChatsRoute({ ...deps.chats, ...(bot ? { bot } : {}), ...(scope ? { scope } : {}) }, ctx)) return;
     if (move && await moveKindsRoute(move, ctx)) return;
-    if (move && await moveMemoryRoute({ ...move, bot: (id) => move.store.bot(id) ?? undefined }, ctx)) return;
     if (move && await moveFilesRoute({ dataDir: move.dataDir, bots: () => (bot ? move.store.bots.filter((entry) => entry.id === bot) : scope ? move.store.bots.filter((entry) => scope.has(entry.id)) : move.store.bots), owner: move.owner }, ctx)) return;
     if (move && home && await moveLeaseRoute({ leases, owner: move.owner }, ctx)) return;
-    if (move && home && await arrivedRoute({ dataDir: move.dataDir, store: move.store, webhooks: move.webhooks, owner: move.owner, lineLanguage: deps.lineLanguage ?? (() => deps.config().language), ...(deps.connectionsMoved ? { stayed: deps.connectionsMoved } : {}) }, ctx)) return;
+    if (move && home && await arrivedRoute({ dataDir: move.dataDir, store: move.store, owner: move.owner, lineLanguage: deps.lineLanguage ?? (() => deps.config().language), ...(deps.connectionsMoved ? { stayed: deps.connectionsMoved } : {}) }, ctx)) return;
     if (move && deps.cloudHome && deps.automations && await automationsOffRoute({ automations: deps.automations, owner: move.owner }, ctx)) return;
-    if (move && !deps.cloudHome && await homeRoute({ dataDir: move.dataDir, store: move.store, webhooks: move.webhooks }, ctx)) return;
+    if (move && !deps.cloudHome && await homeRoute({ dataDir: move.dataDir, store: move.store }, ctx)) return;
     if (path === "/api/cloud-send/manifest") {
       if (method !== "GET") return json(res, 405, { error: "method not allowed" });
       if (!deps.chats) return json(res, 404, { error: "not found" });
       res.setHeader("cache-control", "no-store");
       return json(res, 200, { vault: 1, ...await cloudSendManifest({ summary: () => cloudSendSummary(sources, { move: true, leaving: !home, ...(bot ? { bot } : {}), ...(scope ? { bots: scope } : {}) }), store: deps.chats.store, dataDir: deps.chats.dataDir,
-        connections: deps.connections ?? (async () => []), heads: threadHeads, ...(move ? { kinds: move, teamMemory: move.teamMemory } : {}), ...(bot ? { bot } : {}),
+        connections: deps.connections ?? (async () => []), heads: threadHeads, ...(move ? { kinds: move } : {}), ...(bot ? { bot } : {}),
         attachments: url.searchParams.get("attachments") !== "0", files: url.searchParams.get("files") !== "0", ...(scope ? { scope } : {}) }) });
     }
     if (path === "/api/cloud-send/verify-secrets") {

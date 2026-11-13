@@ -9,7 +9,7 @@ import { buildNotification, type Notification } from "../notify.ts";
 import { quoteInNote } from "../peer-provenance.ts";
 import { peerName } from "../peer-roster.ts";
 import { redactSecretsInText } from "../redact.ts";
-import { retriesTeammateThread, type RoutineFailureFacts } from "../routine-recovery.ts";
+import { retriesTeammateThread, type FailureFacts } from "../turn-failure.ts";
 import { queueSteeredMessage } from "../steer-queue.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 
@@ -188,7 +188,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
    * Never retried: a stall the turn watchdog stopped (kind "stalled"), a stop, a refusal or a cap (retriesTeammateThread,
    * from the failure's words and `facts`), a run that answered a retry, and a thread whose asks are not the Chief's person's. */
   /** `notified`: the person already heard of it another way (a usage limit's own notice), so only the Chief is told. */
-  function reportIncident(input: { kind: IncidentKind; bot: BotRecord; threadId: string; detail: string; facts?: RoutineFailureFacts; notified?: boolean }): void {
+  function reportIncident(input: { kind: IncidentKind; bot: BotRecord; threadId: string; detail: string; facts?: FailureFacts; notified?: boolean }): void {
     const { bot, threadId } = input;
     if (deps.quietThread?.(bot.id, threadId)) return;
     const task = store.taskByThread(bot.id, threadId);

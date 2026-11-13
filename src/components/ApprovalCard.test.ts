@@ -7,25 +7,6 @@ import { pendingApprovals, PendingApprovalActions, PendingApprovalPanel, spokenA
 import { StoreProvider, type Bot, type Message } from "@/state/store";
 import { skillRequestBehavior } from "../../shared/skill-request";
 
-const routineRequest = {
-  version: 1 as const,
-  requestId: "routine-request",
-  botId: "bot-1",
-  threadId: "thread-1",
-  createdAt: 1,
-};
-
-const createRoutineOperation = {
-  action: "create" as const,
-  routine: {
-    name: "Backlog review",
-    instructions: "Review every item in the backlog.",
-    schedule: { type: "daily" as const, time: "09:00", weekdays: [1, 2, 3, 4, 5] },
-    runOn: "maus" as const,
-    durationMinutes: 30,
-  },
-};
-
 describe("ApprovalCard decided by voice", () => {
   const bash = (answered: string, via?: "call" | "reaction"): Message => ({
     id: "bash-card",
@@ -91,81 +72,6 @@ describe("ApprovalCard: the card that lifts a lock on the lent computer", () => 
     expect(renderToStaticMarkup(createElement(ApprovalCard, { message: lift({ answered: "allow" }) }))).toContain("Allowed");
     expect(pendingApprovals([lift({ answered: "allow" })])).toEqual([]);
     expect(pendingApprovals([lift({ answered: "deny" })])).toEqual([]);
-  });
-});
-
-describe("ApprovalCard routine proposals", () => {
-  it("shows a routine card left open from before Triggers v2 as expired, with nothing to confirm", () => {
-    const message: Message = {
-      id: "routine-card",
-      role: "bot",
-      kind: "options",
-      at: 1,
-      card: {
-        title: "Confirm routine",
-        subtitle: "Weekdays at 09:00",
-        options: ["Confirm", "Cancel"],
-        requestId: "routine-request",
-        tool: "schedule_routine",
-        routineRequest: { ...routineRequest, operation: createRoutineOperation },
-      },
-    };
-
-    const markup = renderToStaticMarkup(createElement(ApprovalCard, { message }));
-    expect(markup).toContain("Weekdays at 09:00");
-    expect(markup).toContain("Expired");
-    expect(markup).not.toContain("Waiting for your confirmation");
-    expect(pendingApprovals([message])).toEqual([]);
-  });
-
-  it("records the exact routine action after confirmation", () => {
-    const message: Message = {
-      id: "routine-delete-card",
-      role: "bot",
-      kind: "options",
-      at: 1,
-      card: {
-        title: "Delete “Daily inbox”?",
-        subtitle: "Delete “Daily inbox”?\nWhen: Weekdays at 09:00",
-        options: ["Confirm", "Cancel"],
-        answered: "allow",
-        requestId: "routine-request",
-        tool: "manage_routine",
-        routineRequest: {
-          ...routineRequest,
-          operation: { action: "delete", routineId: "routine-1", expectedUpdatedAt: 1 },
-        },
-      },
-    };
-
-    const markup = renderToStaticMarkup(createElement(ApprovalCard, { message }));
-    expect(markup).toContain("Delete “Daily inbox”?");
-    expect(markup).toContain("Routine deleted");
-  });
-
-  it("does not imply a run-now request has already started", () => {
-    const message: Message = {
-      id: "routine-run-card",
-      role: "bot",
-      kind: "options",
-      at: 1,
-      card: {
-        title: "Run now “Daily inbox”?",
-        subtitle: "Action: Run routine now\nName: Daily inbox",
-        options: ["Confirm", "Cancel"],
-        answered: "allow",
-        requestId: "routine-request",
-        tool: "manage_routine",
-        routineRequest: {
-          ...routineRequest,
-          operation: { action: "run_now", routineId: "routine-1", expectedUpdatedAt: 1 },
-        },
-      },
-    };
-
-    const markup = renderToStaticMarkup(createElement(ApprovalCard, { message }));
-    expect(markup).toContain("Routine run queued");
-    expect(markup).not.toContain("Routine started");
   });
 });
 
@@ -643,58 +549,18 @@ describe("ApprovalCard for a change that applied on its own", () => {
     kind: "options",
     at: 1,
     card: {
-      title: "Schedule “Check before dentist”?",
-      subtitle: "Action: Create routine\nSchedule: Cron 30 14 * * 3",
+      title: "Set up Scout?",
+      subtitle: "Name: \"Scout\"",
       options: [],
       answered: "allow",
       dismissed: true,
       autoApplied: true,
-      requestId: "routine-request",
-      tool: "schedule_routine",
+      requestId: "profile-request",
+      tool: "update_profile",
       ...card,
     },
   });
-  const routineCard = (operation: NonNullable<NonNullable<Message["card"]>["routineRequest"]>["operation"], undo?: object) => applied({
-    routineRequest: { ...routineRequest, operation, resultId: "routine-1", ...(undo ? { undo } : {}) } as NonNullable<Message["card"]>["routineRequest"],
-  });
   const render = (message: Message) => renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Scout" }, message, threadId: "thread-1" }));
-
-  // A create renders the live trigger card (TriggerCard.test.ts); every later change is this one line.
-  const update = { action: "update" as const, routineId: "routine-1", expectedUpdatedAt: 1, changes: { name: "Renamed" } };
-  const before = { ...createRoutineOperation.routine, enabled: true };
-
-  it("reads as one plain line with Undo instead of the approval box", () => {
-    const at = new Date();
-    at.setHours(14, 30, 0, 0);
-    const markup = render(routineCard(update, { name: "Check before dentist", schedule: { type: "once", at: at.getTime() }, appliedUpdatedAt: 2, before }));
-    expect(markup).toMatch(/Scout changed an automation: Check before dentist, today 2:30/);
-    expect(markup).toContain(">Undo<");
-    expect(markup).toContain(">Details<");
-    expect(markup).not.toContain("30 14 * * 3");
-    expect(markup).not.toContain("Waiting for your confirmation");
-    expect(markup).not.toContain("schedule_routine");
-  });
-
-  it("never shows a cron expression that has no plain name", () => {
-    const markup = render(routineCard(
-      { ...update, changes: { schedule: { type: "cron", expression: "*/7 3-5 * * 1", timeZone: "UTC" } } },
-      { name: "Odd hours", schedule: { type: "cron", expression: "*/7 3-5 * * 1", timeZone: "UTC" } },
-    ));
-    expect(markup).toContain("Scout changed an automation: Odd hours");
-    expect(markup).not.toContain("*/7");
-  });
-
-  it("says Undone after Undo, and offers no Undo for a run", () => {
-    const undone = { ...routineCard(update, { name: "Backlog review", appliedUpdatedAt: 2, before }) };
-    undone.card = { ...undone.card!, undone: true };
-    const markup = render(undone);
-    expect(markup).toContain("Scout changed an automation: Backlog review");
-    expect(markup).toContain(" · Undone");
-    expect(markup).not.toContain(">Undo<");
-    const run = render(routineCard({ action: "run_now", routineId: "routine-1", expectedUpdatedAt: 1 }, { name: "Backlog review" }));
-    expect(run).toContain("Scout ran an automation: Backlog review");
-    expect(run).not.toContain(">Undo<");
-  });
 
   it("names profile fields, the model, and the skill in plain words", () => {
     const profile = render(applied({
@@ -725,7 +591,7 @@ describe("ApprovalCard for a change that applied on its own", () => {
     expect(skill).toContain("Scout added a skill: file-expense");
   });
 
-  it("reads team setup and team memory as one line, with Undo except for a deletion", () => {
+  it("reads team setup as one line, with Undo except for a deletion", () => {
     const setup = { version: 1 as const, requestId: "t", botId: "bot-1", threadId: "thread-1", reason: "asked", createdAt: 1, requesterRevision: "r", newTeams: [] };
     const team = render(applied({ tool: "set_up_team", teamSetupRequest: { ...setup, operations: [], resumed: true,
       result: { state: "applied", newTeams: [], bots: [{ id: "b2", name: "Mira", action: "created" }, { id: "b3", name: "Ada", action: "updated" }] },
@@ -736,17 +602,16 @@ describe("ApprovalCard for a change that applied on its own", () => {
       result: { state: "applied", newTeams: [], bots: [{ id: "b3", name: "Ada", action: "deleted" }] } } }));
     expect(deleted).toContain("Scout deleted @Ada");
     expect(deleted).not.toContain(">Undo<");
-    const memory = render(applied({ tool: "propose_team_memory", subtitle: "Person: Ada Lovelace — Runs the payroll review.",
-      teamMemoryRequest: { section: "", entryId: "e", kind: "person", revision: "v1" } }));
-    expect(memory).toContain("Scout saved to department memory: Person: Ada Lovelace");
-    expect(memory).toContain(">Undo<");
-    expect(memory).not.toContain("Remember");
   });
 
-  it("keeps the approval box for a card a person confirmed", () => {
-    const confirmed = routineCard(createRoutineOperation, { name: "Backlog review" });
+  it("keeps the whole card for a change a person confirmed that did not apply on its own", () => {
+    const confirmed = applied({ tool: "update_profile", profileRequest: {
+      version: 1, requestId: "p", botId: "bot-1", threadId: "thread-1", targetBotId: "bot-1", targetName: "Scout",
+      createdAt: 1, reason: "asked", changes: { title: "Researcher" }, before: { title: "" }, expectedRevision: "r",
+    } });
     confirmed.card = { ...confirmed.card!, autoApplied: undefined, options: ["Confirm", "Cancel"] };
-    expect(render(confirmed)).toContain("Routine scheduled");
+    expect(render(confirmed)).toContain("Profile updated");
+    expect(render(confirmed)).toContain("Scout wants to update its profile");
   });
 });
 

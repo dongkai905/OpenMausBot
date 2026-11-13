@@ -6,7 +6,7 @@ import type { LinkedSecret, VaultSecret } from "../../shared/vault";
 import { t } from "@/lib/i18n";
 import { productName } from "@/lib/brand";
 import { addLogin, changeLogin, connectOnePassword, deleteLogin, disconnectOnePassword, grantVault, refreshOnePassword } from "@/lib/logins";
-import { relativeTime } from "@/lib/memory";
+import { relativeTime } from "@/lib/clock-time";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { deleteSecret, listVault } from "@/lib/vault";
 import { useStore } from "@/state/store";

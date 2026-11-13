@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { NewBotDefaults } from "./new-bot-defaults.ts";
+import { newBotDefaultsSchema, type NewBotDefaults } from "./new-bot-defaults.ts";
 import type { BotRecord } from "./store.ts";
 
 const FIXTURES = join(import.meta.dirname, "..", "shared", "package-fixtures");
@@ -18,9 +18,7 @@ async function installation() {
   vi.stubEnv("HOME", home);
   vi.stubEnv("USERPROFILE", home);
   const { Store } = await import("./store.ts");
-  const { RoutineManager } = await import("./routines.ts");
   const skills = await import("./skills.ts");
-  const workspace = await import("./workspace.ts");
   const sections = await import("./section-context.ts");
   const presets = await import("./presets.ts");
   const importer = await import("./package-import.ts");
@@ -28,28 +26,19 @@ async function installation() {
   const parts = await import("./package-parts.ts");
   const { parsePackageDocument } = await import("../shared/package-format.ts");
   const store = new Store(() => ({ instanceId: "claude", model: "default-model" }));
-  const routines = new RoutineManager({
-    file: join(home, "routines.json"),
-    botState: (id) => (store.bot(id) && !store.bot(id)!.hidden ? "ready" : "missing"),
-    goalState: (groupId, botId) => (store.group(groupId ?? "")?.memberIds.includes(botId) ? "ready" : "missing"),
-    createTask: () => null,
-    startTurn: async () => {},
-  });
   const presetFile = join(home, "presets.json");
   const presetStore = presets.createPresetStore(presetFile);
   const mcp = { servers: {} as Record<string, unknown> };
   const deps = {
     store,
-    routines,
     skills: { install: skills.installSkill, setEnabled: skills.setSkillEnabled, installOrg: skills.installOrgSkill },
-    memory: { writeIndex: workspace.writeMemoryFile, writeTopic: workspace.writeMemoryTopic },
     mcp: { servers: () => mcp.servers, refusal: () => undefined, persist: (next: Record<string, unknown>) => { mcp.servers = next; } },
     sections: { writeBrief: (section: string, text: string) => void sections.writeSectionContext(section, text) },
     images: { save: () => "/api/attachments/fixture.png" },
     defaultSelection: () => ({ instanceId: "claude", model: "default-model" }),
     presets: presetStore,
   };
-  const applyDeps = { store, skills: deps.skills, memory: deps.memory };
+  const applyDeps = { store, skills: deps.skills };
   const org = (packageId = "pkg-1") => ({
     adminOrigin: "https://admin.example.com", organizationId: "org-1", packageId, ref: "acme/sales-skills", sha256: "a".repeat(64),
     publisher: { organizationId: "org-acme", slug: "acme", name: "Acme Partners" },
@@ -60,7 +49,7 @@ async function installation() {
     document.package.publisher = { organization: "acme", name: "Acme Partners" };
     return document;
   };
-  return { store, skills, workspace, presets, importer, exporter, parts, parsePackageDocument, presetStore, presetFile, deps, applyDeps, org, orgDocument };
+  return { store, skills, presets, importer, exporter, parts, parsePackageDocument, presetStore, presetFile, deps, applyDeps, org, orgDocument };
 }
 
 afterEach(async () => {
@@ -109,7 +98,7 @@ describe("preset store", () => {
     const app = await installation();
     const result = app.importer.importPackageDocument(app.parsePackageDocument(fixture("library-only.v2.json")), { trust: "file", mode: "add" }, app.deps);
     if (result.alreadyAdded) throw new Error("unexpected");
-    expect(result).toMatchObject({ name: "Sales skills", section: "", bots: [], groups: [], routines: [], offeredSkills: ["objection-handling", "follow-up"], connections: [], brief: false, notes: 0 });
+    expect(result).toMatchObject({ name: "Sales skills", section: "", bots: [], groups: [], offeredSkills: ["objection-handling", "follow-up"], connections: [], brief: false, notes: 0 });
     expect(result.presets).toEqual([{ id: expect.any(String), key: "support", name: "Support agent" }]);
     expect(app.store.bots).toEqual([]);
     expect(app.store.sections).toEqual([]);
@@ -168,13 +157,15 @@ describe("preset store", () => {
       ["file", "Support agent", undefined, false],
     ]);
     expect(listed[1]).toMatchObject({ packageName: "Sales skills", release: "2.0.1", bot: { name: "Sky", title: "Support", appearance: { color: "blue" } },
-      skills: [{ name: "objection-handling", description: "Answer common objections." }], playbooks: [], notes: [] });
+      skills: [{ name: "objection-handling", description: "Answer common objections." }], playbooks: [] });
     expect(app.presets.listBotPresets(app.presetStore, new Map([[org.installId, "withdrawn" as const]])).map((preset) => preset.source)).toEqual(["file"]);
     expect(app.presets.listBotPresets(app.presetStore, new Map([[org.installId, "removed" as const]])).map((preset) => preset.source)).toEqual(["file"]);
 
     const stored = JSON.parse(readFileSync(app.presetFile, "utf8"));
+    // A row carrying fields outside the preset allowlist is listed without them.
     Object.assign(stored.presets[0].bot, { approvalMode: "full", modelSelection: { instanceId: "x", model: "y" }, cwd: "/", computer: "local" });
-    stored.presets[1].seed = { memory: { "memory/log/2026-09-24.md": "chat" } };
+    // A row the package parser refuses is never listed at all.
+    stored.presets[1].bot.name = 42;
     writeFileSync(app.presetFile, JSON.stringify(stored));
     const after = app.presets.listBotPresets(app.presetStore, new Map());
     expect(after).toHaveLength(1);
@@ -184,19 +175,16 @@ describe("preset store", () => {
 });
 
 describe("creating a bot from a preset", () => {
-  it("adds a file preset's skills switched off, its playbooks and starter notes, and stamps where it came from", async () => {
+  it("adds a file preset's skills switched off, its playbooks, and stamps where it came from", async () => {
     const app = await installation();
     const input = fixture("full-team.v2.json");
-    input.package.presets[0].seed = { memory: { "MEMORY.md": "- Greets by name.\n", "memory/tone.md": "Warm.\n" } };
     const imported = app.importer.importPackageDocument(app.parsePackageDocument(input), { trust: "file", mode: "add" }, app.deps);
     if (imported.alreadyAdded) throw new Error("unexpected");
     const resolved = app.presetStore.resolve(imported.presets![0]!.id)!;
     const bot = app.store.createBot({ name: "Sky", modelSelection: { instanceId: "claude", model: "default-model" } });
-    expect(app.presets.applyPresetToBot(bot.id, resolved, app.applyDeps)).toEqual({ skills: ["objection-handling"], notes: 2 });
+    expect(app.presets.applyPresetToBot(bot.id, resolved, app.applyDeps)).toMatchObject({ skills: ["objection-handling"] });
     expect(app.skills.listSkills(bot.id)).toEqual([expect.objectContaining({ name: "objection-handling", enabled: false, source: "package:sales-desk" })]);
     expect(app.skills.skillPackageStamps(bot.id)).toEqual([]);
-    expect(app.workspace.readMemoryFile(bot.id).text).toBe("- Greets by name.\n");
-    expect(app.workspace.readMemoryTopic(bot.id, "tone.md")).toBe("Warm.\n");
     const record = app.store.bot(bot.id)!;
     expect(record.playbooks).toEqual([expect.objectContaining({ key: "qualify", name: "Qualify a lead" })]);
     expect(record.installedPackage).toEqual({ id: "sales-desk", name: "Sales desk", release: "1.3.0", requiredApps: [], source: "file",
@@ -243,7 +231,7 @@ describe("sharing my New bot defaults as a preset", () => {
     ...overrides,
   });
 
-  it("keeps only the allowlist: name, look, instructions, skills and (when asked) starter notes", async () => {
+  it("keeps only the allowlist: name, look, instructions and skills", async () => {
     const app = await installation();
     const built = app.presets.presetFromDefaults(defaults(), { name: "Support agent", description: "Kind and precise.", includeNotes: true,
       avatar: { mime: "image/png", data: PNG } });
@@ -253,11 +241,9 @@ describe("sharing my New bot defaults as a preset", () => {
       bot: { name: "Sky", title: "Support", description: "Answers customers.", soul: "Be kind.\n",
         appearance: { color: "blue", mascotExpression: "happy", avatar: { mime: "image/png", data: PNG, crop: "rounded" } } },
       skills: ["follow-up"],
-      seed: { memory: { "MEMORY.md": "- Customers first.\n", "memory/tone.md": "Warm.\n" } },
     });
     expect(JSON.stringify(built.value)).not.toMatch(/opus|secret|full|Bash|crm|work|Ops|Daily/);
-    expect(app.presets.presetFromDefaults(defaults(), { includeNotes: false }).value!.preset).not.toHaveProperty("seed");
-    const empty = app.presets.presetFromDefaults({ profile: { approvalMode: "auto", computer: "local" }, memory: {}, skills: [], routines: [] }, { includeNotes: true });
+    const empty = app.presets.presetFromDefaults(newBotDefaultsSchema.parse({ profile: { approvalMode: "auto", computer: "local" } }), { includeNotes: true });
     expect(empty).toEqual({ value: null, skipped: [{ part: "presets[new-bot-defaults]", reason: "preset_empty" }] });
   });
 
@@ -271,7 +257,7 @@ describe("sharing my New bot defaults as a preset", () => {
     }), { includeNotes: true });
     const bot = { id: "b1", threadId: "t1", name: "Morgan", color: "green", section: "Sales desk", createdAt: 1 } as BotRecord;
     const exported = app.exporter.createTeamPackageExport({
-      team: "Sales desk", bots: [bot], groups: [], routines: [], published: null,
+      team: "Sales desk", bots: [bot], groups: [], published: null,
       skillsByBot: new Map([["b1", [{ name: "research-brief", description: "research-brief steps.", instructions: skillText("research-brief"), source: "fixture" }]]]),
       preset: built.value,
     });
@@ -319,7 +305,6 @@ describe("sharing my New bot defaults as a preset", () => {
     const bot = app.store.createBot({ name: "Sky", modelSelection: { instanceId: "claude", model: "default-model" } });
     app.presets.applyPresetToBot(bot.id, app.presetStore.resolve(imported.presets![0]!.id)!, app.applyDeps);
     expect(app.skills.listSkills(bot.id)).toEqual([expect.objectContaining({ name: "follow-up", enabled: false })]);
-    expect(app.workspace.readMemoryTopic(bot.id, "tone.md")).toBe("Warm.\n");
   });
 
   it("records what was last shared and starts over from an unreadable record", async () => {

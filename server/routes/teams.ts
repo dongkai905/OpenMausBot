@@ -27,7 +27,6 @@ import {
 import { readPublishedLibrary, writePublishedLibrary, type DefaultsPreset } from "../presets.ts";
 import { scoutProject, suggestTeam } from "../project-scout.ts";
 import { readPublishedTeam, writePublishedTeam } from "../published-teams.ts";
-import type { Routine, RoutineManager } from "../routines.ts";
 import { readSectionContext } from "../section-context.ts";
 import { sectionKey, type BotRecord, type GroupRecord, type Store } from "../store.ts";
 import { createTeamBackup, importTeamBackup } from "../team-backup.ts";
@@ -42,7 +41,6 @@ export interface TeamRouteDeps {
   cfg: Pick<AppConfig, "mcpServers">;
   /** The exporting person's name, as a package's author: the server's profile's, or on a Team Cloud the person's own. */
   authorName(auth: RequestAuth): string | undefined;
-  routines(): RoutineManager | null;
   orgLibrary(): Pick<OrgLibrary, "list" | "preview" | "add" | "offeredSkills" | "addOfferedSkill"> | null;
   broadcast(payload: Record<string, unknown>): void;
   publicBot(bot: BotRecord): WireBot;
@@ -51,7 +49,6 @@ export interface TeamRouteDeps {
   defaultSelection(): Promise<ModelSelection>;
   defaultsPresetFor(body: Record<string, unknown>, includeNotes: boolean): { preset: DefaultsPreset | null; skipped: TeamExportSkip[] };
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
-  starterNotes(botId: string): Array<{ path: string; text: string }>;
   checkedExportSkillNames(value: unknown, bots: readonly BotRecord[]): { ok: true; names: string[] } | { ok: false; error: string };
   collectExportSkills(bots: readonly BotRecord[], names: readonly string[]): ReadonlyMap<string, readonly ExportablePackageSkill[]>;
   collectTeamSkills(bots: readonly BotRecord[], selection: unknown):
@@ -61,23 +58,15 @@ export interface TeamRouteDeps {
   threadShown?(auth: RequestAuth): (threadId: string) => boolean;
   /** On a Team Cloud: false for someone else's own MausBot, which no export carries. */
   botShown?(auth: RequestAuth): (botId: string) => boolean;
-  /** On a Team Cloud: false for a routine that lives in someone else's private chat, which no export carries. */
-  routineShown?(auth: RequestAuth): (routine: Routine) => boolean;
 }
 
 export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
-  const routinesFor = (auth: RequestAuth): Routine[] => {
-    const all = deps.routines()!.listRoutines();
-    const shown = deps.routineShown?.(auth);
-    return shown ? all.filter(shown) : all;
-  };
   const {
     store, cfg, broadcast, publicBot, publicGroupState, groupWithThread, defaultSelection, defaultsPresetFor,
-    packageImportDeps, starterNotes, checkedExportSkillNames, collectExportSkills, collectTeamSkills,
+    packageImportDeps, checkedExportSkillNames, collectExportSkills, collectTeamSkills,
   } = deps;
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
-    const routines = deps.routines();
     const orgLibrary = deps.orgLibrary();
     if (method === "POST" && path === "/api/teams/export") {
       const body = await readBody(req, 8 * 1024 * 1024);
@@ -136,12 +125,10 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
             authorName: profileName,
             bots: exportable,
             groups: store.groups,
-            routines: routinesFor(auth),
             brief: readSectionContext(team)?.text,
             published: readPublishedTeam(team),
             skillsByBot: skills.skillsByBot,
             skillSelection: skills.all ? "all" : "chosen",
-            memoryByBot: body.includeMemory === true ? new Map(teamBots.map((bot) => [bot.id, starterNotes(bot.id)])) : undefined,
             avatars,
             mcpServers: cfg.mcpServers ?? {},
             skipped: [...skills.skipped, ...(defaults?.skipped ?? [])],
@@ -171,7 +158,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if ((body.format === "backup" ? exportable.length : memberIds.length) === 0) return json(res, 400, { error: "Create a bot before exporting your team" });
       try {
         if (body.format === "backup") {
-          return json(res, 200, createTeamBackup(store, routinesFor(auth), name, deps.threadShown?.(auth)));
+          return json(res, 200, createTeamBackup(store, name, deps.threadShown?.(auth)));
         }
         if (body.format === "package") {
           const selectedBots = exportable.filter((bot) => !bot.hidden);
@@ -182,7 +169,6 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
             authorName: profileName,
             bots: selectedBots,
             groups: store.groups,
-            routines: routinesFor(auth),
             skillsByBot: collectExportSkills(selectedBots, skillNames.names),
           });
           return json(res, 200, {
@@ -279,7 +265,6 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
         section: imported.section,
         bots: imported.bots.map((bot) => publicBot(store.bot(bot.id) ?? bot)),
         groups: imported.groups.map((created) => ({ ...publicGroupState(store.group(created.id) ?? created), messages: [] })),
-        routines: imported.routines,
         offeredSkills: imported.offeredSkills,
         connections: imported.connections,
         skipped: imported.skipped,
@@ -339,7 +324,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if (body?.format === "openmaus.backup") {
         if (importMode !== "add") return json(res, 400, { error: "Import backups alongside your existing bots; project mode is only for templates" });
         try {
-          const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth) });
+          const imported = importTeamBackup(store, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth) });
           // A restore writes transcripts without store events: these frames carry the restored pages to other clients.
           const bots = imported.bots.map((bot) => publicBot(bot));
           const groups = imported.groups.map((group) => groupWithThread(group));
@@ -383,7 +368,6 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
         bots: imported.bots.map((bot) => publicBot(store.bot(bot.id) ?? bot)),
         group: imported.group,
         groups: imported.groups.map((created) => ({ ...created, messages: [] })),
-        routines: imported.routines,
         offeredSkills: imported.offeredSkills,
         connections: imported.connections,
         skipped: imported.skipped,

@@ -32,7 +32,7 @@ export function useUsageSnapshot(): void {
   useEffect(() => {
     latest.current = state;
   });
-  const ready = owner === true && snapshotReady(state, window.ogb?.remoteClient?.active !== true);
+  const ready = owner === true && snapshotReady(state);
   useEffect(() => {
     if (!ready) return;
     const check = () => void sendDailySnapshot(latest.current, browserSources(latest.current.config));

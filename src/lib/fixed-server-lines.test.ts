@@ -7,7 +7,6 @@ import { serverErrorText } from "./server-error";
 import { modelOptionLabel } from "./model-label";
 import { localizedCard } from "./widget-text";
 import { CHAT_NOTICE, chatNotice, noticeFailure, noticeLine } from "../../server/chat-notices";
-import { recoveredText } from "../../server/automation-reports";
 import "../../server/server-line-packs";
 import { USER_ERROR, userError, userErrorFields } from "../../server/user-errors";
 import { parseConfigPatch } from "../../server/config";
@@ -78,13 +77,6 @@ describe("fixed server words", () => {
       const line = noticeLine(key, { name: "Scout", minutes });
       expect(routineLineText(line.textCode, line.text, line.textParams)).toBe(`Scout continuou trabalhando por ${minutes} ${expected} — envie o objetivo novamente quando o bot estiver livre.`);
     }
-  });
-
-  it("words recovery on the server in the host's clock and the person's language", () => {
-    const at = Date.UTC(2026, 9, 26, 15, 30);
-    expect(recoveredText("Check", at)).toMatch(/^Recovered: Check finished OK at /);
-    const time = new Intl.DateTimeFormat("pt-BR", { hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(at).replace(/\s/g, " ");
-    expect(recoveredText("Check", at, "pt-br")).toBe(`Voltou a funcionar: Check terminou com sucesso às ${time}`);
   });
 
   it("does not leave an English generic teammate inside a translated line", () => {

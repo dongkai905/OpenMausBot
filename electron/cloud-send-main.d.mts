@@ -31,7 +31,6 @@ export function installCloudSend(deps: {
   handoff(what: { kind: string; [key: string]: unknown }): Promise<any>;
   move(options?: { final?: boolean; scope?: string }): Promise<CloudSendOutcome>;
   check(options?: { scope?: string; stopped?(): boolean }): Promise<CloudMoveCheck>;
-  switches(): Record<string, boolean>;
   snapshot(): CloudSendSnapshot;
   publish(): void;
 };

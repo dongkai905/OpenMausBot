@@ -5,7 +5,6 @@ import { accessSync, constants, readFileSync, statfsSync } from "node:fs";
 import { availableParallelism, freemem, loadavg, totalmem } from "node:os";
 import { failedTurnCause } from "../shared/failed-turn.ts";
 import { PLACE_STATES } from "../shared/place-view.ts";
-import type { RoutineRunStatus } from "../shared/routines.ts";
 import { trialCreditKind } from "../shared/trial-credit.ts";
 import type { BoxReport } from "./bot-box/box.ts";
 import type { RoomReport } from "./engine-memory.ts";
@@ -15,6 +14,9 @@ import type { ProviderSnapshot, RuntimeEvent } from "./contracts.ts";
 import { createCloudSpeed, type CloudSpeed } from "./cloud-speed.ts";
 import { classifyError } from "./drivers/retry.ts";
 import type { Message, StoreChange } from "./store.ts";
+
+/** How a scheduled run ended; the states the health report counts. */
+export type RoutineRunStatus = "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled" | "missed";
 
 /** The report's largest JSON body; incidents past it wait for the next poll. */
 export const CLOUD_HEALTH_MAX_BYTES = 64 * 1024;

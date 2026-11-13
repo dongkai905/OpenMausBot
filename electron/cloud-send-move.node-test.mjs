@@ -59,15 +59,11 @@ function sides({ here = [], bots = {}, there = [], connections = [], secrets = {
     local: async (route, init) => {
       if (init?.method && init.method !== "GET") { calls.push(`HERE ${init.method} ${route}`); return json({ v: 1, removed: true }); }
       if (route === "/api/cloud-send" || route === "/api/cloud-send?move=1") return json(summary(here));
-      if (route.startsWith("/api/cloud-send/memory?bot=")) return json({ v: 1, files: [], journal: [] });
-      if (route === "/api/cloud-send/memory") return json({ v: 1, about: { learned: [], removed: [] }, teams: [] });
       if (route === "/api/cloud-send/files") return json({ v: 1, files: [] });
-      if (route.startsWith("/api/cloud-send/kind?key=")) return json({ v: 1, dataDir: "/desk/.openmausbot", record: route.includes("routine") ? { enabled: true } : route.includes("app-event") ? { enabled: false } : {} });
+      if (route.startsWith("/api/cloud-send/kind?key=")) return json({ v: 1, dataDir: "/desk/.openmausbot", record: {} });
       if (route === "/api/cloud-send/chats?attachments=1") return json({ v: 1, dataDir: "/desk/.openmausbot", conversations, attachments: [] });
       if (route === "/api/bots?messages=0") return json({ bots: Object.entries(bots).map(([id, fields]) => ({ id, threadId: `t-${id}`, name: id, ...fields })) });
       if (/^\/api\/bots\/[\w-]+\/skills$/u.test(route)) return json({ skills: [] });
-      if (/^\/api\/bots\/[\w-]+\/memory$/u.test(route)) return json({ topics: [] });
-      if (route.includes("/memory/file")) return json({ exists: false, text: "" });
       if (route === "/api/cloud-connections") return json({ computer: { environmentId: "env-desk", label: "Amit's Mac" }, connections, engines: [], commands: [] });
       if (route === "/api/cloud-send/chats") return json({ v: 1, dataDir: "/desk/.openmausbot", conversations });
       const listed = /^\/api\/cloud-send\/chats\/ids\?thread=([\w-]+)&from=(\d+)$/u.exec(route);
@@ -320,14 +316,14 @@ test("a move names at most 200 of the conversations My Cloud held a request, nev
   assert.deepEqual(refused.result.failed.map((failure) => [failure.key, failure.error]), [["chats", "My Cloud said: the store is busy"]]);
 });
 
-test("a move sends what only it carries last, after the chats and their settings, switched off there; an app event only in the final pass, which this computer then lets go of", async () => {
+test("a move sends what only it carries with the bots, before the chats and their settings", async () => {
   const kind = (key, kindName, parts) => ({ key, kind: kindName, label: key, id: key.split(":")[1], bot: "ember", parts });
   const conversations = [{ bot: "ember", threadId: "a", last: 1, lastId: "a-1", busy: false, settings: { snoozedUntil: 5 } }];
   const put = [];
-  const move = sides({ here: [bot("ember", { soul: "s" }), kind("routine:r1", "routine", { def: "d1", runs: "x" }), kind("app-event:e1", "app-event", { def: "d2" }),
-    { key: "imported-skill:tidy", kind: "imported-skill", label: "tidy", id: "tidy", parts: { files: "f" } }], there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } }, conversations,
+  const move = sides({ here: [bot("ember", { soul: "s" }), kind("imported-skill:tidy", "imported-skill", { files: "f" })],
+    there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } }, conversations,
   onCall: (method, route, body, cloud) => {
-    if (method === "PUT" && route === "/api/cloud-send/kind") { put.push(body.key); cloud.set(body.key, { key: body.key, kind: body.key.split(":")[0], label: body.key, id: body.key.split(":")[1], parts: body.key === "routine:r1" ? { def: "d1", runs: "x" } : body.key === "app-event:e1" ? { def: "d2" } : { files: "f" } }); return reply(200, { v: 1, ok: true }); }
+    if (method === "PUT" && route === "/api/cloud-send/kind") { put.push(body.key); cloud.set(body.key, { key: body.key, kind: body.key.split(":")[0], label: body.key, id: body.key.split(":")[1], parts: { files: "f" } }); return reply(200, { v: 1, ok: true }); }
     if (method === "GET" && route === "/api/cloud-send/chats") return reply(200, { v: 1, conversations: [{ threadId: "a", settings: {} }] });
     if (method === "POST" && route === "/api/cloud-send/chats/settings") return reply(200, { v: 1, changed: body.conversations.length });
     return null;
@@ -335,42 +331,31 @@ test("a move sends what only it carries last, after the chats and their settings
   const send = createCloudSend(move.deps);
   const first = await send.send({ reason: "move" });
   assert.deepEqual(first.result.failed, []);
-  assert.deepEqual(put, ["imported-skill:tidy", "routine:r1"], "an app event waits for the final pass");
-  assert.deepEqual(send.switches(), { "routine:r1": true });
+  assert.deepEqual(put, ["imported-skill:tidy"]);
   const at = (call) => move.calls.indexOf(call);
-  assert.ok(at("PUT /api/cloud-send/kind") > -1 && move.calls.lastIndexOf("PUT /api/cloud-send/kind") > at("POST /api/cloud-send/chats"), "the routine went after the chats");
-  assert.ok(move.calls.lastIndexOf("PUT /api/cloud-send/kind") > at("POST /api/cloud-send/chats/settings"), "and after their settings");
   assert.ok(at("PUT /api/cloud-send/kind") < at("POST /api/cloud-send/chats"), "a skill goes before the chats");
   assert.equal(first.result.conversationSettings, 1);
-  assert.equal(first.result.moved, 2);
-  assert.ok(!move.calls.some((call) => call.startsWith("HERE ")), "this computer lets go of nothing yet");
-
-  const final = await send.send({ reason: "move", final: true });
-  assert.deepEqual(final.result.failed, []);
-  assert.deepEqual(put.slice(2), ["app-event:e1"]);
-  assert.ok(move.calls.includes(`HERE DELETE /api/cloud-send/kind?key=${encodeURIComponent("app-event:e1")}`));
-  assert.equal(final.result.moved, 1);
-  assert.deepEqual(move.deps.store.value.clouds[CLOUD].on, { "routine:r1": true, "app-event:e1": false }, "what was on here is kept for the switch, after this computer let go");
+  assert.equal(first.result.moved, 1);
+  assert.ok(!move.calls.some((call) => call.startsWith("HERE ")), "this computer lets go of nothing");
 });
 
-test("an app event My Cloud refuses for good is left behind as final, and this computer keeps collecting it", async () => {
-  const event = { key: "app-event:e1", kind: "app-event", label: "Reply to email", id: "e1", bot: "ember", parts: { def: "d2" } };
-  const error = "This app automation stays on the computer it came from: connected apps are not set up on My Cloud. Set them up here, then make it again.";
-  const refusing = (body) => sides({ here: [bot("ember", { soul: "s" }), event], there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } },
+test("a skill My Cloud refuses for good is left behind as final", async () => {
+  const skill = { key: "imported-skill:tidy", kind: "imported-skill", label: "tidy", id: "tidy", parts: { files: "f" } };
+  const error = "My Cloud could not take this skill.";
+  const refusing = (body) => sides({ here: [bot("ember", { soul: "s" }), skill], there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } },
     onCall: (method, route) => method === "PUT" && route === "/api/cloud-send/kind" ? reply(409, body) : null });
   const move = refusing({ error, final: true });
   const final = await createCloudSend(move.deps).send({ reason: "move", final: true });
-  assert.deepEqual(final.result.failed, [{ key: "app-event:e1", kind: "app-event", label: "Reply to email", error: `My Cloud said: ${error}`, final: true }]);
-  assert.ok(!move.calls.some((call) => call.startsWith("HERE DELETE")), "this computer did not let go of it");
+  assert.deepEqual(final.result.failed, [{ key: "imported-skill:tidy", kind: "imported-skill", label: "tidy", error: `My Cloud said: ${error}`, final: true }]);
   const busy = refusing({ error: "busy" });
   assert.equal((await createCloudSend(busy.deps).send({ reason: "move", final: true })).result.failed[0].final, undefined, "a refusal that may pass is tried again");
 });
 
-test("what a move carries last is never taken for removed on My Cloud, so a routine changed here before the final pass still goes", async () => {
-  // Seen in the real app on Oct 22: after a plain move, cloud-send.json had every routine and webhook it had just carried
-  // as "removed", because the pass's closing plan read My Cloud before the automations went.
-  const routine = (def) => ({ key: "routine:r1", kind: "routine", label: "Digest", id: "r1", bot: "ember", parts: { def } });
-  const here = [bot("ember", { soul: "s" }), routine("d1")];
+test("what a move carries is never taken for removed on My Cloud, so a skill changed here before the final pass still goes", async () => {
+  // Seen in the real app on Oct 22: after a plain move, cloud-send.json had everything it had just carried as "removed",
+  // because the pass's closing plan read My Cloud before the last of it went.
+  const skill = (files) => ({ key: "imported-skill:tidy", kind: "imported-skill", label: "tidy", id: "tidy", parts: { files } });
+  const here = [bot("ember", { soul: "s" }), skill("f1")];
   const put = [];
   const move = sides({ here, there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } },
     onCall: (method, route, body, cloud) => {
@@ -379,30 +364,11 @@ test("what a move carries last is never taken for removed on My Cloud, so a rout
     } });
   const send = createCloudSend(move.deps);
   await send.send({ reason: "move" });
-  assert.deepEqual(put, ["routine:r1"]);
-  assert.equal(move.deps.store.value.clouds[CLOUD].off["routine:r1"], undefined, "it went, it is not removed there");
-  here[1] = routine("d2");
+  assert.deepEqual(put, ["imported-skill:tidy"]);
+  assert.equal(move.deps.store.value.clouds[CLOUD].off["imported-skill:tidy"], undefined, "it went, it is not removed there");
+  here[1] = skill("f2");
   await send.send({ reason: "move", final: true });
-  assert.deepEqual(put, ["routine:r1", "routine:r1"], "changed here since, it goes again in the final pass");
-});
-
-test("a routine on both sides whose only difference is its runs goes in a move, so the runs made here reach My Cloud; one changed on both keeps My Cloud's", async () => {
-  // Seen in the real app on Oct 22: a computer whose workspace My Cloud already held (an earlier Copy) kept running a
-  // routine; the move kept My Cloud's run list, and its check found "1 runs missing" on every pass, so it never finished.
-  const routine = (def, runs) => ({ key: "routine:r1", kind: "routine", label: "Digest", id: "r1", bot: "ember", parts: { def, runs } });
-  const make = (here, there) => {
-    const put = [];
-    const move = sides({ here: [bot("ember", { soul: "s" }), here], there: [bot("ember", { soul: "s" }), there], bots: { ember: { soul: "s" } },
-      onCall: (method, route, body) => { if (method === "PUT" && route === "/api/cloud-send/kind") { put.push(body.key); return reply(200, { v: 1, ok: true }); } return null; } });
-    return { move, put };
-  };
-  const runsOnly = make(routine("d1", "runs-here"), routine("d1", "runs-there"));
-  await createCloudSend(runsOnly.move.deps).send({ reason: "move" });
-  assert.deepEqual(runsOnly.put, ["routine:r1"], "its runs go: My Cloud adds them by id");
-
-  const both = make(routine("d-here", "runs-here"), routine("d-there", "runs-there"));
-  await createCloudSend(both.move.deps).send({ reason: "move" });
-  assert.deepEqual(both.put, [], "changed on both: My Cloud's routine is kept");
+  assert.deepEqual(put, ["imported-skill:tidy", "imported-skill:tidy"], "changed here since, it goes again in the final pass");
 });
 
 test("a bot's fields only a move carries go over My Cloud's move route, absent ones as cleared; any other send never carries them", async () => {
@@ -420,11 +386,11 @@ test("a bot's fields only a move carries go over My Cloud's move route, absent o
   assert.deepEqual(fields, []);
 });
 
-test("while the chats go, the move's progress counts chats only: the automations after them never add to it", async () => {
+test("while the chats go, the move's progress counts chats only: what went before them never adds to it", async () => {
   // Seen in the real app on Oct 22: the line read "5 of 5 chats" for a moment, and what went after the chats counted on.
-  const routine = (id) => ({ key: `routine:${id}`, kind: "routine", label: id, id, bot: "ember", parts: { def: id } });
+  const skill = (id) => ({ key: `imported-skill:${id}`, kind: "imported-skill", label: id, id, parts: { files: id } });
   const conversations = ["a", "b"].map((threadId) => ({ bot: "ember", threadId, last: 1, lastId: `${threadId}-1`, busy: false }));
-  const here = [bot("ember", { soul: "s" }), routine("r1"), routine("r2")];
+  const here = [bot("ember", { soul: "s" }), skill("s1"), skill("s2")];
   const move = sides({ here, there: [bot("ember", { soul: "s" })], bots: { ember: { soul: "s" } }, conversations,
     onCall: (method, route, body, cloud) => {
       if (method === "PUT" && route === "/api/cloud-send/kind") { cloud.set(body.key, here.find((item) => item.key === body.key)); return reply(200, { v: 1, ok: true }); }
@@ -441,10 +407,10 @@ test("while the chats go, the move's progress counts chats only: the automations
 
 test("a check that finds things missing names, for what may stay behind, each short chat's bot and every bot and room by name", async () => {
   // Seen on a customer's PC: the check found things missing pass after pass, and only this computer's log said what.
-  const manifest = (side) => ({ v: 1, appVersion: "0.1.140", items: [bot("b1", { soul: "s" }), bot("b2", { soul: "s" })], memory: [], journal: [], learned: [], forgotten: [], teams: [],
+  const manifest = (side) => ({ v: 1, appVersion: "0.1.140", items: [bot("b1", { soul: "s" }), bot("b2", { soul: "s" })],
     rooms: [{ id: "r1", name: "Launch room", members: ["b1"], threads: ["t-r1"] }], connections: [],
     conversations: [{ threadId: "t-b1", bot: "b1", rows: 1, newest: "t-b1-1", settings: {} }, { threadId: "t-b2", bot: "b2", rows: 1, newest: "t-b2-1", settings: {} }],
-    attachments: side === "here" ? ["0b6c9f2e-1d4a.mp3"] : [], files: [], automations: [], runs: [] });
+    attachments: side === "here" ? ["0b6c9f2e-1d4a.mp3"] : [], files: [] });
   const s = sides({ here: [bot("b1", { soul: "s" }), bot("b2", { soul: "s" })], there: [bot("b1", { soul: "s" }), bot("b2", { soul: "s" })], onCall: (method, route, body) => {
     if (route.startsWith("/api/cloud-send/manifest")) return reply(200, { ...manifest("there"), rooms: [{ id: "r1", name: "Launch room", members: ["b1"], threads: ["t-r1"] }] });
     if (route === "/api/cloud-send/chats/verify") {
