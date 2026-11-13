@@ -42,24 +42,17 @@ export interface ConnectionListing {
 }
 
 /** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, Boat, X
- * research, the decider) are not listed, since the person's own key would replace what it includes. An Anthropic key
- * goes for "Claude (API key)" alone: there it never takes over Claude bots that sign in with a Claude account. */
+ * research, the decider) are not listed, since the person's own key would replace what it includes. */
 interface Provider { id: string; label: string; for: string[]; config(cfg: AppConfig): Partial<AppConfig> | null }
 
 const keyed = (name: "openai" | "openrouter") => (cfg: AppConfig): Partial<AppConfig> | null => {
   const key = cfg[name]?.key;
   return key ? { [name]: { key } } : null;
 };
-const keyedUrl = (name: "xai" | "groq" | "meta") => (cfg: AppConfig): Partial<AppConfig> | null => {
-  const entry = cfg[name];
-  return entry?.key ? { [name]: { key: entry.key, ...(entry.url ? { url: entry.url } : {}) } } : null;
-};
 
 export const KEY_PROVIDERS: readonly Provider[] = [
   { id: "openai", label: "OpenAI", for: ["openai"], config: keyed("openai") },
   { id: "openrouter", label: "OpenRouter", for: ["openrouter"], config: keyed("openrouter") },
-  { id: "openaiCompat", label: "OpenAI-compatible", for: ["openaiCompat"], config: (cfg) => cfg.openaiCompat?.key
-    ? { openaiCompat: Object.fromEntries(Object.entries(cfg.openaiCompat).filter(([, value]) => typeof value === "string" && value)) } : null },
 ];
 
 const LOCAL_NAME = /(?:^|\.)(?:localhost|local|lan|home|internal|ts\.net)$/iu;

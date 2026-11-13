@@ -16,7 +16,7 @@ const summary: TeamAdminSummary = teamAdminSummary({
   apps: { gmail: { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: "ca_1", alias: "team@acme.test", status: "ACTIVE" }] }, slack: { connected: false, pending: false, status: "not_connected", accounts: [] } },
   mcp: [{ name: "linear", type: "http", url: "https://mcp.linear.app/sse?token=never-shown", headerKeys: ["Authorization"], enabled: true, auth: "signed-in" },
     { name: "files", command: "npx", envKeys: ["FILES_TOKEN"], enabled: false }],
-  status: { treg: { configured: true }, xai: { configured: false }, anthropic: { configured: true, everyClaudeBot: true }, openai: { configured: false }, openrouter: { configured: false } },
+  status: { treg: { configured: true }, anthropic: { configured: true, everyClaudeBot: true }, openai: { configured: false }, openrouter: { configured: false } },
   voice: { key: false, included: true },
   engines: [{ instanceId: "claude", name: "Claude", snapshot: { state: "available", authenticated: true, account: { email: "mira@gmail.com", method: "login" } } },
     { instanceId: "codex", name: "Codex", snapshot: { state: "available", authenticated: false } }, { instanceId: "gone", name: "Gone", snapshot: { state: "unavailable" } }],

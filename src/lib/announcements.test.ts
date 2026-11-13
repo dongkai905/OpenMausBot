@@ -171,8 +171,8 @@ describe("what the page knows", () => {
     expect(providersRestricted(null)).toBe(false);
     expect(providersRestricted(policy({}))).toBe(false);
     expect(providersRestricted(policy({ companyModelsOnly: true }))).toBe(true);
-    expect(providersRestricted(policy({ allowedEngines: ["claudeAgent"] }))).toBe(true);
-    expect(providersRestricted(policy({ allowedEngines: ["claudeAgent"], team: true }))).toBe(false);
+    expect(providersRestricted(policy({ allowedEngines: ["customAcp"] }))).toBe(true);
+    expect(providersRestricted(policy({ allowedEngines: ["customAcp"], team: true }))).toBe(false);
   });
 });
 

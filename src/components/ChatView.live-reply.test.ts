@@ -13,7 +13,7 @@ const dispatch = vi.hoisted(() => vi.fn());
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
-    state: { ...original.initialState, config: null, instances: [{ instanceId: "test", driverKind: "claudeAgent", displayName: "Test" } as InstanceInfo] },
+    state: { ...original.initialState, config: null, instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test" } as InstanceInfo] },
     dispatch,
   }) };
 });
@@ -55,7 +55,7 @@ const ask: Message = { id: "ask", role: "user", kind: "text", at: started, text:
 
 let seq = 0;
 const frame = (event: Partial<RuntimeEvent>) => ({
-  eventId: `e${++seq}`, provider: "claudeAgent", threadId: THREAD, createdAt: new Date().toISOString(), turnId: "t1", ...event,
+  eventId: `e${++seq}`, provider: "customAcp", threadId: THREAD, createdAt: new Date().toISOString(), turnId: "t1", ...event,
 } as RuntimeEvent);
 const engine = (event: Partial<RuntimeEvent>) => act(() => noteLiveReplyEvent(frame(event)));
 const sayIn = (delta: string, itemId: string) => engine({ type: "content.delta", streamKind: "assistant_text", delta, itemId } as Partial<RuntimeEvent>);

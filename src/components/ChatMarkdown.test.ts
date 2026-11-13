@@ -901,7 +901,7 @@ describe("ChatMarkdown attachments", () => {
   });
 
   describe("a file link outside the conversation's workspace", () => {
-    const filePath = "C:\\Users\\Maus\\_draft\\ollama-gen.js";
+    const filePath = "C:\\Users\\Maus\\_draft\\local-gen.js";
     const render = (outsideWorkspace: boolean, href = filePath) => {
       const save = vi.spyOn(AttachmentPreview, "useLocalFileSave").mockReturnValue({
         state: "failed",
@@ -914,7 +914,7 @@ describe("ChatMarkdown attachments", () => {
       });
       try {
         return renderToStaticMarkup(createElement(ChatMarkdown, {
-          text: `[ollama-gen.js](${href})`, message: { threadId: "thread-1", messageId: "message-1" },
+          text: `[local-gen.js](${href})`, message: { threadId: "thread-1", messageId: "message-1" },
         }));
       } finally {
         save.mockRestore();
@@ -940,7 +940,7 @@ describe("ChatMarkdown attachments", () => {
       try {
         const html = render(true);
         expect(html).not.toContain("Show in folder");
-        expect(html).toMatch(/<code[^>]*select-all[^>]*>C:\\Users\\Maus\\_draft\\ollama-gen\.js<\/code>/);
+        expect(html).toMatch(/<code[^>]*select-all[^>]*>C:\\Users\\Maus\\_draft\\local-gen\.js<\/code>/);
       } finally {
         vi.unstubAllGlobals();
       }

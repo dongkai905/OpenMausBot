@@ -20,7 +20,7 @@ import type { Message } from "@/state/store";
 
 let seq = 0;
 const frame = (event: Partial<RuntimeEvent>, threadId = "t"): RuntimeEvent =>
-  ({ eventId: `e${++seq}`, provider: "claudeAgent", threadId, createdAt: "2026-11-11T12:00:00.000Z", turnId: "turn-1", ...event } as RuntimeEvent);
+  ({ eventId: `e${++seq}`, provider: "customAcp", threadId, createdAt: "2026-11-11T12:00:00.000Z", turnId: "turn-1", ...event } as RuntimeEvent);
 const note = (event: Partial<RuntimeEvent>, threadId = "t") => {
   const sent = frame(event, threadId);
   noteLiveReplyEvent(sent);

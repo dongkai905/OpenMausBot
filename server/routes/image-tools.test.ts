@@ -11,8 +11,8 @@ import { createImageToolRoutes, generateImageForTurn, IMAGE_MESSAGES } from "./i
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const CFG = {
-  imageGen: { key: "openai-secret", primary: { provider: "openai" as const }, fallback: { provider: "xai" as const } },
-  xai: { key: "xai-secret" },
+  imageGen: { key: "openai-secret", primary: { provider: "openai" as const }, fallback: { provider: "openrouter" as const } },
+  openrouter: { key: "openrouter-secret" },
 };
 
 function okFetch(): typeof fetch {
@@ -52,7 +52,7 @@ describe("generate_image for a turn", () => {
   it("says so when the backup made the image, and why the base did not", async () => {
     const { deps: d } = deps({ cfg: { ...CFG, imageGen: { ...CFG.imageGen, key: "" } } });
     const result = await generateImageForTurn({ prompt: "owl" }, d);
-    expect(result.body).toEqual({ text: expect.stringMatching(/xAI .*backup image provider, because the base failed: Add an OpenAI image API key first/) });
+    expect(result.body).toEqual({ text: expect.stringMatching(/OpenRouter .*backup image provider, because the base failed: Add an OpenAI image API key first/) });
   });
 
   it("still moves to the backup when the person names a provider the base and backup share", async () => {
@@ -74,15 +74,15 @@ describe("generate_image for a turn", () => {
   it("uses the provider the person named when it is their backup", async () => {
     const fetchImpl = okFetch();
     const { deps: d } = deps({ fetchImpl });
-    await generateImageForTurn({ prompt: "owl", provider: "xai" }, d);
-    expect(String(vi.mocked(fetchImpl).mock.calls[0]![0])).toContain("api.x.ai");
+    await generateImageForTurn({ prompt: "owl", provider: "openrouter" }, d);
+    expect(String(vi.mocked(fetchImpl).mock.calls[0]![0])).toContain("openrouter.ai");
   });
 
   it("refuses a provider that is neither the base nor the backup, naming the ones set", async () => {
     const { deps: d, attached } = deps();
     const result = await generateImageForTurn({ prompt: "owl", provider: "gemini" }, d);
     expect(result.status).toBe(400);
-    expect(result.body).toEqual({ error: expect.stringMatching(/Gemini.*base is OpenAI.*backup is xAI/) });
+    expect(result.body).toEqual({ error: expect.stringMatching(/Gemini.*base is OpenAI.*backup is OpenRouter/) });
     expect(attached).toEqual([]);
   });
 

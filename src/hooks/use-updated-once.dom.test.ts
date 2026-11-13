@@ -20,7 +20,7 @@ afterEach(async () => {
 
 async function shownFor(autoUpdated?: { version: string; at: number }): Promise<string> {
   function Card() {
-    return createElement("span", null, useUpdatedOnce({ driverKind: "opencodeGo", autoUpdated }) ?? "plain");
+    return createElement("span", null, useUpdatedOnce({ driverKind: "customAcp", autoUpdated }) ?? "plain");
   }
   await act(async () => root?.unmount());
   container?.remove();

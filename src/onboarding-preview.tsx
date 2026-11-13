@@ -30,7 +30,7 @@ const COLORS = ["blue", "orange", "purple", "teal", "pink", "green", "red", "cya
 function bot(id: string, name: string, color: string, extra: Record<string, unknown> = {}) {
   return {
     id, threadId: `${id}-thread`, name, title: "", description: "", notifications: true, color, unread: false, createdAt: 1,
-    modelSelection: { instanceId: "claude", model: "sonnet" }, messages: [], tasks: [{ threadId: `${id}-thread`, title: "", createdAt: 1 }], ...extra,
+    modelSelection: { instanceId: "my-agent", model: "agent-default" }, messages: [], tasks: [{ threadId: `${id}-thread`, title: "", createdAt: 1 }], ...extra,
   };
 }
 
@@ -44,11 +44,11 @@ function fixture(url: string, ai: boolean, bots: number): unknown {
   }
   if (path === "/api/instances") {
     return { instances: [{
-      instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", install: { docsUrl: "https://docs.anthropic.com" },
-      authentication: { method: "paste-code" }, capabilities: { agentsMcp: true },
-      snapshot: { state: "available", authenticated: ai }, models: { default: "sonnet", options: [] },
+      instanceId: "my-agent", driverKind: "customAcp", displayName: "My Agent", install: { docsUrl: "https://example.test" },
+      capabilities: { agentsMcp: true },
+      snapshot: { state: "available", authenticated: ai }, models: { default: "agent-default", options: [] },
     }, {
-      instanceId: "codex", driverKind: "codex", displayName: "Codex", install: { docsUrl: "https://example.test" },
+      instanceId: "other-agent", driverKind: "customAcp", displayName: "Other Agent", install: { docsUrl: "https://example.test" },
       snapshot: { state: "unavailable", authenticated: false }, models: { default: "m", options: [] },
     }] };
   }

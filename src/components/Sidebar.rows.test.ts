@@ -65,7 +65,7 @@ let state: AppState = {
     profile("scout", "Scout", [thread("scout-now", "Scout plan", NOW - HOUR), thread("scout-earlier", "Scout list", NOW - 3 * HOUR)]),
     profile("pepper", "Pepper", [thread("pepper-now", "Pepper notes", NOW - HOUR)]),
   ],
-  instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+  instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
 };
 const dispatch = vi.fn();
 let root: Root;

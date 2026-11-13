@@ -15,7 +15,7 @@ import { StatusActivityRow } from "./StatusActivityRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const rescue: FirstReplyRescue = { botId: "bot-1", threadId: "thread-1", turnId: "turn-1", requestMessageId: "ask-1", instanceId: "opencodeGo", ai: "OpenCode" };
+const rescue: FirstReplyRescue = { botId: "bot-1", threadId: "thread-1", turnId: "turn-1", requestMessageId: "ask-1", instanceId: "agent-three", ai: "OpenCode" };
 const AT = 50_000;
 const row = (payload: FirstReplyRescue = rescue): Message => ({
   id: "m-1", at: AT, role: "bot", kind: "activity", turnId: payload.turnId,
@@ -24,9 +24,9 @@ const row = (payload: FirstReplyRescue = rescue): Message => ({
 const bot = (busy: boolean, turnStartedAt = AT - 20_000): Bot => ({
   id: "bot-1", threadId: "thread-1", name: "Maus", title: "", description: "", notifications: true, color: "green", unread: false, busy,
   messages: [{ id: "ask-1", at: 1, role: "user", kind: "text", text: "Plan my week" }],
-  modelSelection: { instanceId: "opencodeGo", model: "free" }, tasks: [{ threadId: "thread-1", title: "Chat", createdAt: 1, busy, ...(busy ? { turnStartedAt } : {}) }],
+  modelSelection: { instanceId: "agent-three", model: "free" }, tasks: [{ threadId: "thread-1", title: "Chat", createdAt: 1, busy, ...(busy ? { turnStartedAt } : {}) }],
 } as unknown as Bot);
-const engine = { instanceId: "opencodeGo", displayName: "OpenCode", driverKind: "opencodeGo", models: { default: "free", options: [] } } as unknown as InstanceInfo;
+const engine = { instanceId: "agent-three", displayName: "OpenCode", driverKind: "customAcp", models: { default: "free", options: [] } } as unknown as InstanceInfo;
 const frame = (type: string, turnId: string) => ({ eventId: `e-${turnId}`, provider: "fake", threadId: "thread-1", turnId, createdAt: "", type, ok: true }) as unknown as RuntimeEvent;
 
 let host: HTMLDivElement;

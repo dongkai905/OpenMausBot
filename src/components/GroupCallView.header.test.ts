@@ -22,7 +22,7 @@ afterAll(() => vi.unstubAllGlobals());
 
 const ada: Bot = {
   id: "ada", threadId: "ada-thread", name: "Ada", title: "", description: "", color: "green", voice: "v",
-  notifications: true, unread: false, messages: [], modelSelection: { instanceId: "codex", model: "m" },
+  notifications: true, unread: false, messages: [], modelSelection: { instanceId: "agent-two", model: "m" },
 };
 const room: Group = {
   id: "room", threadId: "room-thread", name: "Launch planning", memberIds: ["ada"],

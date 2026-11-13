@@ -35,7 +35,7 @@ const atlas: Bot = {
 };
 const state: AppState = {
   ...initialState, connected: true, selectedId: "atlas", activeView: "chat", bots: [atlas],
-  instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
+  instances: [{ instanceId: "test", driverKind: "customAcp", displayName: "Test", snapshot: { state: "available" } } as InstanceInfo],
 };
 let root: Root;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

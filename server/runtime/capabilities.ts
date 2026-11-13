@@ -10,17 +10,11 @@ export interface EngineCapabilities {
   subagents: boolean;
 }
 
-const CHAT_STEP_CAP = 64;
-
 // transcript: the engine sends the thread as SendTurnInput.transcript messages, so the turn text must not replay it inline too.
 type EngineRow = Pick<EngineCapabilities, "resume" | "stepCap"> & { transcript?: true };
 
-const CHAT_ROW: EngineRow = { resume: false, stepCap: CHAT_STEP_CAP, transcript: true };
-
 const ENGINES: Readonly<Record<string, EngineRow>> = {
   customAcp: { resume: true },
-  "openai-compat": CHAT_ROW,
-  grok: CHAT_ROW,
 };
 
 export function replaysTranscriptNatively(driverKind: string | undefined): boolean {

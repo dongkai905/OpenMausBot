@@ -261,7 +261,7 @@ describe("phoneSecretAAD", () => {
     })).not.toThrow();
     for (const candidate of [
       { ...context, deviceId: "another-device" },
-      { ...context, target: "xaiApiKey" },
+      { ...context, target: "openaiApiKey" },
       { ...context, requestKey: "another-request" },
     ]) {
       expect(() => assertPhoneSecretRequestMatches(candidate, "paired-device-1", {

@@ -31,7 +31,7 @@ const questionRequest: QuestionRequestCardData = {
       header: "Model",
       options: [
         { label: "Claude Opus 5", description: "What the bot had before." },
-        { label: "OpenAI Codex / GPT", description: "Reads AGENTS.md and .codex/skills." },
+        { label: "OpenAI Codex / GPT", description: "Reads AGENTS.md and .second/skills." },
       ],
     },
     {

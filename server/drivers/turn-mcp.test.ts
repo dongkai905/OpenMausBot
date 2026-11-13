@@ -57,7 +57,7 @@ describe("OpenMausBot's own MCP servers for an engine that reaches servers by UR
   });
 });
 
-describe("the MCP servers a Kimi Code turn gets", () => {
+describe("the MCP servers a turn gets", () => {
   const env = (server: ReturnType<typeof acpMcpServers>[number]) =>
     Object.fromEntries(("env" in server ? server.env : []).map(({ name, value }) => [name, value]));
   const withRemote = (extra: Partial<SendTurnInput> = {}) => {
@@ -65,29 +65,19 @@ describe("the MCP servers a Kimi Code turn gets", () => {
     return { ...base, integrations: { ...base.integrations, custom: { ...base.integrations!.custom, docs: { type: "http", url: "https://mcp.example.com/mcp", headers: {} } } } } as SendTurnInput;
   };
 
-  it("carry Moonshot's schema profile on every server, with the person's stdio server behind the gate that fits it", () => {
-    const servers = acpMcpServers(withRemote(), { engine: "kimiAgent" });
+  it("carry no schema profile, so the person's stdio server is left as it is", () => {
+    const servers = acpMcpServers(withRemote());
     expect(servers.map((server) => server.name)).toEqual(["agents", "browser", "data", "notes", "docs"]);
-    for (const server of servers) expect([server.name, env(server)[TOOL_SCHEMA_PROFILE_ENV]]).toEqual([server.name, "moonshot"]);
-    const notes = servers.find((server) => server.name === "notes") as { command: string; args: string[] };
-    expect(notes.args).toEqual([SPAWNED_PROXIES.mcpGate]);
-    expect(JSON.parse(env(servers[3]!).OMB_GATE_UPSTREAM!)).toEqual({ command: "npx", args: ["-y", "notes-mcp"], env: { NOTES_KEY: "k" } });
+    expect(servers.some((server) => TOOL_SCHEMA_PROFILE_ENV in env(server))).toBe(false);
+    expect(servers.find((server) => server.name === "notes")).toEqual({ name: "notes", command: "npx", args: ["-y", "notes-mcp"], env: [{ name: "NOTES_KEY", value: "k" }] });
     expect((servers[4] as { args: string[] }).args).toEqual([SPAWNED_PROXIES.mcpRemote]);
   });
 
-  it("keeps the profile on every server behind a tool-selection gate too", () => {
-    const servers = acpMcpServers(turn({ toolScope: { allow: ["mcp:*"] } }), { engine: "kimiAgent" });
+  it("put every server behind a tool-selection gate, and still no profile on them", () => {
+    const servers = acpMcpServers(turn({ toolScope: { allow: ["mcp:*"] } }));
     for (const server of servers) {
       expect((server as { args: string[] }).args).toEqual([SPAWNED_PROXIES.mcpGate]);
-      expect(env(server)[TOOL_SCHEMA_PROFILE_ENV]).toBe("moonshot");
-    }
-  });
-
-  it("are unchanged for every other engine", () => {
-    for (const engine of [undefined, "opencodeGo", "grokAgent", "qwenAgent"]) {
-      const servers = acpMcpServers(withRemote(), { engine });
-      expect(servers.some((server) => TOOL_SCHEMA_PROFILE_ENV in env(server))).toBe(false);
-      expect(servers.find((server) => server.name === "notes")).toEqual({ name: "notes", command: "npx", args: ["-y", "notes-mcp"], env: [{ name: "NOTES_KEY", value: "k" }] });
+      expect(env(server)[TOOL_SCHEMA_PROFILE_ENV]).toBeUndefined();
     }
   });
 });

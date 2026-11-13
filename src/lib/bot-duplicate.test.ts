@@ -39,7 +39,7 @@ describe("what a duplicated bot is created with", () => {
   it("keeps a copy of a VPS bot on its source's own server, and on the default when the source has none", () => {
     const source = {
       id: "src", threadId: "t", name: "Rio", title: "", description: "", notifications: true, color: "green", unread: false,
-      modelSelection: { instanceId: "codex", model: "default" }, messages: [],
+      modelSelection: { instanceId: "agent-two", model: "default" }, messages: [],
       computer: "cloud", cloudBackend: "vps", autoStartVps: true, vpsAlias: "alpha-vps",
     } as Bot;
     expect(duplicateBotProfile(source)).toMatchObject({ name: "Rio copy", computer: "cloud", cloudBackend: "vps", autoStartVps: true, vpsAlias: "alpha-vps" });

@@ -30,9 +30,9 @@ const engine = (instanceId: string, displayName: string, driverKind: string, mod
   models: { default: models[0]![0], options: models.map(([id, label]) => ({ id, label })) },
 }) as unknown as InstanceInfo;
 
-const claude = engine("claude", "Claude", "claudeAgent", [["claude-sonnet-5", "Claude Sonnet 5"]]);
-const codex = engine("codex", "Codex", "codex", [["gpt-5.5", "GPT-5.5"], ["gpt-5.5-mini", "GPT-5.5 mini"]]);
-const gemini = engine("gemini", "Gemini", "geminiAgent", [["gemini-3-pro", "Gemini 3 Pro"]]);
+const claude = engine("claude", "Claude", "customAcp", [["claude-sonnet-5", "Claude Sonnet 5"]]);
+const second = engine("agent-two", "Codex", "agent-two", [["gpt-5.5", "GPT-5.5"], ["gpt-5.5-mini", "GPT-5.5 mini"]]);
+const gemini = engine("gemini", "Gemini", "agent-six", [["gemini-3-pro", "Gemini 3 Pro"]]);
 
 const bot = (fallback?: Bot["fallback"]): Bot => ({
   id: "scout", threadId: "thread-scout", name: "Scout", title: "", description: "", soul: "",
@@ -58,7 +58,7 @@ const modelRow = (label: string) => [...(menu()?.querySelectorAll<HTMLElement>("
   .find((row) => row.getAttribute("aria-label")?.startsWith(label));
 
 beforeEach(() => {
-  fixture.instances.splice(0, fixture.instances.length, claude, codex, gemini);
+  fixture.instances.splice(0, fixture.instances.length, claude, second, gemini);
   fixture.dispatch.mockReset();
   onChange.mockReset();
   host = document.createElement("div");
@@ -88,36 +88,36 @@ describe("a bot's backup AIs in Simple", () => {
     click(host.querySelector("[data-panel-action=backup-add]"));
     await settle();
     expect(menu()?.getAttribute("aria-label")).toBe("Choose a backup AI");
-    expect(providers()).toEqual(["codex", "gemini"]);
+    expect(providers()).toEqual(["agent-two", "gemini"]);
     expect(menu()?.querySelector("[data-current-model]")).toBeNull();
     click(modelRow("GPT-5.5 mini"));
-    expect(onChange).toHaveBeenCalledWith([{ instanceId: "codex", model: "gpt-5.5-mini" }]);
+    expect(onChange).toHaveBeenCalledWith([{ instanceId: "agent-two", model: "gpt-5.5-mini" }]);
     expect(host.querySelector("[data-panel-action=backup-add]")?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("changes one in place, offering only AIs no other backup uses", async () => {
-    render([{ instanceId: "codex", model: "gpt-5.5" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
+    render([{ instanceId: "agent-two", model: "gpt-5.5" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
     const rows = host.querySelectorAll("[data-backup]");
     expect([...rows].map((row) => row.querySelector("[data-panel-action=backup-change]")?.getAttribute("aria-label")))
       .toEqual(["Backup 1: GPT-5.5", "Backup 2: Gemini 3 Pro"]);
     click(rows[0]!.querySelector("[data-panel-action=backup-change]"));
     await settle();
-    expect(providers()).toEqual(["codex"]);
+    expect(providers()).toEqual(["agent-two"]);
     expect(menu()?.querySelector("[data-current-model]")?.textContent).toContain("GPT-5.5");
     click(modelRow("GPT-5.5 mini"));
-    expect(onChange).toHaveBeenCalledWith([{ instanceId: "codex", model: "gpt-5.5-mini" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
+    expect(onChange).toHaveBeenCalledWith([{ instanceId: "agent-two", model: "gpt-5.5-mini" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
   });
 
   it("keeps the row (and so the focus in it) when its model changes", () => {
-    render([{ instanceId: "codex", model: "gpt-5.5" }]);
+    render([{ instanceId: "agent-two", model: "gpt-5.5" }]);
     const row = host.querySelector("[data-backup]");
-    render([{ instanceId: "codex", model: "gpt-5.5-mini" }]);
+    render([{ instanceId: "agent-two", model: "gpt-5.5-mini" }]);
     expect(host.querySelector("[data-backup]"), "the same row, not a new one").toBe(row);
   });
 
   it("removes one and keeps the rest in order", () => {
-    render([{ instanceId: "codex", model: "gpt-5.5" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
-    const remove = host.querySelector('[data-backup="codex"] [data-panel-action=backup-remove]');
+    render([{ instanceId: "agent-two", model: "gpt-5.5" }, { instanceId: "gemini", model: "gemini-3-pro" }]);
+    const remove = host.querySelector('[data-backup="agent-two"] [data-panel-action=backup-remove]');
     expect(remove?.getAttribute("aria-label")).toBe("Remove GPT-5.5 from backups");
     click(remove);
     expect(onChange).toHaveBeenCalledWith([{ instanceId: "gemini", model: "gemini-3-pro" }]);
@@ -132,36 +132,36 @@ describe("a bot's backup AIs in Simple", () => {
   });
 
   it("offers the bot's own account too, without its own model, and says it shares the usage limit", async () => {
-    fixture.instances.splice(0, 1, engine("claude", "Claude", "claudeAgent", [["claude-sonnet-5", "Claude Sonnet 5"], ["claude-opus-5", "Claude Opus 5"]]));
+    fixture.instances.splice(0, 1, engine("claude", "Claude", "customAcp", [["claude-sonnet-5", "Claude Sonnet 5"], ["claude-opus-5", "Claude Opus 5"]]));
     render();
     click(host.querySelector("[data-panel-action=backup-add]"));
     await settle();
-    expect(providers()).toEqual(["claude", "codex", "gemini"]);
+    expect(providers()).toEqual(["claude", "agent-two", "gemini"]);
     expect(menu()!.querySelector('[data-simple-provider="claude"]')?.textContent).toContain("Same account as the main AI: it shares the usage limit.");
-    expect(menu()!.querySelector('[data-simple-provider="codex"]')?.textContent).not.toContain("Same account");
+    expect(menu()!.querySelector('[data-simple-provider="agent-two"]')?.textContent).not.toContain("Same account");
     expect(modelRow("Claude Sonnet 5")).toBeUndefined();
     click(modelRow("Claude Opus 5"));
     expect(onChange).toHaveBeenCalledWith([{ instanceId: "claude", model: "claude-opus-5" }]);
   });
 
   it("allows a second backup on one account, never the same model twice", async () => {
-    render([{ instanceId: "codex", model: "gpt-5.5" }]);
+    render([{ instanceId: "agent-two", model: "gpt-5.5" }]);
     click(host.querySelector("[data-panel-action=backup-add]"));
     await settle();
-    expect(providers()).toEqual(["codex", "gemini"]);
+    expect(providers()).toEqual(["agent-two", "gemini"]);
     const labels = [...menu()!.querySelectorAll("[data-menu-row]")].map((row) => row.getAttribute("aria-label") ?? "");
     expect(labels.filter((label) => label.startsWith("GPT-5.5") && !label.startsWith("GPT-5.5 mini"))).toEqual([]);
     click(modelRow("GPT-5.5 mini"));
-    expect(onChange).toHaveBeenCalledWith([{ instanceId: "codex", model: "gpt-5.5" }, { instanceId: "codex", model: "gpt-5.5-mini" }]);
+    expect(onChange).toHaveBeenCalledWith([{ instanceId: "agent-two", model: "gpt-5.5" }, { instanceId: "agent-two", model: "gpt-5.5-mini" }]);
   });
 
   it("lists two backups on one account as separate rows and removes the right one", () => {
-    render([{ instanceId: "codex", model: "gpt-5.5" }, { instanceId: "codex", model: "gpt-5.5-mini" }]);
+    render([{ instanceId: "agent-two", model: "gpt-5.5" }, { instanceId: "agent-two", model: "gpt-5.5-mini" }]);
     const rows = host.querySelectorAll("[data-backup]");
     expect([...rows].map((row) => row.querySelector("[data-panel-action=backup-change]")?.getAttribute("aria-label")))
       .toEqual(["Backup 1: GPT-5.5", "Backup 2: GPT-5.5 mini"]);
     click(rows[1]!.querySelector("[data-panel-action=backup-remove]"));
-    expect(onChange).toHaveBeenCalledWith([{ instanceId: "codex", model: "gpt-5.5" }]);
+    expect(onChange).toHaveBeenCalledWith([{ instanceId: "agent-two", model: "gpt-5.5" }]);
   });
 
   it("closes its menu on Escape without letting the key close the panel", async () => {

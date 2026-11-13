@@ -67,26 +67,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("the ModelGo row", () => {
-  const URL_EXACT = "https://modelgo.ai/?utm_source=openmausbot&utm_medium=sponsorship&utm_content=app&campaign_id=openmausbot&ad_group_id=app";
-  const offers = () => fixture.track.mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
+describe("a row with its own Get a key link", () => {
+  const URL_EXACT = "https://platform.openai.com/api-keys";
+  const offers = () => fixture.track.mock.calls.filter(([name]) => name === "key_saved").map(([, props]) => props);
   const link = (props: Parameters<typeof KeyRow>[0]) => render(props).find((node) => node.type === "a")! as ReactElement<Props & { href?: string }>;
 
-  it("counts a key saved in Settings and its Get a key link, and points that link at exactly the sponsor's address", async () => {
-    fixture.api.mockResolvedValueOnce({ modelgo: { configured: true, last4: KEY.slice(-4) } }).mockResolvedValueOnce({ ok: true });
-    expect(link({ id: "modelgo" }).props.href).toBe(URL_EXACT);
-    link({ id: "modelgo" }).props.onClick!();
-    expect(offers()).toEqual([{ action: "get_key", place: "settings" }]);
-    await enterKey({ id: "modelgo" });
-    expect(offers()).toEqual([{ action: "get_key", place: "settings" }, { action: "add_key", place: "settings" }]);
-    expectNoKeyIn(fixture.track.mock.calls);
+  it("points that link at exactly the provider's address", async () => {
+    fixture.api.mockResolvedValueOnce({ openai: { configured: true, last4: KEY.slice(-4) } }).mockResolvedValueOnce({ ok: true });
+    expect(link({ id: "openai" }).props.href).toBe(URL_EXACT);
   });
 
   it("does not count Settings for the model picker's copy of the row", async () => {
-    fixture.api.mockResolvedValueOnce({ modelgo: { configured: true } }).mockResolvedValueOnce({ ok: true });
-    link({ id: "modelgo", via: "model_picker" }).props.onClick!();
-    await enterKey({ id: "modelgo", via: "model_picker" });
-    expect(offers()).toEqual([]);
+    fixture.api.mockResolvedValueOnce({ openai: { configured: true } }).mockResolvedValueOnce({ ok: true });
+    link({ id: "openai", via: "model_picker" }).props.onClick!();
+    await enterKey({ id: "openai", via: "model_picker" });
+    expect(offers().filter((props) => props.place === "settings")).toEqual([]);
   });
 });
 
@@ -136,12 +131,12 @@ describe("a key saved in Settings → API keys", () => {
     expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "boat", via: "settings", result: "ok" }]]);
   });
 
-  it("saves an xAI key through the desktop's encrypted store, so Remove clears the stored copy too", async () => {
-    const setCredential = vi.fn().mockResolvedValue({ xai: { configured: true } });
+  it("saves an OpenAI key through the desktop's encrypted store, so Remove clears the stored copy too", async () => {
+    const setCredential = vi.fn().mockResolvedValue({ openai: { configured: true } });
     vi.stubGlobal("window", { ogb: { setCredential } });
     fixture.api.mockResolvedValue({ ok: true });
-    await enterKey({ id: "xai" });
-    expect(setCredential).toHaveBeenCalledWith("xaiApiKey", KEY);
+    await enterKey({ id: "openai" });
+    expect(setCredential).toHaveBeenCalledWith("openaiApiKey", KEY);
     expect(fixture.api.mock.calls.map(([path]) => path)).toEqual(["/api/keys/test"]);
   });
 

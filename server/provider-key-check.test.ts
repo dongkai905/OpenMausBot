@@ -14,7 +14,7 @@ describe("loopback hosts for HTTP key checks", () => {
   it.each(["http://127.example.test/v1", "http://127.0.0.1.example.test/v1"])("never sends a key to %s", async url => {
     let calls = 0;
     const provider: typeof fetch = async () => { calls++; return Response.json({ data: [] }); };
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "fixture-key", url }, provider))
+    expect(await checkProviderKey({ provider: "openrouter", key: "fixture-key", url }, provider))
       .toEqual({ ok: false, reason: "unexpected" });
     expect(calls).toBe(0);
   });
@@ -30,7 +30,7 @@ describe("loopback hosts for HTTP key checks", () => {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-key");
       return Response.json({ data: [{ id: "fixture-model" }] });
     };
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "fixture-key", url }, provider))
+    expect(await checkProviderKey({ provider: "openrouter", key: "fixture-key", url }, provider))
       .toEqual({ ok: true, check: "models", models: ["fixture-model"] });
     expect(calls).toBe(1);
   });
@@ -76,22 +76,20 @@ describe("provider key check", () => {
   });
 
   it("builds each provider's models endpoint from its base URL or the default", () => {
-    expect(providerModelsUrl("anthropic")).toBe("https://api.anthropic.com/v1/models");
-    expect(providerModelsUrl("anthropic", "https://proxy.example.test/v1/")).toBe("https://proxy.example.test/v1/models");
-    expect(providerModelsUrl("openaiCompat")).toBe("https://openrouter.ai/api/v1/models");
-    expect(providerModelsUrl("openaiCompat", "https://api.openai.com/v1")).toBe("https://api.openai.com/v1/models");
-    expect(providerModelsUrl("xai", "")).toBe("https://api.x.ai/v1/models");
-    expect(providerModelsUrl("mistral")).toBe("https://api.mistral.ai/v1/models");
+    expect(providerModelsUrl("openai")).toBe("https://api.openai.com/v1/models");
+    expect(providerModelsUrl("openai", "https://proxy.example.test/v1/")).toBe("https://proxy.example.test/v1/models");
+    expect(providerModelsUrl("openrouter")).toBe("https://openrouter.ai/api/v1/models");
+    expect(providerModelsUrl("openrouter", "https://api.openai.com/v1")).toBe("https://api.openai.com/v1/models");
   });
 
-  it("sends the provider's own header shape and returns a few model ids on success", async () => {
-    const anthropic = await checkProviderKey({ provider: "anthropic", key: "good-key", url: base });
-    expect(anthropic).toEqual({ ok: true, check: "models", models: ["model-a", "model-b", "named-c"] });
-    expect(seen[0]).toMatchObject({ path: "/v1/models", headers: { "x-api-key": "good-key", "anthropic-version": "2023-06-01" } });
-    expect(seen[0]!.headers.authorization).toBeUndefined();
+  it("sends the key as a bearer token and returns a few model ids on success", async () => {
+    const openai = await checkProviderKey({ provider: "openai", key: "good-key", url: base });
+    expect(openai).toEqual({ ok: true, check: "models", models: ["model-a", "model-b", "named-c"] });
+    expect(seen[0]).toMatchObject({ path: "/models", headers: { authorization: "Bearer good-key" } });
+    expect(seen[0]!.headers["x-api-key"]).toBeUndefined();
 
-    const openai = await checkProviderKey({ provider: "openaiCompat", key: "good-key", url: `${base}/v1` });
-    expect(openai.ok).toBe(true);
+    const openrouter = await checkProviderKey({ provider: "openrouter", key: "good-key", url: `${base}/v1` });
+    expect(openrouter.ok).toBe(true);
     expect(seen[1]).toMatchObject({ path: "/v1/models", headers: { authorization: "Bearer good-key" } });
     expect(seen[1]!.headers["x-api-key"]).toBeUndefined();
   });
@@ -100,28 +98,28 @@ describe("provider key check", () => {
     const models = [{ id: "large" }, null, { name: "small" }, { id: 7 }, { id: "x".repeat(121) },
       { id: "three" }, { id: "four" }, { id: "five" }, { id: "six" }];
     const provider: typeof fetch = async () => Response.json(shape === "array" ? models : { [shape]: models });
-    expect(await checkProviderKey({ provider: "mistral", key: "fixture" }, provider))
+    expect(await checkProviderKey({ provider: "openai", key: "fixture" }, provider))
       .toEqual({ ok: true, check: "models", models: ["large", "small", "three", "four", "five"] });
   });
 
   it("tells a rejected key from a broken provider and from an unreachable one", async () => {
-    expect(await checkProviderKey({ provider: "xai", key: "bad-key", url: base })).toEqual({ ok: false, reason: "rejected", status: 401 });
-    expect(await checkProviderKey({ provider: "xai", key: "broken-key", url: base })).toEqual({ ok: false, reason: "unexpected", status: 500 });
-    expect(await checkProviderKey({ provider: "xai", key: "good-key", url: "http://127.0.0.1:1" })).toEqual({ ok: false, reason: "unreachable" });
+    expect(await checkProviderKey({ provider: "openai", key: "bad-key", url: base })).toEqual({ ok: false, reason: "rejected", status: 401 });
+    expect(await checkProviderKey({ provider: "openai", key: "broken-key", url: base })).toEqual({ ok: false, reason: "unexpected", status: 500 });
+    expect(await checkProviderKey({ provider: "openai", key: "good-key", url: "http://127.0.0.1:1" })).toEqual({ ok: false, reason: "unreachable" });
   });
 
   it.each([{}, { error: { message: "invalid key" } }, { data: null }, { data: {} }, { models: "unavailable" }])(
     "does not report a successful model check for HTTP 200 with %j",
     async body => {
       const provider: typeof fetch = async () => Response.json(body);
-      expect(await checkProviderKey({ provider: "openaiCompat", key: "fixture", url: "https://models.example.test/v1" }, provider))
+      expect(await checkProviderKey({ provider: "openrouter", key: "fixture", url: "https://models.example.test/v1" }, provider))
         .toEqual({ ok: false, reason: "unexpected", status: 200 });
     },
   );
 
   it.each([[], { data: [] }, { models: [] }])("accepts a structurally valid empty catalog %j", async body => {
     const provider: typeof fetch = async () => Response.json(body);
-    expect(await checkProviderKey({ provider: "mistral", key: "fixture" }, provider))
+    expect(await checkProviderKey({ provider: "openai", key: "fixture" }, provider))
       .toEqual({ ok: true, check: "models", models: [] });
   });
 
@@ -129,7 +127,7 @@ describe("provider key check", () => {
     let calls = 0;
     const publicCatalog: typeof fetch = async () => { calls++; return Response.json({ data: [] }); };
     for (const key of ["", "   "]) {
-      expect(await checkProviderKey({ provider: "openaiCompat", key }, publicCatalog)).toEqual({ ok: false, reason: "rejected" });
+      expect(await checkProviderKey({ provider: "openrouter", key }, publicCatalog)).toEqual({ ok: false, reason: "rejected" });
     }
     expect(calls).toBe(0);
   });
@@ -147,9 +145,9 @@ describe("provider key check", () => {
         ? Response.json({ data: { is_free_tier: authorization === "Bearer free-fixture-key", label: "private-key-label", usage: 42 } })
         : Response.json({ error: { message: "Missing Authentication header" } }, { status: 401 });
     };
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "invalid-fixture-key" }, openRouter))
+    expect(await checkProviderKey({ provider: "openrouter", key: "invalid-fixture-key" }, openRouter))
       .toEqual({ ok: false, reason: "rejected", status: 401 });
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "valid-fixture-key", url: "https://openrouter.ai/api/v1/" }, openRouter))
+    expect(await checkProviderKey({ provider: "openrouter", key: "valid-fixture-key", url: "https://openrouter.ai/api/v1/" }, openRouter))
       .toEqual({ ok: true, check: "authentication", models: [], freeTier: false });
     expect(await checkProviderKey({ provider: "openrouter", key: "valid-fixture-key" }, openRouter))
       .toEqual({ ok: true, check: "authentication", models: [], freeTier: false });
@@ -169,60 +167,11 @@ describe("provider key check", () => {
     expect(urls).toEqual(["https://api.openai.com/v1/models"]);
   });
 
-  it("checks Groq at its preset endpoint without claiming chat authentication", async () => {
-    const groq: typeof fetch = async (input, init) => {
-      expect(String(input)).toBe("https://api.groq.com/openai/v1/models");
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-groq");
-      expect(init?.redirect).toBe("manual");
-      return Response.json({ data: [{ id: "openai/gpt-oss-120b" }] });
-    };
-    expect(await checkProviderKey({ provider: "groq", key: "fixture-groq" }, groq))
-      .toEqual({ ok: true, check: "models", models: ["openai/gpt-oss-120b"] });
-    expect(await checkProviderKey({ provider: "groq", key: "bad-key", url: base }))
-      .toEqual({ ok: false, reason: "rejected", status: 401 });
-  });
-
-  // Its /models answers without a key, but a wrong key gets 401 (checked 2026-10-30), so a key's own list proves it.
-  it("checks ModelGo at its preset endpoint and only there", async () => {
-    const modelgo: typeof fetch = async (input, init) => {
-      expect(String(input)).toBe("https://api.modelgo.ai/v1/models");
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-modelgo");
-      return Response.json({ object: "list", data: [{ id: "fixture-model" }] });
-    };
-    expect(await checkProviderKey({ provider: "modelgo", key: "fixture-modelgo" }, modelgo)).toEqual({ ok: true, check: "models", models: ["fixture-model"] });
-  });
-
-  it("checks Greenference at its preset endpoint", async () => {
-    const greenference: typeof fetch = async (input, init) => {
-      expect(String(input)).toBe("https://llm.eu.greenference.com/v1/models");
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-greenference");
-      expect(init?.redirect).toBe("manual");
-      return Response.json({ object: "list", data: [{ id: "greenference/glm-5.3-flash" }] });
-    };
-    expect(await checkProviderKey({ provider: "greenference", key: "fixture-greenference" }, greenference))
-      .toEqual({ ok: true, check: "models", models: ["greenference/glm-5.3-flash"] });
-    const refused: typeof fetch = async () => Response.json({ error: { code: "authentication", message: "invalid or expired token" } }, { status: 401 });
-    expect(await checkProviderKey({ provider: "greenference", key: "bad-key" }, refused)).toEqual({ ok: false, reason: "rejected", status: 401 });
-  });
-
-  it("checks Meta at its preset endpoint without claiming chat authentication", async () => {
-    const meta: typeof fetch = async (input, init) => {
-      expect(String(input)).toBe("https://api.meta.ai/v1/models");
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-meta");
-      expect(init?.redirect).toBe("manual");
-      return Response.json({ data: [{ id: "muse-spark-1.3" }] });
-    };
-    expect(await checkProviderKey({ provider: "meta", key: "fixture-meta" }, meta))
-      .toEqual({ ok: true, check: "models", models: ["muse-spark-1.3"] });
-    expect(await checkProviderKey({ provider: "meta", key: "bad-key", url: base }))
-      .toEqual({ ok: false, reason: "rejected", status: 401 });
-  });
-
   it("does not call a custom compatible server's nonexistent /key endpoint", async () => {
     const paths: string[] = [];
     const custom: typeof fetch = async (input) => { paths.push(String(input)); return Response.json({ data: [] }); };
-    for (const url of ["https://api.groq.com/openai/v1", "https://api.openai.com/v1", "https://openrouter.ai.example.test/api/v1"]) {
-      expect(await checkProviderKey({ provider: "openaiCompat", key: "fixture", url }, custom))
+    for (const url of ["https://api.example.test/openai/v1", "https://api.openai.com/v1", "https://openrouter.ai.example.test/api/v1"]) {
+      expect(await checkProviderKey({ provider: "openrouter", key: "fixture", url }, custom))
         .toEqual({ ok: true, check: "models", models: [] });
       expect(paths.at(-1)).toBe(`${url}/models`);
     }
@@ -235,22 +184,22 @@ describe("provider key check", () => {
       Response.json({ data: [] }),
       Response.json({ error: { message: "private provider detail" } }),
     ]) {
-      expect(await checkProviderKey({ provider: "openaiCompat", key: "fixture" }, async () => response))
+      expect(await checkProviderKey({ provider: "openrouter", key: "fixture" }, async () => response))
         .toEqual({ ok: false, reason: "unexpected", status: response.status });
     }
   });
 
   it("gives up on a hanging provider and never follows a redirect with the key", async () => {
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "good-key", url: `${base}/hang` }, fetch, 200)).toEqual({ ok: false, reason: "unreachable" });
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "good-key", url: `${base}/moved` })).toEqual({ ok: false, reason: "unexpected", status: 302 });
+    expect(await checkProviderKey({ provider: "openrouter", key: "good-key", url: `${base}/hang` }, fetch, 200)).toEqual({ ok: false, reason: "unreachable" });
+    expect(await checkProviderKey({ provider: "openrouter", key: "good-key", url: `${base}/moved` })).toEqual({ ok: false, reason: "unexpected", status: 302 });
     expect(seen.filter((request) => request.path.startsWith("/moved"))).toHaveLength(1);
   });
 
   it("refuses to send a key in clear to anything but a loopback test double", async () => {
     let called = false;
     const spy: typeof fetch = async () => { called = true; return new Response("{}"); };
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "good-key", url: "http://models.example.test/v1" }, spy)).toEqual({ ok: false, reason: "unexpected" });
-    expect(await checkProviderKey({ provider: "openaiCompat", key: "good-key", url: "not a url" }, spy)).toEqual({ ok: false, reason: "unexpected" });
+    expect(await checkProviderKey({ provider: "openrouter", key: "good-key", url: "http://models.example.test/v1" }, spy)).toEqual({ ok: false, reason: "unexpected" });
+    expect(await checkProviderKey({ provider: "openrouter", key: "good-key", url: "not a url" }, spy)).toEqual({ ok: false, reason: "unexpected" });
     expect(called).toBe(false);
   });
 });

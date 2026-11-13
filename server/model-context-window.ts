@@ -1,9 +1,5 @@
-import { injectedContextWindow } from "./drivers/local-inject.ts";
-
 export function modelContextWindow(model: string | undefined): number | undefined {
   if (!model) return undefined;
-  const local = injectedContextWindow(model);
-  if (local) return local;
   const id = model.toLowerCase();
   // Opus 5.5, Sonnet 5.5 and Fable 5.2 are 1M without a `[1m]` suffix: only the exact slug, alone or after a slash or provider dot.
   if (/(?:^|[/.])claude-(?:(?:opus|sonnet)-5(?:-5|\.5)|fable-5(?:-2|\.2))$/.test(id)) return 1_000_000;

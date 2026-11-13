@@ -19,21 +19,6 @@ export function modelsAwaitEngine(instance: Pick<InstanceInfo, "modelsUnconfirme
     && instance.snapshot.authenticated !== false;
 }
 
-export type SignInFamily = "claude" | "openai";
-
-export function signInFamily(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): SignInFamily | undefined {
-  if (!instance || instance.access === "api") return undefined;
-  if (instance.driverKind === "claudeAgent") return "claude";
-  if (instance.driverKind === "codex") return "openai";
-  return undefined;
-}
-
-export const SIGN_IN_FAMILY_LABEL: Record<SignInFamily, string> = { claude: "Claude", openai: "OpenAI" };
-
-export function isClaudeAccount(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): boolean {
-  return signInFamily(instance) === "claude";
-}
-
 export function splitEngineRail<T>(instances: readonly T[]): {
   subscription: T[];
   api: T[];

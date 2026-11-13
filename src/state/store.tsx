@@ -3,7 +3,7 @@ import { api, ApiError, retryRequest, snapshotArrays } from "./api";
 import { use, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createAppStore } from "./app-store"; import { readOneBot } from "./bot-read"; import { StoreContext, StoreSourceContext } from "./store-context";
 import { flushSync } from "react-dom";
-import type { BotMovedTo, BotVisibility, CardAnswerer, CloudBackend, ConnectorToolGrant, EffortLevel, InstalledPackageMetadata, LiveCallState, ServerFrame, GroupThreadUsage, ResolvedSender, SteerQueueReason, WireBot, WireGroup, WireTask, OptionCardData as WireOptionCard } from "../../shared/wire"; import type { InstanceEndpointInfo } from "../../shared/claude-endpoint";
+import type { BotMovedTo, BotVisibility, CardAnswerer, CloudBackend, ConnectorToolGrant, EffortLevel, InstalledPackageMetadata, LiveCallState, ServerFrame, GroupThreadUsage, ResolvedSender, SteerQueueReason, WireBot, WireGroup, WireTask, OptionCardData as WireOptionCard } from "../../shared/wire";
 import { movesThreadToTop } from "../../shared/wire"; import type { DefaultBotFields } from "../../shared/default-bot";
 import { reorderStable } from "../../shared/bot-order";
 import { withOneChief } from "../../shared/bot-owner";
@@ -399,20 +399,15 @@ export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicyS
 // A section left out here is wiped from state.config whenever a config frame lands.
 export type ConfigStatusFrame = Pick<
   ConfigStatus,
-  "awakeLimit" | "pausedBots" | "xai" | "mistral" | "cerebras" | "groq" | "greenference" | "modelgo" | "meta" | "deepseek" | "xResearch" | "treg" | "postiz" | "anthropic" | "openai" | "openrouter" | "openaiCompat" | "fleet" | "composio" | "box" | "vps" | "rooms" | "mcp" | "threads" | "automaticRecovery" | "cacheKeepWarm" | "localVm" | "opencodeGo" | "tts" | "decider" | "helpers" | "imageGen" | "live" | "savedKeys" | "profile" | "everyBotRules" | "language" | "features" | "onboarding" | "browserEngine" | "browserProfiles" | "edition" | "budgets" | "billing" | "managedPolicy" | "cloudHome" | "team" | "workspaceBanner"
+  "awakeLimit" | "pausedBots" | "meta" | "xResearch" | "treg" | "postiz" | "anthropic" | "openai" | "openrouter" | "fleet" | "composio" | "box" | "vps" | "rooms" | "mcp" | "threads" | "automaticRecovery" | "cacheKeepWarm" | "localVm" | "tts" | "decider" | "helpers" | "imageGen" | "live" | "savedKeys" | "profile" | "everyBotRules" | "language" | "features" | "onboarding" | "browserEngine" | "browserProfiles" | "edition" | "budgets" | "billing" | "managedPolicy" | "cloudHome" | "team" | "workspaceBanner"
 >;
 
 export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
   return {
-    xai: frame.xai,
-    mistral: frame.mistral,
-    cerebras: frame.cerebras,
-    groq: frame.groq, greenference: frame.greenference, modelgo: frame.modelgo, deepseek: frame.deepseek,
     meta: frame.meta, xResearch: frame.xResearch, treg: frame.treg, postiz: frame.postiz,
     anthropic: frame.anthropic,
     openai: frame.openai,
     openrouter: frame.openrouter,
-    openaiCompat: frame.openaiCompat,
     fleet: frame.fleet,
     composio: frame.composio,
     box: frame.box,
@@ -423,7 +418,6 @@ export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
     automaticRecovery: frame.automaticRecovery,
     cacheKeepWarm: frame.cacheKeepWarm,
     localVm: frame.localVm,
-    opencodeGo: frame.opencodeGo,
     tts: frame.tts,
     decider: frame.decider, helpers: frame.helpers,
     imageGen: frame.imageGen,
@@ -444,11 +438,11 @@ export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
 
 export type { EngineInstall } from "./engine-install";
 
-export interface InstanceInfo extends InstanceEndpointInfo {
+export interface InstanceInfo {
   instanceId: string;
   driverKind: string;
   displayName: string;
-  icon?: import("../../shared/provider-icon").ProviderIcon; /** An OpenAI-compatible server recognised as Ollama. */ serverKind?: "ollama";
+  icon?: import("../../shared/provider-icon").ProviderIcon;
   readOnly?: boolean;
   trialCredit?: "active" | "used_up" | "ended";
   managed?: { organizationId: string; organizationName: string };
@@ -465,7 +459,7 @@ export interface InstanceInfo extends InstanceEndpointInfo {
     version?: string | null;
     update?: { title: string; message: string; command: string };
     billing?: "metered" | "subscription";
-    warning?: { title: string; message: string }; ollama?: import("../../shared/local-model").OllamaProblem;
+    warning?: { title: string; message: string };
   };
   /** What one tiny test message through this AI showed, for its current sign-in; absent until one is sent. */
   aiTest?: import("../../shared/ai-ranking").AiTestState;

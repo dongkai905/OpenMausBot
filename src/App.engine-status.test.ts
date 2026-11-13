@@ -23,7 +23,7 @@ it("keeps a saved conversation visible through an unavailable engine status and 
     messages: [{ id: "saved", role: "user", text: "Saved conversation before the status failure", timestamp: 1 }],
   } as unknown as Bot;
   state = { ...initialState, connected: true, hydrated: true, bots: [bot], selectedId: bot.id,
-    instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", models: { default: "claude-sonnet-5", options: [{ id: "claude-sonnet-5", label: "Sonnet" }] }, snapshot: { state: "unavailable", reason: "CLI probe timed out" } }],
+    instances: [{ instanceId: "claude", driverKind: "customAcp", displayName: "Claude", models: { default: "claude-sonnet-5", options: [{ id: "claude-sonnet-5", label: "Sonnet" }] }, snapshot: { state: "unavailable", reason: "CLI probe timed out" } }],
   };
   const container = document.createElement("div");
   document.body.append(container);
@@ -45,7 +45,7 @@ it("keeps a saved conversation visible through an unavailable engine status and 
 it("offers AI setup when there is no conversation and every engine is unavailable", () => {
   vi.stubGlobal("fetch", () => new Promise(() => {}));
   state = { ...initialState, connected: true, hydrated: true,
-    instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", models: { default: "", options: [] }, snapshot: { state: "unavailable" } }],
+    instances: [{ instanceId: "claude", driverKind: "customAcp", displayName: "Claude", models: { default: "", options: [] }, snapshot: { state: "unavailable" } }],
   };
   const container = document.createElement("div");
   document.body.append(container);

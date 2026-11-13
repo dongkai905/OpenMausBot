@@ -3,11 +3,11 @@ import { needsCli, needsSignIn } from "@/components/EngineSetup";
 import { t } from "./i18n";
 import { modelOptionLabel } from "./model-label";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "./custom-models";
-import { engineDisplayName, isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail } from "./engine-rail";
+import { engineDisplayName, isCustomOnly, splitEngineRail } from "./engine-rail";
 import { favoriteKey, favoriteModels } from "./favorite-models";
 import { localModelDetail } from "./local-model";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
-import { choiceIsSelected, modelChoices, takesTypedModels, type ModelChoice } from "./model-choices";
+import { choiceIsSelected, modelChoices, type ModelChoice } from "./model-choices";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -46,7 +46,6 @@ export interface MenuGroup {
   instance: InstanceInfo;
   label: string;
   provider: string;
-  account?: string;
   /** A short line under the heading, such as why this account is special here. */
   note?: string;
   body: MenuGroupBody;
@@ -89,8 +88,6 @@ export interface SimpleMenuInput {
 }
 
 export function providerName(instance: InstanceInfo): string {
-  const family = signInFamily(instance);
-  if (family) return SIGN_IN_FAMILY_LABEL[family];
   if (instance.access !== "api") return engineDisplayName(instance);
   return engineDisplayName(instance).replace(/\s*\((?:API key|API|chave de API)\)$/i, "") || engineDisplayName(instance);
 }
@@ -98,7 +95,7 @@ export function providerName(instance: InstanceInfo): string {
 export function variantSuffix(instance: InstanceInfo | undefined, model: string, variant?: string): string {
   const option = instance?.models.options.find((candidate) => candidate.id === model);
   if (!instance || !option || variant === undefined) return "";
-  const listed = modelChoices(instance, [option]).some((choice) => choiceIsSelected(choice, { instanceId: instance.instanceId, model, variant }));
+  const listed = modelChoices([option]).some((choice) => choiceIsSelected(choice, { instanceId: instance.instanceId, model, variant }));
   const label = listed ? option.variants?.find((candidate) => candidate.id === variant)?.label : undefined;
   return label ? ` · ${label}` : "";
 }
@@ -118,7 +115,7 @@ export function repeatedModelLabels(options: readonly ModelOption[]): Set<string
 
 function listedModels(instance: InstanceInfo) {
   const signedOut = !isCustomOnly(instance) && needsSignIn(instance);
-  const own = isCustomOnly(instance) || signedOut ? [] : modelChoices(instance, instance.models.options.filter((option) => !option.custom));
+  const own = isCustomOnly(instance) || signedOut ? [] : modelChoices(instance.models.options.filter((option) => !option.custom));
   const local = partitionCustomModels(instance.models.options.filter((option) => option.custom));
   return { signedOut, own, all: [...own, ...local.pinned, ...local.rest] };
 }
@@ -129,14 +126,10 @@ function localFrom(rows: readonly MenuModelRow[], mixed: boolean): number | null
   return first >= 0 && rows.slice(first).every((row) => row.option.custom) ? first : null;
 }
 
-function heading(instance: InstanceInfo, listed: readonly InstanceInfo[]): Pick<MenuGroup, "label" | "provider" | "account"> {
+function heading(instance: InstanceInfo): Pick<MenuGroup, "label" | "provider"> {
   const provider = providerName(instance);
-  const family = signInFamily(instance);
-  if (instance.serverKind === "ollama") return { label: provider, provider };
   if (instance.access === "api") return { label: `${provider} · ${t("model.simple.apiKey")}`, provider };
-  const several = family !== undefined && listed.filter((other) => signInFamily(other) === family).length > 1;
-  const account = several && engineDisplayName(instance) !== provider ? engineDisplayName(instance) : undefined;
-  return { label: account ? `${provider} · ${account}` : provider, provider, account };
+  return { label: provider, provider };
 }
 
 function currentRow(input: SimpleMenuInput): MenuCurrent {
@@ -149,14 +142,11 @@ function currentRow(input: SimpleMenuInput): MenuCurrent {
   if (!active) return loading ? { ...row, pending: true } : { ...row, meta: t("model.simple.unavailable"), warning: true };
   if (!option && input.refreshing === active.instanceId) return { ...row, pending: true };
   if (option?.orgBlocked) return { ...row, meta: t("model.orgBlocked"), warning: true, blocked: true };
-  if (option?.needsCliUpdate) return { ...row, meta: t("engines.updateClaude"), warning: true, blocked: true };
   if (active.policy) return { ...row, meta: t("policy.managedBy", { organization: active.policy.organizationName }), warning: true };
   if (needsCli(active)) return { ...row, meta: t("model.setupRequired"), warning: true };
   if (needsSignIn(active) && !isCustomOnly(active) && !option?.custom) return { ...row, meta: t("model.signInRequired"), warning: true };
   if (bot.follows === true) return { ...row, meta: t(input.updatesBotDefault ? "model.simple.botsModelScope" : "model.simple.botsModel", { name: bot.name }) };
-  const family = signInFamily(active);
-  const accounts = family ? instances.filter((instance) => signInFamily(instance) === family).length : 0;
-  if (accounts > 1 || active.snapshot.chatgptPlan) return { ...row, meta: engineDisplayName(active) };
+  if (active.snapshot.chatgptPlan) return { ...row, meta: engineDisplayName(active) };
   return option?.provider || detail ? { ...row, meta: option?.provider ?? detail } : row;
 }
 
@@ -165,7 +155,7 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   const models = new Map(listed.map((instance) => [instance.instanceId, listedModels(instance)]));
   const total = listed.filter((instance) => !instance.policy && !needsCli(instance))
     .reduce((sum, instance) => sum + models.get(instance.instanceId)!.all.length, 0);
-  const search = total > SIMPLE_SEARCH_AFTER || listed.some((instance) => takesTypedModels(instance) && !instance.policy && !needsCli(instance));
+  const search = total > SIMPLE_SEARCH_AFTER;
   const query = search ? input.query.trim() : "";
   const { subscription, api, custom } = splitEngineRail(listed);
   const ordered = [...subscription, ...api, ...custom];
@@ -189,7 +179,7 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
         ...(repeated.has(option.label) && option.provider ? { route: option.provider } : {}),
         ...(detail ? { detail } : {}),
         current: currentSelection ? choiceIsSelected(option, currentSelection) : false,
-        blocked: option.orgBlocked === true || option.needsCliUpdate !== undefined,
+        blocked: option.orgBlocked === true,
       };
     };
     const mixed = own.length > 0 && own.length < all.length;
@@ -217,7 +207,7 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   }
 
   const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).flatMap((instance): MenuGroup[] => {
-    const named = heading(instance, listed);
+    const named = heading(instance);
     const body = groupBody(instance, named.provider);
     return body ? [{ instance, ...named, body }] : [];
   });

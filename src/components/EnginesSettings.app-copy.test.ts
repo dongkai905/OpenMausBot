@@ -12,7 +12,7 @@ const install: InstanceInfo["install"] = {
   server: { standalone: { version: "1.19.4", downloadBytes: 64_291_659 } },
 };
 const broken: InstanceInfo = {
-  instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", cliDefault: "opencode",
+  instanceId: "agent-three", driverKind: "customAcp", displayName: "OpenCode", cliDefault: "opencode",
   snapshot: { state: "unavailable", reason: "`opencode` version check failed." }, models: { default: "", options: [] }, install,
 };
 const ready: InstanceInfo = {

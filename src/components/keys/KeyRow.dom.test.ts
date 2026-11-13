@@ -9,11 +9,11 @@ import type { InstanceInfo } from "@/state/store";
 const fx = vi.hoisted(() => ({ refreshInstances: vi.fn() }));
 vi.mock("@/state/store", async (original) => {
   const actual = await original<typeof import("@/state/store")>();
-  const instances = [{ instanceId: "deepseek", driverKind: "deepseekAgent", displayName: "DeepSeek Harness", snapshot: { state: "unavailable" },
-    install: { platform: "linux", command: { linux: "npm install -g @deepseek-ai/dsh" } }, models: { default: "m", options: [] } }] as unknown as InstanceInfo[];
+  const instances = [{ instanceId: "openai", driverKind: "customAcp", displayName: "Fixture Agent", snapshot: { state: "unavailable" },
+    install: { platform: "linux", command: { linux: "npm install -g fixture-agent" } }, models: { default: "m", options: [] } }] as unknown as InstanceInfo[];
   return {
     ...actual,
-    useStore: () => ({ state: { ...actual.initialState, config: { deepseek: { configured: true, last4: "9z9z" } }, instances }, dispatch: vi.fn(), refreshInstances: fx.refreshInstances }),
+    useStore: () => ({ state: { ...actual.initialState, config: { openai: { configured: true, last4: "9z9z" } }, instances }, dispatch: vi.fn(), refreshInstances: fx.refreshInstances }),
   };
 });
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
@@ -29,7 +29,7 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  flushSync(() => root.render(createElement(KeyRow, { id: "deepseek" })));
+  flushSync(() => root.render(createElement(KeyRow, { id: "openai" })));
 });
 afterEach(() => {
   flushSync(() => root.unmount());

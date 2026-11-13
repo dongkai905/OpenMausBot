@@ -200,8 +200,8 @@ describe("configuration boundaries", () => {
       .toEqual({ primary: { provider: "gemini", model: "gemini-2.5-flash-image" }, fallback: null, maxPerTurn: 3 });
     expect(() => parseConfigPatch({ imageGen: { primary: { provider: "cursor" } } })).toThrow("primary");
     expect(() => parseConfigPatch({ imageGen: { maxPerTurn: 11 } })).toThrow("maxPerTurn");
-    expect(parseConfigPatch({ imageGen: { provider: "xai" } }).imageGen).toEqual({ primary: { provider: "xai" } });
-    for (const pasted of ["sk-or-v1-0123456789abcdef0123456789abcdef", "sk-proj-abcdefghijklmnop", "xai-abcdefghijklmnopqrstuvwx", "AIzaSyA-abcdefghijklmnopqrstuvwxyz012"]) {
+    expect(parseConfigPatch({ imageGen: { provider: "openai" } }).imageGen).toEqual({ primary: { provider: "openai" } });
+    for (const pasted of ["sk-or-v1-0123456789abcdef0123456789abcdef", "sk-proj-abcdefghijklmnop", "AIzaSyA-abcdefghijklmnopqrstuvwxyz012"]) {
       expect(() => parseConfigPatch({ imageGen: { primary: { provider: "openrouter", model: pasted } } })).toThrow("API key");
       expect(() => parseConfigPatch({ imageGen: { fallback: { provider: "openai", model: pasted } } })).toThrow("API key");
       expect(() => parseConfigPatch({ imageGen: { provider: "custom", customModel: pasted } })).toThrow("API key");
@@ -734,14 +734,14 @@ describe("a config.json saved with a byte order mark", () => {
     const path = join(DATA_DIR, "config.json");
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(path, bom + JSON.stringify({
-      xai: { key: "xai-fixture" },
+      openrouter: { key: "openrouter-fixture" },
       mcpServers: { notes: { command: "npx", args: ["notes-mcp"] } },
     }, null, 2));
     try {
       saveConfig({ budgets: { monthlyUsd: 25, warnAtPercent: 70 } });
       const disk = JSON.parse(readFileSync(path, "utf8"));
       expect(disk).toMatchObject({
-        xai: { key: "xai-fixture" },
+        openrouter: { key: "openrouter-fixture" },
         mcpServers: { notes: { command: "npx", args: ["notes-mcp"] } },
         budgets: { monthlyUsd: 25, warnAtPercent: 70 },
       });
@@ -825,8 +825,8 @@ describe("saving the image providers", () => {
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(path, JSON.stringify({ imageGen: { key: "openai-fixture", primary: { provider: "openai" } } }));
     try {
-      saveConfig(parseConfigPatch({ imageGen: { fallback: { provider: "xai" } } }));
-      expect(JSON.parse(readFileSync(path, "utf8")).imageGen).toEqual({ key: "openai-fixture", primary: { provider: "openai" }, fallback: { provider: "xai" } });
+      saveConfig(parseConfigPatch({ imageGen: { fallback: { provider: "openrouter" } } }));
+      expect(JSON.parse(readFileSync(path, "utf8")).imageGen).toEqual({ key: "openai-fixture", primary: { provider: "openai" }, fallback: { provider: "openrouter" } });
       saveConfig(parseConfigPatch({ imageGen: { fallback: null } }));
       saveConfig(parseConfigPatch({ imageGen: { fallback: null } }));
       expect(JSON.parse(readFileSync(path, "utf8")).imageGen).toEqual({ key: "openai-fixture", primary: { provider: "openai" } });
@@ -873,39 +873,8 @@ it("clears a thread event-log knob with null while other keys survive", () => {
 });
 
 describe("default fleet", () => {
-it("carries the saved OpenAI-compatible URL into the live default instance", () => {
+  it.each(["openai", "openrouter", "openaiCompat", "claudeApi"])("preserves a custom driver's own routing when its id is %s", (id) => {
     const map = instanceConfigs({
-      openaiCompat: { key: "secret", url: "https://models.example.test/v1" },
-    });
-    expect(map.openaiCompat.config).toEqual({ url: "https://models.example.test/v1" });
-    expect(map.openaiCompat.environment).toEqual({
-      OPENAI_COMPAT_API_KEY: "secret",
-      OPENAI_COMPAT_URL: "https://models.example.test/v1",
-    });
-  });
-
-it("never hands a workspace API key to an API-key instance with its own endpoint or key", () => {
-    const map = instanceConfigs({
-      openaiCompat: { key: "sk-or-WORKSPACE" },
-      mistral: { key: "mistral-WORKSPACE" },
-      xai: { key: "xai-WORKSPACE" },
-      instances: {
-        claude: { driver: "claudeAgent" },
-        openaiCompat: { driver: "openai-compat" },
-        sameUrl: { driver: "openai-compat", config: { url: "https://openrouter.ai/api/v1/" } },
-        groq: { driver: "openai-compat", config: { url: "https://third-party.example.test/v1" } },
-        ownKey: { driver: "openai-compat", config: { key: "sk-own" } },
-        ownVariable: { driver: "openai-compat", config: { apiKeyEnv: "OPENROUTER_API_KEY" } },
-      },
-    });
-    expect(map.openaiCompat.environment).toMatchObject({ OPENAI_COMPAT_API_KEY: "sk-or-WORKSPACE" });
-    expect(map.sameUrl.environment).toMatchObject({ OPENAI_COMPAT_API_KEY: "sk-or-WORKSPACE" });
-    for (const id of ["groq", "ownKey", "ownVariable"]) expect(map[id].environment, id).toEqual({});
-  });
-
-  it.each(["openai", "openrouter", "xaiApi", "claudeApi"])("preserves a custom driver's own routing when its id is %s", (id) => {
-    const map = instanceConfigs({
-      mistral: { key: "mistral-WORKSPACE" },
       instances: {
         [id]: { driver: "mistral", config: { url: "https://custom.example.test/v1" }, environment: { MISTRAL_API_KEY: "mistral-own" } },
       },
@@ -936,7 +905,6 @@ it("never hands a workspace API key to an API-key instance with its own endpoint
 
     const inherited = instanceConfigs({
       ...workspace,
-      openaiCompat: { key: "compat-WORKSPACE", url: "https://workspace-router.example.test/v1" },
       instances: { [id]: { driver: "openai-compat", config: { url: `${defaultUrl}/`, apiKeyEnv: keyEnv } } },
     });
     expect(inherited[id].environment).toEqual({ [keyEnv]: workspace[id as "openai" | "openrouter"].key });
@@ -944,7 +912,6 @@ it("never hands a workspace API key to an API-key instance with its own endpoint
 
 it("preserves a per-instance OpenAI-compatible URL override", () => {
     const map = instanceConfigs({
-      openaiCompat: { url: "https://workspace.example.test/v1" },
       instances: {
         custom: {
           driver: "openai-compat",
@@ -956,41 +923,6 @@ it("preserves a per-instance OpenAI-compatible URL override", () => {
       url: "https://instance.example.test/v1",
       apiKeyEnv: "CUSTOM_KEY",
     });
-  });
-
-  it("keeps an explicit empty routing provider while other instances inherit the workspace pin", () => {
-    const config: AppConfig = {
-      openaiCompat: { provider: "workspace-provider" },
-      instances: {
-        isolated: { driver: "openai-compat", config: { provider: "" } },
-        inherited: { driver: "openai-compat" },
-        pinned: { driver: "openai-compat", config: { provider: "instance-provider" } },
-      },
-    };
-    const instances = instanceConfigs(config);
-    expect(instances.isolated.config).toEqual({ provider: "" });
-    expect(instances.inherited.config).toEqual({ provider: "workspace-provider" });
-    expect(instances.pinned.config).toEqual({ provider: "instance-provider" });
-    expect(config.instances?.isolated.config).toEqual({ provider: "" });
-    expect(config.instances?.inherited.config).toBeUndefined();
-  });
-
-  it("does not retain an injected OpenAI-compatible URL across config refreshes", () => {
-    const config: AppConfig = {
-      openaiCompat: { url: "https://first.example.test/v1" },
-      instances: {
-        custom: { driver: "openai-compat" },
-      },
-    };
-
-    expect(instanceConfigs(config).custom.config).toEqual({
-      url: "https://first.example.test/v1",
-    });
-    config.openaiCompat = { url: "https://second.example.test/v1" };
-    expect(instanceConfigs(config).custom.config).toEqual({
-      url: "https://second.example.test/v1",
-    });
-    expect(config.instances?.custom.config).toBeUndefined();
   });
 
 it("does not expand a one-off shadow fleet", () => {
@@ -1032,9 +964,7 @@ describe("Instance CLI override", () => {
 
   it("never persists the credential env instanceConfigs injects", () => {
     const cfg: AppConfig = {
-      xai: { key: "SECRET-XAI" },
       box: { token: "SECRET-BOAT" },
-      opencodeGo: { apiKey: "SECRET-OCG" },
       instances: {
         claude: { driver: "claudeAgent" },
         grokApi: { driver: "grok" },
@@ -1053,69 +983,40 @@ describe("Instance CLI override", () => {
 
   it("preserves explicit instance credentials even when workspace injection shadows them", () => {
     const cfg: AppConfig = {
-      xai: { key: "fixture-shared-xai" },
+      openai: { key: "fixture-shared-openai" },
       instances: {
-        ownKey: { driver: "grok", environment: { XAI_API_KEY: "fixture-instance-xai", MY_FLAG: "1" } },
-        sameCredential: { driver: "grok", environment: { XAI_API_KEY: "fixture-shared-xai" } },
-        injectedOnly: { driver: "grok" },
+        ownKey: { driver: "openai-compat", environment: { OMB_OPENAI_API_KEY: "fixture-instance-openai", MY_FLAG: "1" } },
+        sameCredential: { driver: "openai-compat", environment: { OMB_OPENAI_API_KEY: "fixture-shared-openai" } },
+        openai: { driver: "openai-compat" },
       },
     };
     const instances = persistableInstanceConfigs(cfg);
-    expect(instances.ownKey.environment).toEqual({ XAI_API_KEY: "fixture-instance-xai", MY_FLAG: "1" });
-    expect(instances.sameCredential.environment).toEqual({ XAI_API_KEY: "fixture-shared-xai" });
-    expect(instances.injectedOnly.environment).toBeUndefined();
+    expect(instances.ownKey.environment).toEqual({ OMB_OPENAI_API_KEY: "fixture-instance-openai", MY_FLAG: "1" });
+    expect(instances.sameCredential.environment).toEqual({ OMB_OPENAI_API_KEY: "fixture-shared-openai" });
+    expect(instances.openai.environment).toBeUndefined();
     instances.ownKey.environment!.MY_FLAG = "changed";
     expect(cfg.instances!.ownKey.environment!.MY_FLAG).toBe("1");
   });
 
-  it("saving another engine's CLI does not freeze inherited API endpoint or model settings", () => {
-    const cfg: AppConfig = {
-      openaiCompat: { url: "https://first.example.test/v1", model: "first-model", provider: "first-provider" },
-      instances: {
-        claude: { driver: "claudeAgent" },
-        openaiCompat: { driver: "openai-compat", config: { tools: false } },
-        inherited: { driver: "openai-compat" },
-        custom: { driver: "openai-compat", config: { url: "https://custom.example.test/v1", provider: "", key: "fixture-custom" } },
-      },
-    };
-    const updated = withInstanceCli(cfg, "claude", "/fixture/claude").config;
-    expect(updated.instances!.openaiCompat.config).toEqual({ tools: false });
-    expect(updated.instances!.inherited.config).toBeUndefined();
-    expect(updated.instances!.custom.config).toEqual(cfg.instances!.custom.config);
-    updated.openaiCompat = { url: "https://second.example.test/v1", model: "second-model", provider: "second-provider" };
-    expect(instanceConfigs(updated).openaiCompat.config).toEqual({ tools: false, ...updated.openaiCompat });
-    const persisted = persistableInstanceConfigs(cfg);
-    (persisted.custom.config as Record<string, unknown>).url = "https://changed.example.test/v1";
-    expect(cfg.instances!.custom.config).toMatchObject({ url: "https://custom.example.test/v1" });
-  });
 });
 
 describe("credential env narrowing", () => {
 it("hands no credential to any default-fleet CLI engine, and the Boat key to none at all", () => {
-    const cfg: AppConfig = { xai: { key: "SECRET-XAI" }, box: { token: "SECRET-BOAT" } };
+    const cfg: AppConfig = { box: { token: "SECRET-BOAT" } };
     const instances = instanceConfigs(cfg);
-    for (const [id, entry] of Object.entries(instances)) {
-      if (id === "xaiApi") expect(entry.environment).toEqual({ XAI_API_KEY: "SECRET-XAI" });
-      else expect(entry.environment).toEqual({});
+    for (const entry of Object.values(instances)) {
+      expect(entry.environment).toEqual({});
     }
   });
 
 it("keeps the built-in routing of a provider instance in a saved fleet", () => {
     const instances = instanceConfigs({
-      openaiCompat: { key: "SECRET-COMPAT", url: "https://api.groq.com/openai/v1" },
       instances: { claude: { driver: "claudeAgent" }, openai: { driver: "openai-compat", displayName: "OpenAI" } },
     });
     expect(instances.openai.config).toEqual({ url: "https://api.openai.com/v1", apiKeyEnv: "OMB_OPENAI_API_KEY", catalog: "openai" });
     expect(instances.openai.environment).toEqual({});
   });
 
-  it("keeps a per-instance environment while layering the credential on top", () => {
-    const cfg: AppConfig = {
-      openaiCompat: { key: "SECRET-COMPAT" },
-      instances: { own: { driver: "openai-compat", environment: { MY_FLAG: "1" } } },
-    };
-    expect(instanceConfigs(cfg).own.environment).toEqual({ MY_FLAG: "1", OPENAI_COMPAT_API_KEY: "SECRET-COMPAT" });
-  });
 });
 
 describe("legacy feature flag migration", () => {
@@ -1404,61 +1305,18 @@ it("uses a preset voice only when the person has not chosen one or another provi
     expect(JSON.parse(readFileSync(path, "utf8")).instances).toEqual({});
   });
 
-  it.each(["https://next.example.test/v1", ""])("an explicit workspace URL save (%s) repairs the shared default connection", (url) => {
-    const path = join(DATA_DIR, "config.json");
-    const instances = {
-      openaiCompat: { driver: "openai-compat", config: { url: "https://old.example.test/v1", tools: false, model: "selected", provider: "" } },
-      custom: { driver: "openai-compat", config: { url: "https://custom.example.test/v1", key: "fixture-custom" } },
-      customShared: { driver: "openai-compat", config: { url: "https://shared.example.test/v1" } },
-    };
-    writeFileSync(path, JSON.stringify({ openaiCompat: { url, key: "fixture-shared" }, instances }));
-    saveConfig({ openaiCompat: { url } });
-    const disk = JSON.parse(readFileSync(path, "utf8"));
-    expect(disk.instances.openaiCompat.config).toEqual({ tools: false, model: "selected", provider: "" });
-    expect(disk.instances.custom).toEqual(instances.custom);
-    expect(disk.instances.customShared).toEqual(instances.customShared);
-    expect(disk.openaiCompat).toEqual({ url, key: "fixture-shared" });
-    expect(instanceConfigs(loadConfig()).openaiCompat.config).toEqual({
-      tools: false, model: "selected", provider: "", ...(url ? { url } : {}),
-    });
-  });
-
-  it.each([
-    { config: { key: "fixture-private" } },
-    { config: { apiKeyEnv: "CUSTOM_API_KEY" } },
-    { environment: { OPENAI_COMPAT_API_KEY: "fixture-private" } },
-  ])("keeps an independently credentialed default connection when the workspace URL changes: %j", (override) => {
-    const entry = { driver: "openai-compat", ...override, config: { url: "https://private.example.test/v1", ...override.config } };
-    const path = join(DATA_DIR, "config.json");
-    writeFileSync(path, JSON.stringify({ instances: { openaiCompat: entry } }));
-    saveConfig({ openaiCompat: { url: "https://workspace.example.test/v1" } });
-    expect(JSON.parse(readFileSync(path, "utf8")).instances.openaiCompat).toEqual(entry);
-  });
-
-  it("preserves explicit instance URLs on unrelated saves and in a combined configuration patch", () => {
+  it("preserves explicit instance URLs on unrelated saves", () => {
     const path = join(DATA_DIR, "config.json");
     const entry = { driver: "openai-compat", config: { url: "https://explicit.example.test/v1" } };
     writeFileSync(path, JSON.stringify({ instances: { openaiCompat: entry } }));
-    saveConfig({ openaiCompat: { key: "fixture-replacement" }, profile: { name: "Fixture" } });
+    saveConfig({ openai: { key: "fixture-replacement" }, profile: { name: "Fixture" } });
     expect(JSON.parse(readFileSync(path, "utf8")).instances.openaiCompat).toEqual(entry);
-    saveConfig({ openaiCompat: { url: "https://workspace.example.test/v1" }, instances: { openaiCompat: entry } });
-    expect(JSON.parse(readFileSync(path, "utf8")).instances.openaiCompat).toEqual(entry);
-  });
-
-  it.each(["openai-compat", "future-driver"])("limits URL repair to the default OpenAI-compatible driver (%s)", (driver) => {
-    const path = join(DATA_DIR, "config.json");
-    const entry = { driver, config: { url: "https://old.example.test/v1" }, futureSetting: { keep: true } };
-    writeFileSync(path, JSON.stringify({ instances: { openaiCompat: entry } }));
-    saveConfig({ openaiCompat: { url: "https://next.example.test/v1" } });
-    expect(JSON.parse(readFileSync(path, "utf8")).instances.openaiCompat).toEqual({
-      ...entry, config: driver === "openai-compat" ? {} : entry.config,
-    });
   });
 
   it("loads legacy browser profiles without resetting config and canonicalizes them on the next write", () => {
     const path = join(DATA_DIR, "config.json");
     writeFileSync(path, JSON.stringify({
-      xai: { key: "file-xai", url: "https://api.example.test/v1" },
+      postiz: { key: "file-postiz", url: "https://api.example.test/v1" },
       profile: { name: "Ada" },
       features: { browser: true },
       browserProfiles: [
@@ -1480,7 +1338,7 @@ it("uses a preset voice only when the person has not chosen one or another provi
     saveConfig({ features: { showToolCalls: true } });
     const persisted = JSON.parse(readFileSync(path, "utf8"));
     expect(persisted).toMatchObject({
-      xai: { key: "file-xai", url: "https://api.example.test/v1" },
+      postiz: { key: "file-postiz", url: "https://api.example.test/v1" },
       profile: { name: "Ada" },
       features: { browser: true, showToolCalls: true },
       browserProfiles: [
@@ -1530,31 +1388,6 @@ it("syncCredentialEnv updates Fish Audio without replacing ElevenLabs", () => {
     expect(process.env.OMB_FISH_AUDIO_API_KEY).toBe("fish-new");
   });
 
-  it("syncCredentialEnv keeps model and provider env in step with a save", () => {
-    process.env.OPENAI_COMPAT_MODEL = "boot-model";
-    process.env.OPENAI_COMPAT_PROVIDER = "boot-provider";
-    syncCredentialEnv({
-      openaiCompat: { model: "vendor/just-saved", provider: "fireworks" },
-    });
-    expect(process.env.OPENAI_COMPAT_MODEL).toBe("vendor/just-saved");
-    expect(process.env.OPENAI_COMPAT_PROVIDER).toBe("fireworks");
-  });
-
-  it("syncCredentialEnv clears model and provider env on an empty-string save", () => {
-    process.env.OPENAI_COMPAT_MODEL = "boot-model";
-    process.env.OPENAI_COMPAT_PROVIDER = "boot-provider";
-    syncCredentialEnv({ openaiCompat: { model: "", provider: "" } });
-    expect(process.env.OPENAI_COMPAT_MODEL).toBeUndefined();
-    expect(process.env.OPENAI_COMPAT_PROVIDER).toBeUndefined();
-  });
-
-  it("syncCredentialEnv leaves model and provider env untouched when absent from the patch", () => {
-    process.env.OPENAI_COMPAT_MODEL = "boot-model";
-    process.env.OPENAI_COMPAT_PROVIDER = "boot-provider";
-    syncCredentialEnv({ openaiCompat: { key: "just-saved" } });
-    expect(process.env.OPENAI_COMPAT_MODEL).toBe("boot-model");
-    expect(process.env.OPENAI_COMPAT_PROVIDER).toBe("boot-provider");
-  });
 });
 
 describe("workspace credential env strip", () => {
@@ -1683,12 +1516,6 @@ describe("customMcpServers", () => {
 });
 
 describe("changedInstanceIds", () => {
-  it("replaces only the engines whose launch config a save changed", () => {
-    const saved: AppConfig = { openaiCompat: { key: "c1", url: "https://compat.example/v1" } };
-    expect(reloaded({ openaiCompat: { key: "c1", url: "https://compat.example/v1" } }, saved)).toEqual([]);
-    expect(reloaded({ openaiCompat: { key: "c2", url: "https://compat.example/v1" } }, saved)).toEqual(["openaiCompat"]);
-    expect(reloaded({ openaiCompat: { key: "c1", url: "https://other.example/v1" } }, saved)).toEqual(["openaiCompat"]);
-  });
   it("replaces nothing for sections no driver reads", () => {
     expect(reloaded({ onboarding: { hintsSeen: ["tour.composer"] } })).toEqual([]);
     expect(reloaded({ profile: {}, language: "de", tts: {}, features: {} })).toEqual([]);

@@ -45,7 +45,7 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
     threadsReferencing: (fragment) => [...messages].filter(([, list]) => JSON.stringify(list).includes(fragment)).map(([threadId]) => threadId),
     keptAttachments: () => kept,
     deleteAttachment: (name) => rmSync(join(dataDir, "attachments", name)),
-    engineFolders: () => engineSessionFolders(dataDir, [{ HOME: home }]),
+    engineFolders: () => engineSessionFolders([{ HOME: home }]),
     layers: { journalFile: (layer) => join(dataDir, "memory-journal", `${layer}.ndjson`), forget: (layer) => { forgotten.push(layer); } },
     defer: () => {},
     warn: (line) => { warnings.push(line); },
@@ -150,7 +150,7 @@ describe("a deleted conversation's uploads", () => {
 });
 
 describe("a deleted conversation's engine sessions", () => {
-  it("go from Claude's and Codex's folders, by the session it resumes and the ones its log says it started", () => {
+  it("go from Claude's folder, by the session it resumes and the ones its log says it started", () => {
     const { home, bots, deleteThreads, logSession } = fixture();
     bots.push({ id: "scout", tasks: [{ threadId: "t1", resumeCursors: { claude: SESSION } }, { threadId: "t2", resumeCursors: { claude: SHARED } }] });
     logSession("t1", LOGGED);
@@ -163,15 +163,11 @@ describe("a deleted conversation's engine sessions", () => {
       put(join(claude, "session-env", SESSION, "env")),
       put(join(claude, "todos", `${SESSION}-agent-${SESSION}.json`)),
       put(join(claude, "debug", `${SESSION}.txt`)),
-      put(join(home, ".codex", "sessions", "2026", "11", "10", `rollout-2026-11-10T10-00-00-${SESSION}.jsonl`)),
-      put(join(home, ".codex", "archived_sessions", `rollout-2026-11-09T10-00-00-${LOGGED}.jsonl`)),
     ];
     const others = [
       put(join(claude, "projects", "-work-site", `${SHARED}.jsonl`)),
       put(join(claude, ".credentials.json")),
       put(join(claude, "history.jsonl")),
-      put(join(home, ".codex", "sessions", "2026", "11", "10", `rollout-2026-11-10T11-00-00-${SHARED}.jsonl`)),
-      put(join(home, ".codex", "auth.json")),
     ];
     deleteThreads("t1");
     expect(mine.filter(existsSync)).toEqual([]);
@@ -190,13 +186,13 @@ describe("a deleted conversation's engine sessions", () => {
   });
 
   it("go from every audience's engine home on a Team Cloud", () => {
-    const sessions = (dataDir: string) => engineSessionFolders(dataDir, ["team", "member-0123456789abcdef"].map((key) => ({ HOME: join(dataDir, "engine-homes", key) })));
+    const sessions = (dataDir: string) => engineSessionFolders(["team", "member-0123456789abcdef"].map((key) => ({ HOME: join(dataDir, "engine-homes", key) })));
     let dataDirOf = "";
     const { dataDir, bots, deleteThreads } = fixture({ engineFolders: () => sessions(dataDirOf) });
     dataDirOf = dataDir;
-    bots.push({ id: "scout", tasks: [{ threadId: "t1", resumeCursors: { claude: SESSION, codex: LOGGED } }, { threadId: "t2" }] });
+    bots.push({ id: "scout", tasks: [{ threadId: "t1", resumeCursors: { claude: SESSION } }, { threadId: "t2" }] });
     const team = put(join(dataDir, "engine-homes", "team", ".claude", "projects", "-work", `${SESSION}.jsonl`));
-    const member = put(join(dataDir, "engine-homes", "member-0123456789abcdef", ".codex", "sessions", "2026", "11", "10", `rollout-x-${LOGGED}.jsonl`));
+    const member = put(join(dataDir, "engine-homes", "member-0123456789abcdef", ".claude", "projects", "-work", `${SESSION}.jsonl`));
     deleteThreads("t1");
     expect([existsSync(team), existsSync(member)]).toEqual([false, false]);
   });
@@ -219,15 +215,13 @@ describe("a deleted conversation's engine sessions", () => {
     symlinkSync(join(outside, "projects"), join(home, ".claude", "projects"));
     mkdirSync(join(home, ".claude", "file-history"));
     symlinkSync(join(outside, "history", SESSION), join(home, ".claude", "file-history", SESSION));
-    mkdirSync(join(home, ".codex"), { recursive: true });
-    symlinkSync(join(outside, "projects"), join(home, ".codex", "sessions"));
     deleteThreads("t1");
     expect([existsSync(elsewhere), existsSync(history)]).toEqual([true, true]);
     expect(existsSync(join(home, ".claude", "file-history", SESSION))).toBe(false);
   });
 
   it("never follows a link out of the data folder to an engine home", () => {
-    const sessions = (dataDir: string) => engineSessionFolders(dataDir, [{ HOME: join(dataDir, "engine-homes", "team") }]);
+    const sessions = (dataDir: string) => engineSessionFolders([{ HOME: join(dataDir, "engine-homes", "team") }]);
     let dataDirOf = "";
     const { dataDir, outside, bots, deleteThreads } = fixture({ engineFolders: () => sessions(dataDirOf) });
     dataDirOf = dataDir;
@@ -327,13 +321,11 @@ describe("the helpers", () => {
 
   it("finds each engine's folder from the environment its instance runs with", () => {
     const { dataDir, home } = fixture();
-    mkdirSync(join(dataDir, "providers", "chatgpt-plan", "abc", "codex"), { recursive: true });
     const work = instanceEnvironment({ HOME: home }, { config: { configDir: "~/.claude-work" } });
     const endpoint = instanceEnvironment({ HOME: home }, { environment: { CODEX_HOME: join(dataDir, "providers", "relay") } });
     expect(instanceEnvironment({ HOME: home }, { config: { configDir: "relative" } }).CLAUDE_CONFIG_DIR).toBeUndefined();
-    expect(engineSessionFolders(dataDir, [{ HOME: home }, work, endpoint, {}])).toEqual({
+    expect(engineSessionFolders([{ HOME: home }, work, endpoint, {}])).toEqual({
       claude: [join(home, ".claude"), join(home, ".claude-work")],
-      codex: [join(home, ".codex"), join(dataDir, "providers", "relay"), join(dataDir, "providers", "chatgpt-plan", "abc", "codex")],
       pi: [join(home, ".pi", "agent")],
     });
   });

@@ -3,8 +3,6 @@ import { modelManifest } from "../model-manifest/manifest.ts";
 import { providerIconError } from "../../shared/provider-icon.ts";
 import { instanceSettingsSchema } from "../instance-settings.ts";
 import { persistableInstanceConfigs, saveConfig, withInstanceCli, type AppConfig } from "../config.ts";
-import { addEndpoint, addEndpointSchema, endpointBaseUrl, isAddedEndpoint, withEndpointUrls } from "../openai-compat-endpoints.ts";
-import { findOllama, probeOllama } from "../drivers/ollama.ts";
 import type { InstanceConfigMap, ModelSelection, ProviderInstance } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import { findCliCandidates, resetPathCache } from "../env-path.ts";
@@ -13,7 +11,7 @@ import { checkEngine, type EngineCheck } from "../engine-check.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import type { ProviderAuthSessions } from "../provider-auth-sessions.ts";
 import { providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
-import { isLoopbackHost, isProxied, ownerOrAdmin } from "../request-auth.ts";
+import { isLoopbackHost, isProxied } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
@@ -47,8 +45,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
     persistProviderInstance, configStatus, broadcast, testCliBinary, threadBusy,
     botForThread, activeGroupTurnForBot,
   } = deps;
-  const describeInstances = async () => hostedModels ? deps.describeInstances()
-    : withEndpointUrls(await deps.describeInstances(), cfg.instances ?? {});
+  const describeInstances = async () => deps.describeInstances();
   /** Bots, their backups and threads, the new-bot default, or a turn running on it: a provider in use can't go away. */
   const providerInUse = (instanceId: string): boolean => cfg.defaultModelSelection?.instanceId === instanceId || store.bots.some((bot) =>
     bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) => task.modelSelection?.instanceId === instanceId)) ||
@@ -93,13 +90,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       void modelManifest().refreshOnDemand().catch(() => {});
       return json(res, 200, { instances: await describeInstances() });
     }
-    if (method === "GET" && path === "/api/instances/ollama") {
-      if (hostedModels || !ownerOrAdmin(auth)) return json(res, 403, { error: "Only the owner of this server can look for Ollama." });
-      const asked = url.searchParams.get("url")?.trim();
-      const address = asked ? endpointBaseUrl(asked) : null;
-      if (asked && !address) return json(res, 400, { error: "Enter an http or https address, such as http://127.0.0.1:11434." });
-      return json(res, 200, { status: address ? await probeOllama(address) : await findOllama() });
-    }
     // How many engines could start a bot now, never which: the check an update makes that the new version still can
     // (deploy/update.sh), which a shared server lets a local caller without a session make (SERVICE_ALLOW).
     if (method === "GET" && path === "/api/health/engines") {
@@ -134,21 +124,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         cfg.instances = changed.instances;
         broadcast({ kind: "config", ...configStatus() });
         return json(res, 200, { instances: await describeInstances() });
-      } finally { providerConfigBusy.set(false); }
-    }
-
-    if (method === "POST" && path === "/api/instances/openai-compat") {
-      if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return json(res, 415, { error: "content-type must be application/json" });
-      const parsed = addEndpointSchema.safeParse(await readBody(req, 8192));
-      if (!parsed.success) return json(res, 400, { error: "Enter a display name (up to 80 characters), a base URL and an API key." });
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      providerConfigBusy.set(true);
-      try {
-        const instances = persistableInstanceConfigs(cfg);
-        const added = addEndpoint(instances, parsed.data);
-        if ("error" in added) return json(res, 400, { error: added.error });
-        await persistProviderInstance(added.instanceId, instances);
-        return json(res, 201, { instanceId: added.instanceId, instances: await describeInstances() });
       } finally { providerConfigBusy.set(false); }
     }
 
@@ -280,27 +255,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
           if (body.hidden) entry.hidden = true;
           else delete entry.hidden;
         }
-        if (body.tools !== undefined) {
-          if (entry.driver !== "openai-compat") {
-            return json(res, 400, { error: "The tools setting is available for OpenAI-compatible, Grok API, MiniMax API, Mistral API, Cerebras API, Groq API, Greenference API, ModelGo API and Meta API instances only." });
-          }
-          entry.config = { ...entry.config as Record<string, unknown>, tools: body.tools };
-        }
-        if (body.replyWaitMinutes !== undefined) {
-          if (entry.driver !== "openai-compat") return json(res, 400, { ...userError("serverError.instance.replyWaitUnsupported") });
-          const { replyWaitMinutes: _previous, ...rest } = (entry.config ?? {}) as Record<string, unknown>;
-          entry.config = body.replyWaitMinutes === null ? rest : { ...rest, replyWaitMinutes: body.replyWaitMinutes };
-        }
-        if (body.models !== undefined) {
-          if (!isAddedEndpoint(instanceId, entry)) return json(res, 400, { ...userError("serverError.instance.modelsUnsupported") });
-          const { managedModels: _previous, ...rest } = (entry.config ?? {}) as Record<string, unknown>;
-          const models = [...new Set(body.models)];
-          const defaultModel = cfg.defaultModelSelection?.instanceId === instanceId ? cfg.defaultModelSelection.model : undefined;
-          if (models.length && defaultModel && !models.includes(defaultModel)) {
-            return json(res, 409, { ...userError("serverError.instance.defaultModelRemoved", { model: defaultModel }) });
-          }
-          entry.config = models.length ? { ...rest, managedModels: models } : rest;
-        }
         if (body.displayName !== undefined) entry.displayName = body.displayName;
         if (body.configDir !== undefined) {
           entry.config = { ...entry.config as Record<string, unknown>, configDir: body.configDir };
@@ -313,28 +267,6 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       }
     }
 
-    if (method === "DELETE" && instancePatch) {
-      const instanceId = instancePatch[1];
-      if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      const instances = persistableInstanceConfigs(cfg);
-      if (!Object.hasOwn(instances, instanceId)) return json(res, 404, { error: "unknown instance" });
-      if (!isAddedEndpoint(instanceId, instances[instanceId])) {
-        return json(res, 400, { error: "Only custom endpoints can be removed here." });
-      }
-      if (providerInUse(instanceId)) {
-        return json(res, 409, { error: "Choose another account for the bots and default model using this account before removing it." });
-      }
-      providerConfigBusy.set(true);
-      providerInstancesChanging.add(instanceId);
-      try {
-        delete instances[instanceId];
-        await persistProviderInstance(instanceId, instances);
-        return json(res, 200, { instances: await describeInstances() });
-      } finally {
-        providerInstancesChanging.delete(instanceId);
-        providerConfigBusy.set(false);
-      }
-    }
     return PASS;
   };
 }

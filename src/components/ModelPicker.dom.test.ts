@@ -31,7 +31,7 @@ const { ModelPicker } = await import("./ModelPicker");
 
 type Option = InstanceInfo["models"]["options"][number];
 const claude = (options: Option[], authenticated = true): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
   snapshot: { state: "available", version: "2.1.300", authenticated },
   models: { default: options[0]!.id, options },
   capabilities: { effortLevels: ["low", "medium", "high"] },
@@ -265,7 +265,7 @@ describe("the full picker's search and the rows around it", () => {
 describe("an OpenCode model typed by hand", () => {
   const typed = "venice/deepseek-v4-1-flash-uncensored";
   const opencode: InstanceInfo = {
-    instanceId: "opencode", driverKind: "opencodeGo", displayName: "OpenCode", access: "subscription",
+    instanceId: "opencode", driverKind: "customAcp", displayName: "OpenCode", access: "subscription",
     snapshot: { state: "available", version: "1.19.4", authenticated: true },
     models: { default: "opencode/big-pickle", options: [
       { id: "opencode/big-pickle", label: "Zen · Big Pickle" }, { id: "venice/deepseek-v4-flash", label: "Venice · DeepSeek V4 Flash" },

@@ -34,7 +34,7 @@ const room = (messages: Message[]): Group => ({
 } as unknown as Group);
 const draw = (messages: Message[]) => renderToStaticMarkup(createElement(GroupView, { group: room(messages) }));
 const engine = (type: "turn.progress" | "turn.completed") => noteTurnEvent({
-  eventId: type, provider: "claudeAgent", threadId: "room-thread", createdAt: new Date(at).toISOString(), turnId: "t1",
+  eventId: type, provider: "customAcp", threadId: "room-thread", createdAt: new Date(at).toISOString(), turnId: "t1",
   ...(type === "turn.progress" ? { type, activity: "write", itemId: "w", file: "index.html", bytes: 3 * 1024 } : { type, ok: true }),
 } as never);
 

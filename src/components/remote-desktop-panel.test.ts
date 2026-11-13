@@ -6,7 +6,7 @@ import { CLOUD_COMPUTER_BUSY_ERROR } from "../../shared/computer-contention";
 
 describe("remote VPS preview", () => {
   it("runs the cloud computer on the bot's own engine, never on a swapped-in Boat runner", () => {
-    const plain = { instanceId: "plain", driverKind: "openai-compat", snapshot: { state: "available" }, capabilities: { computerMcp: false } } as InstanceInfo;
+    const plain = { instanceId: "plain", driverKind: "customAcp", snapshot: { state: "available" }, capabilities: { computerMcp: false } } as InstanceInfo;
     const tools = { ...plain, instanceId: "tools", driverKind: "claude", capabilities: { computerMcp: true } } as InstanceInfo;
     expect(boatCapableEngine([plain, tools], "plain")).toBeUndefined();
     expect(boatCapableEngine([plain, tools], "tools")).toBe(tools);

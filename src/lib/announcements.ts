@@ -102,7 +102,7 @@ export function announcementPlan(surface: AnnouncementSurface, view: CloudPlanVi
   return view.kind === "free" || view.kind === "signed-out" || view.kind === "removed" ? "none" : "cloud";
 }
 
-const PROVIDER_KEYS = ["anthropic", "openai", "openrouter", "openaiCompat", "xai", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "deepseek", "opencodeGo"] as const;
+const PROVIDER_KEYS = ["anthropic", "openai", "openrouter", "meta"] as const;
 
 export function announcementConditions(state: Pick<AppState, "config" | "bots" | "routines" | "routinesLoadState">): AnnouncementFacts["conditions"] {
   const config = state.config as Partial<Record<(typeof PROVIDER_KEYS)[number], { configured?: boolean }>> | null;

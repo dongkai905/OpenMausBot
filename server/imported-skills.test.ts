@@ -28,15 +28,14 @@ const HOME = join(DATA_DIR, "..");
 const skillMd = (name: string, body = "Follow the steps.") => `---\nname: ${name}\ndescription: Works with ${name}.\n---\n\n${body}\n`;
 const newBot = () => `bot-${randomUUID().slice(0, 8)}`;
 
-function input(name: string, options: { source?: "claudeCode" | "codex"; root?: string; files?: ImportedSkillInput["files"]; warnings?: string[]; description?: string } = {}): ImportedSkillInput {
-  const source = options.source ?? "claudeCode";
-  const root = options.root ?? join(HOME, source === "codex" ? ".codex" : ".claude", "skills");
+function input(name: string, options: { root?: string; files?: ImportedSkillInput["files"]; warnings?: string[]; description?: string } = {}): ImportedSkillInput {
+  const root = options.root ?? join(HOME, ".claude", "skills");
   return {
     name,
     skillMd: skillMd(name),
     files: options.files ?? [{ path: "scripts/run.sh", content: "echo run\n", executable: true }],
     entry: {
-      description: options.description ?? `Works with ${name}.`, source, root, origin: join(root, name), label: `~/${source}/${name}`,
+      description: options.description ?? `Works with ${name}.`, source: "customAcp", root, origin: join(root, name), label: `~/customAcp/${name}`,
       sha256: "0".repeat(64), warnings: options.warnings ?? [],
     },
   };
@@ -55,7 +54,7 @@ const target = (link: string) => resolve(readlinkSync(link).replace(/^\\\\\?\\/,
 
 describe("skills brought in from this computer", () => {
   it("reach a bot made after they came in exactly as the first: listing, index, /name and task folder links", () => {
-    expect(names(store([input("pdf"), input("review", { source: "codex" })]))).toEqual(["pdf", "review"]);
+    expect(names(store([input("pdf"), input("review", { root: join(HOME, ".codex", "skills") })]))).toEqual(["pdf", "review"]);
     for (const bot of [newBot(), newBot()]) {
       const skills = importedSkillsFor(bot, new Set());
       expect(names(skills)).toEqual(["pdf", "review"]);
@@ -119,26 +118,21 @@ describe("skills brought in from this computer", () => {
   });
 
   it("stays out of a turn whose engine loads the same folder itself, and only while the original is there", () => {
-    store([input("pdf"), input("review", { source: "codex" })]);
+    store([input("pdf"), input("review", { root: join(HOME, ".agents", "skills") })]);
     mkdirSync(join(HOME, ".claude", "skills", "pdf"), { recursive: true });
-    mkdirSync(join(HOME, ".codex", "skills", "review"), { recursive: true });
+    mkdirSync(join(HOME, ".agents", "skills", "review"), { recursive: true });
     const bot = newBot();
-    const claude = (claudeUserSkills: boolean, environment?: Record<string, string>) =>
-      names(importedSkillsFor(bot, new Set(), nativeSkillFolders({ driverKind: "claudeAgent", ...(environment ? { environment } : {}) }, { claudeUserSkills, home: HOME, env: {} })));
-    const codex = (config?: unknown, environment?: Record<string, string>) =>
-      names(importedSkillsFor(bot, new Set(), nativeSkillFolders({ driverKind: "codex", config, ...(environment ? { environment } : {}) }, { claudeUserSkills: true, home: HOME, env: {} })));
-    // "Also use my Claude Code skills" already hands Claude ~/.claude/skills: the copy would be a second pdf.
-    expect(claude(true)).toEqual(["review"]);
-    expect(claude(false)).toEqual(["pdf", "review"]);
-    expect(claude(false, { OMB_CLAUDE_INHERIT_USER_CONFIG: "1" })).toEqual(["review"]);
-    // Codex loads $CODEX_HOME/skills from the person's own home, linked into a ChatGPT-plan home too; a company home does not.
-    expect(codex()).toEqual(["pdf"]);
-    expect(codex({ authMode: "chatgpt-plan" })).toEqual(["pdf"]);
-    expect(codex(undefined, { CODEX_HOME: join(DATA_DIR, "providers", "company", "codex") })).toEqual(["pdf", "review"]);
-    expect(names(importedSkillsFor(bot, new Set(), nativeSkillFolders({ driverKind: "geminiAgent" }, { claudeUserSkills: true, home: HOME, env: {} })))).toEqual(["pdf", "review"]);
-    // Gone from ~/.claude/skills: Claude no longer has it, so the copy stays in.
+    const engine = (claudeUserSkills: boolean, environment?: Record<string, string>) =>
+      names(importedSkillsFor(bot, new Set(), nativeSkillFolders({ driverKind: "customAcp", ...(environment ? { environment } : {}) }, { claudeUserSkills, home: HOME, env: {} })));
+    // "Also use my Claude Code skills" already hands the engine ~/.claude/skills: the copy would be a second pdf.
+    expect(engine(true)).toEqual(["review"]);
+    expect(engine(false)).toEqual(["pdf", "review"]);
+    expect(engine(false, { OMB_CLAUDE_INHERIT_USER_CONFIG: "1" })).toEqual(["review"]);
+    // An engine that loads no folder of its own leaves every copy in.
+    expect(names(importedSkillsFor(bot, new Set(), nativeSkillFolders({ driverKind: "otherAcp" }, { claudeUserSkills: true, home: HOME, env: {} })))).toEqual(["pdf", "review"]);
+    // Gone from ~/.claude/skills: the engine no longer has it, so the copy stays in.
     rmSync(join(HOME, ".claude", "skills", "pdf"), { recursive: true });
-    expect(claude(true)).toEqual(["pdf", "review"]);
+    expect(engine(true)).toEqual(["pdf", "review"]);
   });
 
   it("keeps the links of a task folder to what the turn uses, and never touches a bot's own link or folder", () => {

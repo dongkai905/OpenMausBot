@@ -75,24 +75,23 @@ describe("Image generation settings", () => {
 
   it("names the backup when only the backup can run, and shows a key field for each chosen provider", async () => {
     const view = await mount({
-      configured: false, ready: true, xaiConfigured: true,
+      configured: false, ready: true, openrouterConfigured: true,
       primary: { provider: "gemini", model: "gemini-2.5-flash-image", configured: false },
-      fallback: { provider: "xai", model: "grok-imagine-image-2.0", configured: true },
+      fallback: { provider: "openrouter", model: "google/gemini-2.5-flash-image", configured: true },
     });
-    expect(view.textContent).toContain("Ready with the backup only · images are made with Grok (xAI)");
+    expect(view.textContent).toContain("Ready with the backup only · images are made with OpenRouter");
     expect(view.querySelector('input[aria-label="Gemini API key"]')).not.toBeNull();
-    expect(view.querySelector('input[aria-label="Grok (xAI) API key"]')).not.toBeNull();
     expect(view.textContent).toContain("also used");
   });
 
   it("offers every provider but the base as the backup, and None", async () => {
     const view = await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: null });
     const options = [...view.querySelectorAll<HTMLOptionElement>('select[aria-label="Backup provider"] option')].map((option) => option.value);
-    expect(options).toEqual(["", "xai", "gemini", "openrouter", "custom"]);
+    expect(options).toEqual(["", "gemini", "openrouter", "custom"]);
   });
 
   it("saves a chosen base, a cleared backup and the per-reply limit", async () => {
-    await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: { provider: "xai", model: "grok-imagine-image-2.0", configured: true } });
+    await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: { provider: "openrouter", model: "google/gemini-2.5-flash-image", configured: true } });
     await choose("Base provider", "openrouter");
     await choose("Backup provider", "");
     await choose("Images per reply", "2");
@@ -104,9 +103,9 @@ describe("Image generation settings", () => {
   });
 
   it("drops the backup when the base becomes the backup's provider, so no hidden backup is kept", async () => {
-    await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: { provider: "xai", model: "grok-imagine-image-2.0", configured: true } });
-    await choose("Base provider", "xai");
-    expect(sentPatches()).toEqual([["/api/config", { imageGen: { primary: { provider: "xai" }, fallback: null } }]]);
+    await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: { provider: "openrouter", model: "google/gemini-2.5-flash-image", configured: true } });
+    await choose("Base provider", "openrouter");
+    expect(sentPatches()).toEqual([["/api/config", { imageGen: { primary: { provider: "openrouter" }, fallback: null } }]]);
   });
 
   it("lists OpenRouter's image models from its catalog and saves the one picked", async () => {

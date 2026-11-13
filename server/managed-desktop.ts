@@ -55,7 +55,7 @@ export function legacyCompanyInstanceId(connection: Pick<ManagedDesktopConnectio
 const instanceSignature = (connection: ManagedDesktopConnection | null) =>
   signature(connection && (({ expiresAt: _expiresAt, suspended: _suspended, ...identity }) => identity)(connection));
 
-export function companyInstanceConfigs(connection: ManagedDesktopConnection, runtimeDirectory: string): InstanceConfigMap {
+export function companyInstanceConfigs(connection: ManagedDesktopConnection): InstanceConfigMap {
   const entries: InstanceConfigMap = {};
   for (const provider of connection.providers) {
     if (!provider.configured || !provider.models.length) continue;
@@ -113,10 +113,10 @@ export class ManagedDesktopProviders {
       this.ids.clear();
       if (revision !== this.revision || !connection || connection.expiresAt <= this.now()) { this.options.afterReplace?.([]); return; }
       // Outside portable workspace backups; scoped ids keep a new enrollment from inheriting another account's sessions.
-      const directory = this.ensureDirectory(["providers", "company"]);
+      this.ensureDirectory(["providers", "company"]);
       await this.migrateLegacyIds(connection);
-      const configs = companyInstanceConfigs(connection, directory);
-      for (const [id, entry] of Object.entries(configs)) {
+      const configs = companyInstanceConfigs(connection);
+      for (const id of Object.keys(configs)) {
         if (this.options.registry.entries().some(existing => existing.instanceId === id)) throw new Error("Company instance conflicts with an existing account.");
         this.ids.add(id); this.known.add(id);
       }

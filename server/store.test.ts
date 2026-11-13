@@ -2283,11 +2283,11 @@ describe("Store redacts bot-authored secrets on write", () => {
       role: "bot",
       kind: "secret",
       secret: {
-        target: "xaiApiKey",
-        label: "xAI API key",
+        target: "openaiApiKey",
+        label: "OpenAI API key",
         description: `The agent accidentally included ${key}`,
-        placeholder: "xai-…",
-        helpUrl: "https://console.x.ai/",
+        placeholder: "sk-…",
+        helpUrl: "https://platform.openai.com/api-keys",
         requestKey: "credential-request",
       },
     });

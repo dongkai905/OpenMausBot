@@ -13,7 +13,7 @@ export const imageGenConfigSchema = z.object({
   primary: imageSlotSchema.optional(),
   fallback: imageSlotSchema.optional(),
   maxPerTurn: z.number().int().min(1).max(10).optional(),
-  provider: z.enum(["openai", "xai", "custom"]).optional(),
+  provider: z.enum(["openai", "custom"]).optional(),
   key: z.string().optional(),
   geminiKey: z.string().optional(),
   customApiKey: z.string().optional(),
@@ -43,7 +43,7 @@ const imageKeysOnly = z.object({ key: z.string().optional(), geminiKey: z.string
 /** Every key `imageProviderKey` reads (importing it here would loop back through config.ts). */
 function storedImageKeys(disk: Record<string, unknown>): string[] {
   const image = imageKeysOnly.parse(disk.imageGen ?? {});
-  return [image.key, image.geminiKey, image.customApiKey, keyed.parse(disk.xai ?? {}).key, keyed.parse(disk.openrouter ?? {}).key]
+  return [image.key, image.geminiKey, image.customApiKey, keyed.parse(disk.openrouter ?? {}).key]
     .map((key) => key?.trim() ?? "").filter(Boolean);
 }
 

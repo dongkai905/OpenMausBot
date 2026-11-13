@@ -415,7 +415,7 @@ it("keeps the person's request on work handed on after a card answer, on the roo
   };
   const answer = async (cardId: string, outcome: "provided" | "dismiss") => {
     f.save();
-    if (outcome === "provided") await f.api("/api/config", { xai: { key: "xai-fixture-key" } }, "PUT");
+    if (outcome === "provided") await f.api("/api/config", { openai: { key: "openai-fixture-key" } }, "PUT");
     const response = await fetch(`${f.session.info.url}/api/bots/${f.chief.id}/secret-cards/${cardId}/${outcome}`, { method: "POST",
       headers: { "content-type": "application/json", origin: f.session.info.url }, body: JSON.stringify({ threadId: f.thread }) });
     expect(response.status, await response.clone().text()).toBeLessThan(300);
@@ -431,7 +431,7 @@ it("keeps the person's request on work handed on after a card answer, on the roo
     byPrompt: [{ promptIncludes: "OpenMausBot credential update", plan: f.delegate(key, [f.lead], brief) }],
   });
 
-  f.plan[f.chief.id] = ask("after-card", "CARD_ONE_BRIEF check the team", "xaiApiKey");
+  f.plan[f.chief.id] = ask("after-card", "CARD_ONE_BRIEF check the team", "openaiApiKey");
   await f.send("PERSON_CARD_ONE please tidy the team");
   const first = await card();
   await f.idle();

@@ -27,15 +27,15 @@ afterEach(() => {
 
 describe("the star on a model", () => {
   it("toggles in place, says which way it will go, and is remembered", () => {
-    flushSync(() => root.render(createElement(FavoriteStar, { instanceId: "openaiCompat", model: "qwen3:4b", name: "qwen3:4b" })));
+    flushSync(() => root.render(createElement(FavoriteStar, { instanceId: "local-server", model: "qwen3:4b", name: "qwen3:4b" })));
     const star = host.querySelector<HTMLButtonElement>("[data-model-favorite]")!;
     expect(star.getAttribute("aria-pressed")).toBe("false");
     expect(star.getAttribute("aria-label")).toBe("Add qwen3:4b to favorites");
     flushSync(() => star.click());
     expect(star.getAttribute("aria-pressed")).toBe("true");
     expect(star.getAttribute("aria-label")).toBe("Remove qwen3:4b from favorites");
-    expect(favoriteModels().has(favoriteKey("openaiCompat", "qwen3:4b"))).toBe(true);
-    expect(JSON.parse(localStorage.getItem("omb-favorite-models")!)).toEqual([favoriteKey("openaiCompat", "qwen3:4b")]);
+    expect(favoriteModels().has(favoriteKey("local-server", "qwen3:4b"))).toBe(true);
+    expect(JSON.parse(localStorage.getItem("omb-favorite-models")!)).toEqual([favoriteKey("local-server", "qwen3:4b")]);
     flushSync(() => star.click());
     expect(star.getAttribute("aria-pressed")).toBe("false");
   });
@@ -44,7 +44,7 @@ describe("the star on a model", () => {
     const picked: string[] = [];
     const row = (model: string) => createElement("div", { key: model, className: "group/model relative" },
       createElement("button", { type: "button", "data-menu-row": "", tabIndex: -1, onClick: () => picked.push(model) }, model),
-      createElement(FavoriteStar, { instanceId: "openaiCompat", model, name: model }));
+      createElement(FavoriteStar, { instanceId: "local-server", model, name: model }));
     flushSync(() => root.render(createElement("div", {
       role: "menu", tabIndex: -1, onKeyDown: (event: Parameters<typeof modelMenuKey>[0]) => modelMenuKey(event, { query: "", typed: { current: null }, close: () => {} }),
     }, row("a"), row("b"))));

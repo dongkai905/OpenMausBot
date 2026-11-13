@@ -71,12 +71,12 @@ const check = <Check size={15} className="shrink-0 text-accent" aria-hidden="tru
  * Simple mode names the levels as the bot panel does. */
 function approvalMenu(choice: ApprovalChoice, simple: boolean) {
   const trusted = choice.trustedModesAvailable ?? true;
-  const mode = shownApprovalMode(choice.driverKind, approvalModeFor({ approvalMode: choice.approvalMode, autoApprove: choice.autoApprove }));
+  const mode = shownApprovalMode(approvalModeFor({ approvalMode: choice.approvalMode, autoApprove: choice.autoApprove }));
   const all = approvalModeOptions();
   const shown = approvalModeOptionsFor(choice.driverKind).find((option) => option.mode === mode)
     ?? all.find((option) => option.mode === mode)
     ?? all[0];
-  const name = (option: typeof shown) => simple ? simpleApprovalName(option.mode, choice.driverKind) : option.label;
+  const name = (option: typeof shown) => simple ? simpleApprovalName(option.mode) : option.label;
   const current = simple ? { ...shown, label: name(shown), chip: name(shown) } : shown;
   const localOnly = approvalModeSelectionRequiresLocalDesktop(mode, trusted);
   return {

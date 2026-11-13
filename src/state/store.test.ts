@@ -145,7 +145,7 @@ describe("independent bot threads", () => {
     activeLeafId: "first-message",
     tasks: [
       { threadId: "first", title: "First", createdAt: 1, activity: "idle", busy: false, unread: false,
-        modelSelection: { instanceId: "codex", model: "thread-model", effort: "high" }, approvalMode: "auto", alwaysAllow: ["Read"] },
+        modelSelection: { instanceId: "agent-two", model: "thread-model", effort: "high" }, approvalMode: "auto", alwaysAllow: ["Read"] },
       { threadId: "second", title: "Second", createdAt: 2, activity: "waiting-on-you", busy: true, unread: true,
         modelSelection: { instanceId: "claude", model: "other-model" }, approvalMode: "ask", turnStartedAt: 5_000 },
     ],
@@ -164,7 +164,7 @@ describe("independent bot threads", () => {
   });
 
   it("edits only the pinned thread model and approval defaults", () => {
-    const modelSelection = { instanceId: "codex", model: "new-model" };
+    const modelSelection = { instanceId: "agent-two", model: "new-model" };
     const modeled = reducer(start(), { type: "setModel", botId: bot.id, threadId: "first", selection: modelSelection });
     const updated = reducer(modeled, { type: "updateTask", botId: bot.id, threadId: "first", patch: { approvalMode: "ask" } });
     expect(updated.bots[0]?.modelSelection).toEqual(bot.modelSelection);
@@ -407,7 +407,7 @@ describe("connector grants persistence", () => {
     notifications: true,
     color: "green" as const,
     unread: false,
-    modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" },
+    modelSelection: { instanceId: "agent-two", model: "gpt-5.6-sol" },
     approvalMode: "ask" as const,
   });
 
@@ -438,7 +438,7 @@ describe("trusted approval-mode persistence", () => {
     notifications: true,
     color: "green" as const,
     unread: false,
-    modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" },
+    modelSelection: { instanceId: "agent-two", model: "gpt-5.6-sol" },
     approvalMode,
   });
 
@@ -501,7 +501,7 @@ describe("trusted approval-mode persistence", () => {
     const setMode = vi.fn(async () => announcement("auto"));
     const current = { ...announcement("ask"), tasks: [
       { threadId: "main", title: "Main", createdAt: 1 },
-      { threadId: "codex-rules", title: "Rules", createdAt: 2, approvalMode: "custom" as const },
+      { threadId: "second-rules", title: "Rules", createdAt: 2, approvalMode: "custom" as const },
     ] };
     await persistBotUpdate("bot-1", { approvalMode: "auto", applyToAllThreads: true }, new AbortController().signal, request, { setMode }, current);
     expect(setMode).toHaveBeenCalledWith("bot-1", "auto", { acknowledgeLocalAuto: false, allThreads: true });
@@ -1042,7 +1042,7 @@ describe("config status frames", () => {
   it("keeps thread capacity and room timeout with the existing config fields", () => {
     expect(
       configStatusFromFrame({
-        xai: { configured: true },
+        meta: { configured: true },
         composio: { configured: true, mode: "managed" },
         box: { configured: false },
         vps: { configured: true, sshAlias: "homelab" },
@@ -1050,13 +1050,13 @@ describe("config status frames", () => {
         mcp: { callTimeoutMinutes: 30 },
         threads: { maxConcurrentPerBot: 10 },
         localVm: { mode: "per-bot", maxInstances: 3 },
-        opencodeGo: { configured: true },
+        openrouter: { configured: true },
         tts: { configured: true, ready: true, voice: "Ada" },
         profile: { name: "Ian", email: "ian@example.test" },
         features: { skillAuthoring: true },
       }),
     ).toEqual({
-      xai: { configured: true },
+      meta: { configured: true },
       composio: { configured: true, mode: "managed" },
       box: { configured: false },
       vps: { configured: true, sshAlias: "homelab" },
@@ -1064,7 +1064,7 @@ describe("config status frames", () => {
       mcp: { callTimeoutMinutes: 30 },
       threads: { maxConcurrentPerBot: 10 },
       localVm: { mode: "per-bot", maxInstances: 3 },
-      opencodeGo: { configured: true },
+      openrouter: { configured: true },
       tts: { configured: true, ready: true, voice: "Ada" },
       profile: { name: "Ian", email: "ian@example.test" },
       features: { skillAuthoring: true },
@@ -1397,7 +1397,7 @@ describe("cross-client bot creation", () => {
       notifications: true,
       color: "green",
       unread: false,
-      modelSelection: { instanceId: "codex", model: "default" },
+      modelSelection: { instanceId: "agent-two", model: "default" },
     } satisfies Omit<Bot, "messages">;
 
     const added = reducer(initialState, { type: "botPatched", bot: announced });
@@ -1523,7 +1523,7 @@ describe("canonical message races", () => {
       notifications: true,
       color: "green",
       unread: false,
-      modelSelection: { instanceId: "codex", model: "default" },
+      modelSelection: { instanceId: "agent-two", model: "default" },
       messages: [sent, reply],
       activeLeafId: reply.id,
     } satisfies Bot;
@@ -1546,7 +1546,7 @@ describe("computer destination announcements", () => {
     const bot: Bot = {
       id: "computer-bot", threadId: "computer-thread", name: "Ziggy", title: "", description: "",
       notifications: true, color: "green", unread: false,
-      modelSelection: { instanceId: "codex", model: "default" }, computer: "browser",
+      modelSelection: { instanceId: "agent-two", model: "default" }, computer: "browser",
       messages: [{ id: "message", role: "user", kind: "text", at: 1, text: "Keep this conversation" }],
     };
     const { computer: _oldComputer, ...announcement } = bot;
@@ -1564,7 +1564,7 @@ describe("VPS alias announcements", () => {
     const bot: Bot = {
       id: "vps-bot", threadId: "vps-thread", name: "Ziggy", title: "", description: "",
       notifications: true, color: "green", unread: false,
-      modelSelection: { instanceId: "codex", model: "default" }, vpsAlias: "alpha-vps",
+      modelSelection: { instanceId: "agent-two", model: "default" }, vpsAlias: "alpha-vps",
       messages: [{ id: "message", role: "user", kind: "text", at: 1, text: "Keep this conversation" }],
     };
     const { vpsAlias: _oldAlias, ...announcement } = bot;
@@ -1610,7 +1610,7 @@ describe("teammate wait announcements", () => {
   const waiting: Bot = {
     id: "wait-bot", threadId: "wait-thread", name: "Scooter", title: "", description: "",
     notifications: true, color: "green", unread: false,
-    modelSelection: { instanceId: "codex", model: "default" }, busy: true, activity: "working", waitingForTeammates: true,
+    modelSelection: { instanceId: "agent-two", model: "default" }, busy: true, activity: "working", waitingForTeammates: true,
     messages: [{ id: "message", role: "user", kind: "text", at: 1, text: "Keep this conversation" }],
   };
   it.each(["botPatched", "taskSwitched", "botPatchedSwitch"] as const)("clears the wait when a working frame reports settlement via %s", (kind) => {
@@ -1643,7 +1643,7 @@ describe("browser profile announcements", () => {
     const bot: Bot = {
       id: "browser-bot", threadId: "browser-thread", name: "Pepper", title: "", description: "",
       notifications: true, color: "green", unread: false,
-      modelSelection: { instanceId: "codex", model: "default" }, browserProfile: "old-profile",
+      modelSelection: { instanceId: "agent-two", model: "default" }, browserProfile: "old-profile",
       messages: [{ id: "message", role: "user", kind: "text", at: 1, text: "Keep this conversation" }],
     };
     const { messages, browserProfile: _oldProfile, ...announcement } = bot;
@@ -1659,7 +1659,7 @@ describe("phone grant announcements", () => {
   const granted: Bot = {
     id: "phone-bot", threadId: "phone-thread", name: "Pepper", title: "", description: "",
     notifications: true, color: "green", unread: false,
-    modelSelection: { instanceId: "codex", model: "default" }, phoneApps: { location: "read" },
+    modelSelection: { instanceId: "agent-two", model: "default" }, phoneApps: { location: "read" },
     messages: [{ id: "message", role: "user", kind: "text", at: 1, text: "Keep this conversation" }],
   };
   const { messages, phoneApps: _old, ...announcement } = granted;
@@ -1686,7 +1686,7 @@ describe("section Chiefs", () => {
     notifications: true,
     color: "green" as const,
     unread: false,
-    modelSelection: { instanceId: "codex", model: "default" },
+    modelSelection: { instanceId: "agent-two", model: "default" },
     section,
     chiefOfStaff,
   });
@@ -2597,30 +2597,26 @@ describe("live config frames", () => {
   it("keeps saved provider keys and the fleet flag after a config SSE frame lands after a save's own response", () => {
     const saved = reducer(initialState, {
       type: "configStatus",
-      config: configStatusFromFrame({ ...baseFrame, openaiCompat: { configured: true, url: "http://127.0.0.1:1/v1" } }),
+      config: configStatusFromFrame({ ...baseFrame, openrouter: { configured: true } }),
     });
     const frame: ConfigStatusFrame = {
       ...baseFrame,
       anthropic: { configured: true },
-      mistral: { configured: true },
-      groq: { configured: true },
+      openrouter: { configured: true },
       meta: { configured: true },
-      openaiCompat: { configured: true, url: "http://127.0.0.1:1/v1" },
       fleet: { available: true },
     };
     const state = reducer(saved, { type: "configStatus", config: configStatusFromFrame(frame) });
     expect(state.config).toMatchObject({
       anthropic: { configured: true },
-      mistral: { configured: true },
-      groq: { configured: true },
+      openrouter: { configured: true },
       meta: { configured: true },
-      openaiCompat: { configured: true, url: "http://127.0.0.1:1/v1" },
       fleet: { available: true },
     });
   });
 
   it("carries the organisation's read-only desktop policy through a config frame", () => {
-    const managedPolicy = { organizationName: "Fixture Agency", version: 2, companyModelsOnly: true, allowedEngines: ["codex"],
+    const managedPolicy = { organizationName: "Fixture Agency", version: 2, companyModelsOnly: true, allowedEngines: ["agent-two"],
       mcp: { allowCustom: false, allowlist: ["github"] }, computers: { thisComputer: false, localVm: true, box: true, vps: true }, remoteAccess: false };
     expect(configStatusFromFrame({ ...baseFrame, managedPolicy }).managedPolicy).toEqual(managedPolicy);
     expect(configStatusFromFrame({ ...baseFrame, managedPolicy: null }).managedPolicy).toBeNull();
@@ -2656,9 +2652,9 @@ describe("conversation model variant discoveries", () => {
   const owner: Bot = { id: "owner", threadId: "first", name: "Owner", title: "", description: "", notifications: true,
     color: "green", unread: false, modelSelection: selection, messages: [],
     tasks: ["first", "second"].map((threadId) => ({ threadId, title: threadId, createdAt: 1, modelSelection: selection })) };
-  const start = () => ({ ...initialState, bots: [owner], instances: [{ instanceId: "opencode", driverKind: "opencodeGo", displayName: "OpenCode",
+  const start = () => ({ ...initialState, bots: [owner], instances: [{ instanceId: "opencode", driverKind: "customAcp", displayName: "OpenCode",
     snapshot: { state: "available" as const }, capabilities: { modelVariants: true }, models: { default: selection.model, options: [] } }] });
-  const base = (threadId = "first", turnId = "turn-1") => ({ eventId: `${threadId}-${turnId}`, provider: "opencodeGo" as const,
+  const base = (threadId = "first", turnId = "turn-1") => ({ eventId: `${threadId}-${turnId}`, provider: "agent-three" as const,
     providerInstanceId: "opencode", threadId, turnId, createdAt: "2026-09-15T12:00:00Z" });
   const run = (state: AppState, event: RuntimeEvent) => reducer(state, { type: "modelVariantRuntime", event });
   const discovery = (variants: ModelVariantState = { options: [{ id: "minimal", label: "Minimal" }], currentValue: "minimal" }, threadId = "first", turnId = "turn-1"): RuntimeEvent =>

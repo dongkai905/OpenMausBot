@@ -10,12 +10,6 @@ export const CREDENTIAL_TARGETS = {
     placeholder: "Paste your Boat API key",
     helpUrl: "https://docs.boat.dev/api-keys",
   },
-  opencodeGoApiKey: {
-    label: "OpenCode API key",
-    description: "Used for OpenCode Zen and Go.",
-    placeholder: "Paste your OpenCode API key",
-    helpUrl: "https://opencode.ai/docs/providers/",
-  },
   ttsKey: {
     label: "ElevenLabs API key",
     description: "Enables text-to-speech voices in calls.",
@@ -72,11 +66,18 @@ export type LoginCredentialTargetId = "onePasswordToken";
 export type ConfigCredentialTargetId = Exclude<CredentialTargetId, LoginCredentialTargetId>;
 /** AI provider keys: refused where Admin manages the models, and typed only in the computer's own app or a desktop paired to it, never on a phone. */
 export const PROVIDER_CREDENTIAL_TARGETS = [
-  "deepseekApiKey",
+  "openaiApiKey", "openrouterApiKey",
 ] as const satisfies readonly ConfigCredentialTargetId[];
 export type DesktopCredentialSlot = ConfigCredentialTargetId;
 export type CredentialConfig = {
+  box?: { token?: string };
+  tts?: { key?: string; fishKey?: string; geminiKey?: string };
+  imageGen?: { key?: string; customApiKey?: string; geminiKey?: string };
   /** Not in the settings file: the server fills it from its login store. */
+  onePassword?: { connected?: boolean };
+  composio?: { apiKey?: string };
+  openai?: { key?: string };
+  openrouter?: { key?: string };
 };
 
 /** A secret OpenMausBot does not keep itself: the bot names it, and gets a one-use reference or a private file. */
@@ -126,11 +127,8 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
       return { composio: { apiKey: value } };
     case "openaiApiKey":
       return { openai: { key: value } };
-    // Settings' first Anthropic key leaves every bot signed in to Claude on its sign-in; a card appears only while none is set.
     case "openrouterApiKey":
       return { openrouter: { key: value } };
-    case "groqApiKey":
-      return { groq: { key: value } };
   }
 }
 
@@ -154,8 +152,6 @@ export function credentialIsConfigured(config: CredentialConfig, id: CredentialT
       return Boolean(config.openai?.key);
     case "openrouterApiKey":
       return Boolean(config.openrouter?.key);
-    case "groqApiKey":
-      return Boolean(config.groq?.key);
   }
 }
 

@@ -61,21 +61,21 @@ function nodes(value: ReactNode): Node[] {
 }
 
 const official = [{ id: "claude-opus-5-5", label: "Opus 5.5" }, { id: "claude-sonnet-5", label: "Sonnet 5" }];
-const qwen = { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true };
+const qwen = { id: "local::qwen3", label: "qwen3 (Ollama)", custom: true };
 const claudeInstall = {
   command: { darwin: "npm install -g @anthropic-ai/claude-code", linux: "npm install -g @anthropic-ai/claude-code", win32: "npm install -g @anthropic-ai/claude-code" },
   signInCommand: "claude",
 };
 const claude = (snapshot: InstanceInfo["snapshot"], options: InstanceInfo["models"]["options"] = official): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription", snapshot,
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription", snapshot,
   models: { default: "claude-opus-5-5", options }, install: claudeInstall,
   authentication: { method: "paste-code", signOut: true },
 });
 const signedOut = () => claude({ state: "available", version: "2.1.300", authenticated: false });
 const signedIn = () => claude({ state: "available", version: "2.1.300", authenticated: true });
 const notFound = () => claude({ state: "unavailable", reason: "`claude` CLI not found" });
-const codex: InstanceInfo = {
-  instanceId: "codex", driverKind: "codex", displayName: "Codex", access: "subscription",
+const second: InstanceInfo = {
+  instanceId: "agent-two", driverKind: "customAcp", displayName: "Codex", access: "subscription",
   snapshot: { state: "available", version: "1.0.0", authenticated: true },
   models: { default: "gpt-5.6", options: [{ id: "gpt-5.6", label: "GPT-5.6" }] },
 };
@@ -126,24 +126,24 @@ afterEach(() => vi.useRealTimers());
 
 describe("ModelPicker with a signed-out or missing Claude", () => {
   it("keeps an empty ChatGPT plan catalog on the cloud rail so sign-in is reachable", () => {
-    const plan: InstanceInfo = { ...codex, instanceId: "chatgpt", displayName: "ChatGPT plan", snapshot: { state: "available", authenticated: false, chatgptPlan: true }, models: { default: "", options: [] }, authentication: { method: "browser-pkce" }, install: { signInCommand: "codex login" } };
-    fixture.instances = [codex, plan];
-    const forBot = bot("codex", "gpt-5.6");
+    const plan: InstanceInfo = { ...second, instanceId: "chatgpt", displayName: "ChatGPT plan", snapshot: { state: "available", authenticated: false, chatgptPlan: true }, models: { default: "", options: [] }, authentication: { method: "browser-pkce" }, install: { signInCommand: "second login" } };
+    fixture.instances = [second, plan];
+    const forBot = bot("agent-two", "gpt-5.6");
     const opened = open(forBot);
     expect(rail(opened)!.props.instances.map((instance) => instance.instanceId)).toContain("chatgpt");
     rail(opened)!.props.onSelect(plan);
     const html = menu(render(forBot).html);
     expect(html).toContain("Continue with ChatGPT");
     expect(html).toContain("Available models appear after");
-    expect(html).not.toContain("codex login");
+    expect(html).not.toContain("second login");
     expect(html).not.toContain("Local models will appear");
   });
 
   it("keeps a signed-out Claude on the rail and shows its sign-in card instead of pickable cloud models", () => {
-    fixture.instances = [codex, signedOut()];
-    const onCodex = bot("codex", "gpt-5.6");
+    fixture.instances = [second, signedOut()];
+    const onCodex = bot("agent-two", "gpt-5.6");
     const opened = open(onCodex);
-    expect(rail(opened)!.props.instances.map((instance) => instance.instanceId)).toEqual(["codex", "claude"]);
+    expect(rail(opened)!.props.instances.map((instance) => instance.instanceId)).toEqual(["agent-two", "claude"]);
     expect(opened.html).toContain('aria-label="Claude"');
 
     (rail(opened)!.props.onSelect as (instance: InstanceInfo) => void)(fixture.instances[1]);
@@ -179,7 +179,7 @@ describe("ModelPicker with a signed-out or missing Claude", () => {
   });
 
   it("keeps the bot's own Claude with its install card when the CLI is not found", () => {
-    fixture.instances = [codex, notFound()];
+    fixture.instances = [second, notFound()];
     const html = open(bot("claude", "claude-opus-5-5")).html;
     expect(html).toContain('aria-label="Claude"');
     expect(html).toContain("Set up Claude");
@@ -189,9 +189,9 @@ describe("ModelPicker with a signed-out or missing Claude", () => {
   });
 
   it("leaves a Claude that is not found and not in use in Settings", () => {
-    fixture.instances = [codex, notFound()];
-    const opened = open(bot("codex", "gpt-5.6"));
-    expect(rail(opened)!.props.instances.map((instance) => instance.instanceId)).toEqual(["codex"]);
+    fixture.instances = [second, notFound()];
+    const opened = open(bot("agent-two", "gpt-5.6"));
+    expect(rail(opened)!.props.instances.map((instance) => instance.instanceId)).toEqual(["agent-two"]);
     expect(opened.html).not.toContain('aria-label="Claude"');
     expect(opened.html).toContain("Model providers and accounts");
   });
@@ -199,8 +199,8 @@ describe("ModelPicker with a signed-out or missing Claude", () => {
 
 describe("the way into API keys", () => {
   it("opens Settings on the API keys section from the picker footer", () => {
-    fixture.instances = [codex];
-    const opened = open(bot("codex", "gpt-5.6"));
+    fixture.instances = [second];
+    const opened = open(bot("agent-two", "gpt-5.6"));
     const entry = opened.nodes.find((node) => node.props["data-model-add-api-keys"]);
     expect(opened.html).toContain("Add API keys");
     (entry!.props.onClick as () => void)();
@@ -209,19 +209,19 @@ describe("the way into API keys", () => {
 
   it("says the shortcut changes keys too once a key is saved", () => {
     const openai: InstanceInfo = {
-      instanceId: "openai", driverKind: "openai-compat", displayName: "OpenAI", access: "api",
+      instanceId: "openai", driverKind: "customAcp", displayName: "OpenAI", access: "api",
       snapshot: { state: "available", authenticated: true, version: null },
       models: { default: "gpt-5", options: [{ id: "gpt-5", label: "GPT-5" }] },
     };
-    fixture.instances = [codex, openai];
-    const opened = open(bot("codex", "gpt-5.6"));
+    fixture.instances = [second, openai];
+    const opened = open(bot("agent-two", "gpt-5.6"));
     expect(opened.html).toContain("Add or change API keys");
     expect(opened.html).not.toContain(">Add API keys<");
   });
 
   it("ends the rail's API keys group with a way to add one", () => {
-    fixture.instances = [codex];
-    const opened = open(bot("codex", "gpt-5.6"));
+    fixture.instances = [second];
+    const opened = open(bot("agent-two", "gpt-5.6"));
     expect(opened.html).toContain(">API keys<");
     const add = rail(opened)!.props as { onAddApiKeys?: () => void };
     add.onAddApiKeys!();
@@ -286,8 +286,8 @@ describe("the way into local models", () => {
     expect(offersLocalModels(signedOut(), 0)).toBe(true);
     expect(offersLocalModels(notFound(), 0)).toBe(false);
     expect(offersLocalModels({ ...signedIn(), policy: { organizationName: "Fixture", reason: "Not allowed" } }, 0)).toBe(false);
-    expect(offersLocalModels(codex, 0)).toBe(false);
-    expect(offersLocalModels(codex, 2)).toBe(true);
+    expect(offersLocalModels(second, 0)).toBe(false);
+    expect(offersLocalModels(second, 2)).toBe(true);
     expect(offersLocalModels(undefined, 0)).toBe(false);
   });
 

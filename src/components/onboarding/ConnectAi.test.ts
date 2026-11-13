@@ -60,7 +60,7 @@ beforeEach(() => {
   setLocale("en");
   f.check = () => Promise.resolve({ ok: true });
   f.checks = [];
-  f.instances = [engine("grok", "grokAgent", "Grok", false), engine("claude", "claudeAgent", "Claude", false), engine("codex", "codex", "Codex", false)];
+  f.instances = [engine("grok", "customAcp", "Grok", false), engine("claude", "customAcp", "Claude", false), engine("agent-two", "customAcp", "Codex", false)];
   f.dispatch.mockReset(); f.config = {}; f.brand = "default"; f.opened = [];
   vi.mocked(track).mockClear();
   f.row = null;
@@ -110,12 +110,12 @@ describe("connecting an AI on the first screen", () => {
     const signsIn = (instance: InstanceInfo, method?: "paste-code" | "device-code"): InstanceInfo =>
       ({ ...instance, snapshot: { state: "available", authenticated: false }, ...(method ? { authentication: { method } } : {}) });
     f.instances = [
-      signsIn(engine("claude", "claudeAgent", "Claude", false), "paste-code"),
-      signsIn(engine("grok", "grokAgent", "Grok", false), "device-code"),
-      signsIn(engine("kimi", "kimiAgent", "Kimi", false)),
-      engine("codex", "codex", "Codex", false),
-      { ...engine("droid", "droidAgent", "Droid", false), install: { docsUrl: "https://example.test", server: { package: "droid" } } },
-      { ...engine("local", "openai-compat", "Local models", false), access: "custom" },
+      signsIn(engine("claude", "customAcp", "Claude", false), "paste-code"),
+      signsIn(engine("grok", "customAcp", "Grok", false), "device-code"),
+      signsIn(engine("kimi", "customAcp", "Kimi", false)),
+      engine("agent-two", "customAcp", "Codex", false),
+      { ...engine("droid", "agent-five", "Droid", false), install: { docsUrl: "https://example.test", server: { package: "droid" } } },
+      { ...engine("local", "customAcp", "Local models", false), access: "custom" },
     ];
     const setup = (id: string) => host.querySelector(`[data-engine-setup="${id}"]`);
     const plain = (name: string) => `Use the ${name} account you already have. You sign in on their own website, so your password stays with them.`;
@@ -130,7 +130,7 @@ describe("connecting an AI on the first screen", () => {
     expect(setup("grok")?.getAttribute("data-description")).toBe(plain("Grok"));
     await openRow("Droid");
     expect(setup("droid")?.getAttribute("data-description"), "the app installs it, then the sign-in follows").toBe(plain("Droid"));
-    for (const [id, name] of [["kimi", "Kimi"], ["codex", "Codex"]]) {
+    for (const [id, name] of [["kimi", "Kimi"], ["agent-two", "Codex"]]) {
       await openRow(name);
       expect(setup(id)?.hasAttribute("data-description"), `${name} is finished in Terminal: its setup keeps its own instructions`).toBe(false);
     }
@@ -140,7 +140,7 @@ describe("connecting an AI on the first screen", () => {
   });
 
   it("says which AI is connected once one is, and recommends nothing more", async () => {
-    f.instances = [engine("claude", "claudeAgent", "Claude", true), engine("codex", "codex", "Codex", false)];
+    f.instances = [engine("claude", "customAcp", "Claude", true), engine("agent-two", "customAcp", "Codex", false)];
     await show();
     expect(host.querySelector("[data-ai-connected]")?.textContent).toContain("Claude");
     expect(host.querySelector("[data-ai-recommended]")).toBeNull();
@@ -150,7 +150,7 @@ describe("connecting an AI on the first screen", () => {
   it("says Connected only after the AI answered a test message, and plainly while it checks", async () => {
     let answer!: (value: object) => void;
     f.check = () => new Promise((resolve) => { answer = resolve; });
-    f.instances = [engine("grok", "grokAgent", "Grok", true), engine("claude", "claudeAgent", "Claude", true)];
+    f.instances = [engine("grok", "customAcp", "Grok", true), engine("claude", "customAcp", "Claude", true)];
     await show();
     expect(f.checks).toEqual(["/api/instances/claude/check"]);
     expect(host.querySelector("[data-ai-connected]")).toBeNull();
@@ -162,16 +162,16 @@ describe("connecting an AI on the first screen", () => {
 
   it("says a signed-in AI didn't answer, tries the next one, and keeps every other way open", async () => {
     f.check = () => Promise.resolve({ ok: false, error: "Claude didn't answer within 90 seconds." });
-    f.instances = [engine("claude", "claudeAgent", "Claude", true), engine("codex", "codex", "Codex", false), engine("kimi", "kimiAgent", "Kimi", false)];
+    f.instances = [engine("claude", "customAcp", "Claude", true), engine("agent-two", "customAcp", "Codex", false), engine("kimi", "customAcp", "Kimi", false)];
     await show();
     expect(host.querySelector("[data-ai-silent] [data-ai-reason]")?.textContent).toBe("Claude didn't answer within 90 seconds.");
     expect(host.querySelector("[data-ai-silent]")?.textContent).toContain("Or connect another AI below.");
     expect(host.querySelector("[data-ai-connected]")).toBeNull();
-    expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("codex");
+    expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("agent-two");
     await otherWays();
     expect(text()).toContain("Kimi");
     // The next ready AI gets its own test.
-    f.instances = [...f.instances, engine("grok", "grokAgent", "Grok", true)];
+    f.instances = [...f.instances, engine("grok", "customAcp", "Grok", true)];
     f.check = () => Promise.resolve({ ok: true });
     await show();
     expect(f.checks).toEqual(["/api/instances/claude/check", "/api/instances/grok/check"]);
@@ -180,7 +180,7 @@ describe("connecting an AI on the first screen", () => {
 
   it("says the plain reason a check gave, and Check again sends a new test message", async () => {
     f.check = () => Promise.resolve({ ok: false, error: "Claude isn't signed in on this computer anymore. Sign in again, then check again." });
-    f.instances = [engine("claude", "claudeAgent", "Claude", true), engine("codex", "codex", "Codex", false)];
+    f.instances = [engine("claude", "customAcp", "Claude", true), engine("agent-two", "customAcp", "Codex", false)];
     await show();
     expect(host.querySelector("[data-ai-reason]")?.textContent).toBe("Claude isn't signed in on this computer anymore. Sign in again, then check again.");
     expect(text()).not.toContain("is signed in but didn't answer");
@@ -195,20 +195,20 @@ describe("connecting an AI on the first screen", () => {
   });
 
   it("shows what the server's own test found, without sending another", async () => {
-    f.instances = [{ ...engine("claude", "claudeAgent", "Claude", true), aiTest: "failed", aiTestError: "Your Claude usage limit has been reached." },
-      engine("codex", "codex", "Codex", false)];
+    f.instances = [{ ...engine("claude", "customAcp", "Claude", true), aiTest: "failed", aiTestError: "Your Claude usage limit has been reached." },
+      engine("agent-two", "customAcp", "Codex", false)];
     await show();
     expect(f.checks).toEqual([]);
     expect(host.querySelector("[data-ai-reason]")?.textContent).toBe("Your Claude usage limit has been reached.");
     // With no reason given, the plain line.
-    f.instances = [{ ...engine("claude", "claudeAgent", "Claude", true), aiTest: "failed" }];
+    f.instances = [{ ...engine("claude", "customAcp", "Claude", true), aiTest: "failed" }];
     await show();
     expect(host.querySelector("[data-ai-reason]")?.textContent).toBe("Claude is signed in but didn't answer. Try another way.");
   });
 
   it("asks for the person's own AI when only OpenCode's free model works, and says the free model is a backup", async () => {
-    const backup: InstanceInfo = { ...engine("opencodeGo", "opencodeGo", "OpenCode", true), snapshot: { state: "available", authenticated: true, freeFallback: true } };
-    f.instances = [backup, engine("claude", "claudeAgent", "Claude", false)];
+    const backup: InstanceInfo = { ...engine("agent-three", "customAcp", "OpenCode", true), snapshot: { state: "available", authenticated: true, freeFallback: true } };
+    f.instances = [backup, engine("claude", "customAcp", "Claude", false)];
     await show();
     expect(f.checks).toEqual([]);
     expect(host.querySelector("[data-ai-connected]")).toBeNull();
@@ -244,40 +244,5 @@ describe("connecting an AI on the first screen", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
     await act(async () => { dialog.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
     expect(onClose, "a click inside stays").toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("the ModelGo option", () => {
-  const URL_EXACT = "https://modelgo.ai/?utm_source=openmausbot&utm_medium=sponsorship&utm_content=app&campaign_id=openmausbot&ad_group_id=app";
-  const option = () => host.querySelector("[data-modelgo-option]");
-  const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
-  const provider = (ready = false) => engine("modelgo", "modelgo", "ModelGo (API)", ready);
-
-  it("sits among the other ways, labelled a sponsor, and its link opens exactly the sponsor's address", async () => {
-    f.instances.push(provider());
-    await show();
-    expect(option()?.textContent).toContain("ModelGo"); expect(option()?.textContent).toContain("Sponsor");
-    expect(option()?.textContent).toContain("One API key, every model.");
-    expect(host.querySelectorAll("[data-modelgo-option]")).toHaveLength(1);
-    expect(events()).toEqual([{ action: "shown", place: "onboarding" }]);
-    const link = [...option()!.querySelectorAll("button")].find(button => button.textContent?.includes("Get a key"))!;
-    await act(async () => { link.click(); });
-    expect(f.opened).toEqual([URL_EXACT]);
-    expect(events().at(-1)).toEqual({ action: "get_key", place: "onboarding" });
-  });
-
-  it("opens to its key field, and counts that as starting to add a key", async () => {
-    f.instances.push(provider());
-    await show();
-    await act(async () => { option()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(); });
-    expect(option()!.querySelector('[data-engine-setup="modelgo"]')).toBeTruthy();
-    expect(events().at(-1)).toEqual({ action: "add_key", place: "onboarding" });
-  });
-
-  it("is not added on a white-label build, a desktop whose organization refuses it, or a hosted workspace; nor once connected", async () => {
-    f.brand = "file"; await show(); expect(option()).toBeNull();
-    f.brand = "default"; f.config = { managedPolicy: { companyModelsOnly: false, allowedEngines: ["codex"] } }; await show(); expect(option()).toBeNull();
-    f.config = {}; await show({ hosted: true }); expect(option()).toBeNull();
-    f.instances.push(provider(true)); await show(); expect(option()).toBeNull();
   });
 });

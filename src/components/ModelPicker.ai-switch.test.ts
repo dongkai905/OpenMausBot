@@ -30,16 +30,16 @@ const { resetAiSwitch, requestAiSwitch } = await import("@/lib/ai-switch");
 
 const available = { state: "available", version: "1.0.0", authenticated: true } as const;
 const opencode = {
-  instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", access: "subscription", snapshot: available,
+  instanceId: "agent-three", driverKind: "customAcp", displayName: "OpenCode", access: "subscription", snapshot: available,
   models: { default: "free", options: [{ id: "free", label: "Free model" }] },
 } as unknown as InstanceInfo;
-const codex = {
-  instanceId: "codex", driverKind: "codex", displayName: "Codex", access: "subscription", snapshot: available,
+const second = {
+  instanceId: "agent-two", driverKind: "customAcp", displayName: "Codex", access: "subscription", snapshot: available,
   models: { default: "gpt-5.6", options: [{ id: "gpt-5.6", label: "GPT-5.6" }] },
 } as unknown as InstanceInfo;
 const busyBot = {
   id: "maus", threadId: "thread-1", name: "Maus", title: "", description: "", notifications: true, color: "green", unread: false,
-  busy: true, modelSelection: { instanceId: "opencodeGo", model: "free" }, messages: [],
+  busy: true, modelSelection: { instanceId: "agent-three", model: "free" }, messages: [],
 } as unknown as Bot;
 
 let host: HTMLDivElement;
@@ -53,7 +53,7 @@ beforeEach(() => {
   api.mockReset();
   api.mockResolvedValue({ ok: true });
   fixture.dispatch = vi.fn();
-  fixture.instances = [opencode, codex];
+  fixture.instances = [opencode, second];
   fixture.refreshInstances = () => Promise.resolve();
   fixture.refreshModels = () => Promise.resolve();
   host = document.createElement("div");
@@ -87,7 +87,7 @@ describe("the header model chip and Switch AI", () => {
 
   it("opens the bot panel's picker for Switch AI in Simple mode, where the panel's own Thinking row is the only effort control", () => {
     fixture.advanced = false;
-    fixture.instances = [{ ...opencode, capabilities: { effortLevels: ["low", "high"] } }, codex];
+    fixture.instances = [{ ...opencode, capabilities: { effortLevels: ["low", "high"] } }, second];
     act(() => root.render(createElement(ModelPicker, { bot: busyBot, threadId: "thread-1", contained: true })));
     act(() => requestAiSwitch({ botId: "maus", threadId: "thread-1", turnId: "turn-1", place: "panel" }));
     expect(document.querySelector("[data-model-picker-content]")).not.toBeNull();
@@ -96,7 +96,7 @@ describe("the header model chip and Switch AI", () => {
 
   it("shows no thinking-level buttons in the chat's menu while the turn runs: the server refuses them until it ends", () => {
     fixture.advanced = false;
-    fixture.instances = [{ ...opencode, capabilities: { effortLevels: ["low", "high"] } }, codex];
+    fixture.instances = [{ ...opencode, capabilities: { effortLevels: ["low", "high"] } }, second];
     const show = (bot: Bot) => act(() => root.render(createElement(ModelPicker, { bot, threadId: "thread-1" })));
     show(busyBot);
     act(() => requestAiSwitch({ botId: "maus", threadId: "thread-1", turnId: "turn-1", place: "header" }));
@@ -130,14 +130,14 @@ describe("a picker that opens before its engine has listed its models", () => {
   // Engines read their model lists lazily, so a fresh start can hand the picker an engine with none listed yet.
   const sonnet = { id: "claude-sonnet-5", label: "Claude Sonnet 5" };
   const claude = (options: Array<{ id: string; label: string; custom?: boolean }>) => ({
-    instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+    instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
     snapshot: { state: "available", version: "2.1.300", authenticated: true }, models: { default: "claude-sonnet-5", options },
   }) as unknown as InstanceInfo;
   const onClaude = { ...busyBot, modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } } as Bot;
   const text = () => document.querySelector("[data-model-picker-content]")?.textContent ?? "";
   let arrive: () => void;
   const readList = (listed: Array<{ id: string; label: string; custom?: boolean }>) => {
-    const read = new Promise<void>((resolve) => { arrive = () => { fixture.instances = [claude(listed), codex]; resolve(); }; });
+    const read = new Promise<void>((resolve) => { arrive = () => { fixture.instances = [claude(listed), second]; resolve(); }; });
     fixture.refreshInstances = vi.fn(() => read);
     fixture.refreshModels = vi.fn(() => read);
   };
@@ -149,7 +149,7 @@ describe("a picker that opens before its engine has listed its models", () => {
       act(() => trigger().click());
     }],
   ])("opened by %s, says it is loading, then lands on the engine's own models when they arrive", async (_by, openPicker) => {
-    fixture.instances = [claude([]), codex];
+    fixture.instances = [claude([]), second];
     readList([sonnet]);
     act(() => root.render(createElement(ModelPicker, { bot: onClaude, threadId: "thread-1" })));
     openPicker();
@@ -163,7 +163,7 @@ describe("a picker that opens before its engine has listed its models", () => {
   });
 
   it("offers local models once the read finds none of the engine's own", async () => {
-    fixture.instances = [claude([]), codex];
+    fixture.instances = [claude([]), second];
     readList([]);
     act(() => root.render(createElement(ModelPicker, { bot: onClaude, threadId: "thread-1" })));
     act(() => requestAiSwitch({ botId: "maus", threadId: "thread-1", turnId: "turn-1", place: "header" }));
@@ -173,7 +173,7 @@ describe("a picker that opens before its engine has listed its models", () => {
   });
 
   it("opens Switch AI on the bot's own engine, not the one the picker was last left on", () => {
-    fixture.instances = [claude([sonnet]), codex];
+    fixture.instances = [claude([sonnet]), second];
     act(() => root.render(createElement(ModelPicker, { bot: { ...onClaude, busy: false }, threadId: "thread-1" })));
     act(() => trigger().click());
     act(() => buttonNamed("OpenAI")!.click());

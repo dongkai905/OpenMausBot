@@ -14,11 +14,10 @@ export interface ToolSchemaProfile {
   measureInlined: boolean;
 }
 
+/** The limit every provider the server talks to is held to for one tool's parameters: 12 KB, and a depth of 30. A
+ * provider that refuses a schema past its own size refuses the whole request, so every tool list is fitted under it. */
 const PROFILES: Record<ToolSchemaProfileId, ToolSchemaProfile> = {
-  // Moonshot refuses the whole request when one tool's `function.parameters`, as Go's encoding/json writes it, passes an
-  // undocumented size (about 13.7 KB accepted, 15 KB refused): https://github.com/MoonshotAI/kimi-code/issues/4231,
-  // https://github.com/morluto/rea/issues/3654. Depth 30 is walle's default (https://github.com/MoonshotAI/walle/blob/main/conf.go).
-  // Kimi Code inlines every local $ref first (normalizeKimiToolSchema in MoonshotAI/kimi-code packages/kosong).
+  generic: { id: "generic", provider: "the provider", maxSchemaBytes: 12_000, maxDepth: 30, measureInlined: true },
 };
 
 export const TOOL_SCHEMA_PROFILE_ENV = "OMB_TOOL_SCHEMA_PROFILE";
@@ -37,11 +36,10 @@ function hostOf(url: string | undefined): string {
 
 const OPENROUTER_HOST = /(?:^|\.)openrouter\.ai$/;
 
-/** Kimi Code always reaches Moonshot. Any other engine does when its endpoint is Moonshot's own, or when OpenRouter may
- * route one of Moonshot's models to Moonshot's endpoint. */
+/** A model reached through OpenRouter may be served by any provider, so its tool schemas are fitted to the generic limit. */
 export function toolSchemaProfileFor(target: { engine?: string; url?: string; model?: string }): ToolSchemaProfile | undefined {
   const host = hostOf(target.url);
-  if (OPENROUTER_HOST.test(host) && /^moonshotai\//i.test(target.model ?? "")) return PROFILES.moonshot;
+  if (OPENROUTER_HOST.test(host) && target.model) return PROFILES.generic;
   return undefined;
 }
 

@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { instanceConfigs, type AppConfig } from "../config.ts";
+import type { AppConfig } from "../config.ts";
 import type { ProviderAuthenticationStart, ProviderAuthenticationStatus } from "../contracts.ts";
 import { ENGINE_LIST_REUSE_MS, ProviderRegistry } from "../harness/registry.ts";
 import { json, readBody } from "../harness/http.ts";
@@ -299,7 +299,6 @@ describe("a server's reply wait", () => {
     });
     await call("PATCH", "/api/instances/openaiCompat", { replyWaitMinutes: 30 });
     expect(persisted.at(-1)!.openaiCompat).toEqual({ driver: "openai-compat", config: { replyWaitMinutes: 30 } });
-    expect(instanceConfigs(cfg as unknown as AppConfig).openaiCompat!.config).toMatchObject({ url: "http://127.0.0.1:11434/v1", replyWaitMinutes: 30 });
   });
 });
 
@@ -326,35 +325,5 @@ describe("hiding a provider", () => {
     await call("PATCH", "/api/instances/hermes", { hidden: false });
     expect(persisted.at(-1)!.hermes).not.toHaveProperty("hidden");
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
-  });
-});
-
-
-describe("looking for Ollama", () => {
-  it("answers what one address said, and refuses an address that is not one", async () => {
-    const ollama = createServer((request, response) => {
-      response.setHeader("content-type", "application/json");
-      if (request.url === "/api/tags") return response.end(JSON.stringify({ models: [{ name: "qwen3:4b", size: 2_500_000_000, details: { parameter_size: "4.0B" } }] }));
-      if (request.url === "/api/version") return response.end(JSON.stringify({ version: "0.12.6" }));
-      response.statusCode = 404;
-      response.end("{}");
-    });
-    servers.push(ollama);
-    await new Promise<void>((ready) => ollama.listen(0, "127.0.0.1", ready));
-    const address = `http://127.0.0.1:${(ollama.address() as AddressInfo).port}`;
-    const { call, base } = await serve();
-    expect(await call("GET", `/api/instances/ollama?url=${encodeURIComponent(`${address}/v1`)}`)).toEqual({
-      status: { state: "ready", url: address, version: "0.12.6", models: [{ name: "qwen3:4b", bytes: 2_500_000_000, parameters: "4.0B" }] },
-    });
-    const refused = await fetch(`${base}/api/instances/ollama?url=${encodeURIComponent("ftp://127.0.0.1:11434")}`);
-    expect(refused.status).toBe(400);
-    expect(await refused.json()).toEqual({ error: "Enter an http or https address, such as http://127.0.0.1:11434." });
-  });
-
-  it("is only for the owner: a shared server's bot shell or a hosted workspace can't make this server ask an address", async () => {
-    const shell = await serve({}, { kind: "loopback", scopes: ["admin"], trust: "service" });
-    expect((await fetch(`${shell.base}/api/instances/ollama?url=${encodeURIComponent("http://127.0.0.1:9")}`)).status).toBe(403);
-    const hosted = await serve({ hostedModels: true });
-    expect((await fetch(`${hosted.base}/api/instances/ollama`)).status).toBe(403);
   });
 });

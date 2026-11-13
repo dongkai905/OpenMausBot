@@ -18,7 +18,7 @@ vi.mock("@/state/store", async (importOriginal) => {
         ...original.initialState,
         config: { ...original.initialState.config, features: { browser: true }, browserEngine: { kind: "engine" } },
         instances: [{
-          instanceId: "test", driverKind: "grokAgent", displayName: "Grok", snapshot: { state: "available" },
+          instanceId: "test", driverKind: "customAcp", displayName: "Grok", snapshot: { state: "available" },
           capabilities: { computerMcp: true, browserMcp: true },
         } as InstanceInfo],
       },

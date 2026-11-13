@@ -57,15 +57,14 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
   const slackUrl = useSlackManagementUrl(bot.id);
   const choosesVisibility = useChoosesVisibility();
   const [jobDraft, setJobDraft] = useState<string | null>(null);
-  const { patch, approvalMode, engine } = derived;
+  const { patch, approvalMode } = derived;
   const name = bot.name;
   const commitJob = () => {
     if (jobDraft !== null && jobDraft.trim() !== bot.title.trim()) patch({ title: jobDraft.trim() });
     setJobDraft(null);
   };
 
-  // Antigravity's old Auto still executes as Ask: show that without changing the saved mode or granting Full.
-  const displayedMode: ApprovalMode = engine?.driverKind === "antigravityAgent" && approvalMode === "auto" ? "ask" : approvalMode;
+  const displayedMode: ApprovalMode = approvalMode;
   const actsOptions: SegmentOption<ApprovalMode>[] = [
     { value: "ask", label: ACTS_LABEL.ask(), tooltip: t("botSettings.simple.askHint") },
     { value: "full", label: ACTS_LABEL.full(), tooltip: t("botSettings.simple.fullHint") },

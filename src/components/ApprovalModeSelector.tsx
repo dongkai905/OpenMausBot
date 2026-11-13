@@ -52,7 +52,7 @@ export function ApprovalModeSelector({
   const motion = useMenuMotion(open);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const mode = shownApprovalMode(driverKind, approvalModeFor({ approvalMode, autoApprove }));
+  const mode = shownApprovalMode(approvalModeFor({ approvalMode, autoApprove }));
   const allOptions = approvalModeOptions();
   const current = approvalModeOptionsFor(driverKind).find((option) => option.mode === mode)
     ?? allOptions.find((option) => option.mode === mode)
@@ -189,7 +189,7 @@ export function ApprovalModeSelector({
               );
             })}
             {!visibleOptions.some((option) => option.mode === "full") && allowlistAction}
-            {!trustedModesAvailable && (trustedModesNotice || driverKind === "codex" || requiresLocalDesktop) && (
+            {!trustedModesAvailable && (trustedModesNotice || requiresLocalDesktop) && (
               <div className="px-2 py-1.5 text-[12px] leading-snug text-ink-tertiary">
                 {trustedModesNotice ?? t("approvalMode.customLocalOnlyDot")}
               </div>

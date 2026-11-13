@@ -7,38 +7,10 @@ import { describe, expect, it } from "vitest";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import { ENGINE_KINDS, engineCapabilities, replaysTranscriptNatively, type EngineCapabilities } from "./capabilities.ts";
 
-const chat: EngineCapabilities = { resume: false, nativeReviewer: false, full: true, edits: false, stepCap: 64, subagents: false };
-const bare: EngineCapabilities = { resume: true, nativeReviewer: false, full: true, edits: false, subagents: false };
+const acp: EngineCapabilities = { resume: true, nativeReviewer: true, full: true, edits: true, subagents: false };
 
 const EXPECTED: Record<string, EngineCapabilities> = {
-  claudeAgent: { resume: true, nativeReviewer: true, full: true, edits: true, subagents: false },
-  codex: { resume: true, nativeReviewer: true, full: true, edits: false, subagents: false },
-  piAgent: bare,
-  antigravityAgent: { resume: true, nativeReviewer: false, full: true, edits: true, subagents: false },
-  grokAgent: { resume: true, nativeReviewer: true, full: true, edits: true, subagents: false },
-  geminiAgent: { resume: true, nativeReviewer: false, full: true, edits: true, subagents: false },
-  kimiAgent: bare,
-  droidAgent: bare,
-  cursorAgent: { resume: true, nativeReviewer: true, full: true, edits: false, subagents: false },
-  museCode: { resume: true, nativeReviewer: false, full: true, edits: false, subagents: false },
-  opencodeGo: { resume: true, nativeReviewer: false, full: true, edits: false, subagents: false },
-  qwenAgent: { resume: true, nativeReviewer: true, full: true, edits: true, subagents: false },
-  hermesAgent: bare,
-  deepseekAgent: bare,
-  clineAgent: { resume: true, nativeReviewer: false, full: true, edits: false, subagents: false },
-  copilotAgent: bare,
-  commandCodeAgent: bare,
-  kiroAgent: bare,
-  customAcp: bare,
-  "openai-compat": chat,
-  grok: chat,
-  minimax: chat,
-  mistral: chat,
-  cerebras: chat,
-  groq: chat,
-  greenference: chat,
-  modelgo: chat,
-  meta: chat,
+  customAcp: acp,
 };
 
 describe("engineCapabilities", () => {
@@ -72,15 +44,7 @@ describe("engineCapabilities", () => {
     for (const kind of ENGINE_KINDS) {
       const caps = engineCapabilities(kind);
       if (caps.resume) expect("stepCap" in caps, `${kind} keeps a native session and needs no step cap`).toBe(false);
-      else expect(caps.stepCap, `${kind} replays the transcript and needs the chat family's cap`).toBe(64);
     }
-  });
-
-  it("keeps the chat family's step cap equal to MAX_CHAT_ROUNDS in openai-chat.ts", () => {
-    const source = readFileSync(new URL("../drivers/openai-chat.ts", import.meta.url), "utf8");
-    const found = /^const MAX_CHAT_ROUNDS = (\d+);/m.exec(source);
-    expect(found, "MAX_CHAT_ROUNDS moved or was renamed; update server/runtime/capabilities.ts").not.toBeNull();
-    expect(engineCapabilities("openai-compat").stepCap).toBe(Number(found![1]));
   });
 });
 
@@ -97,13 +61,13 @@ describe("replaysTranscriptNatively", () => {
     return [kind!];
   });
 
-  it("finds the chat-completions family", () => {
-    expect(chatKinds.length).toBeGreaterThanOrEqual(7);
+  it("finds no chat-completions driver: the one engine keeps its own session", () => {
+    expect(chatKinds).toEqual([]);
   });
 
-  it("is true for every driver built on createOpenAIChatRuntime, and for no other", () => {
+  it("is false for every registered driver, and for an unknown one", () => {
     for (const kind of BUILT_IN_DRIVERS.map((driver) => driver.driverKind)) {
-      expect(replaysTranscriptNatively(kind), kind).toBe(chatKinds.includes(kind));
+      expect(replaysTranscriptNatively(kind), kind).toBe(false);
     }
     expect(replaysTranscriptNatively("someFutureEngine")).toBe(false);
     expect(replaysTranscriptNatively(undefined)).toBe(false);

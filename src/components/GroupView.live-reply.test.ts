@@ -33,7 +33,7 @@ const room = (busyBotId: string | undefined): Group => ({
 
 let seq = 0;
 const stream = (delta: string, botId?: string) => act(() => noteLiveReplyEvent({
-  eventId: `d${++seq}`, provider: "claudeAgent", threadId: "room-thread", createdAt: new Date(at).toISOString(), turnId: "t1", itemId: "x",
+  eventId: `d${++seq}`, provider: "customAcp", threadId: "room-thread", createdAt: new Date(at).toISOString(), turnId: "t1", itemId: "x",
   type: "content.delta", streamKind: "assistant_text", delta, ...(botId ? { botId } : {}),
 } as RuntimeEvent));
 

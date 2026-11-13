@@ -15,8 +15,7 @@ const WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAA
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const OPENAI = { imageGen: { key: "sk-image" } };
 const ALL_KEYS = {
-  imageGen: { key: "openai-secret", customApiKey: "custom-secret", customUrl: "http://127.0.0.1:20128/v1", customModel: "gateway/model" },
-  xai: { key: "xai-secret" },
+  imageGen: { key: "openai-secret", geminiKey: "gemini-secret", customApiKey: "custom-secret", customUrl: "http://127.0.0.1:20128/v1", customModel: "gateway/model" },
 };
 
 function imageResponse(bytes = PNG): Response {
@@ -62,19 +61,19 @@ describe("avatar image generation", () => {
     });
   });
 
-  it("uses the xAI key only at the fixed Grok endpoint and recognizes JPEG", async () => {
+  it("uses the Gemini key only at the fixed Gemini endpoint and recognizes JPEG", async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => imageResponse(JPEG));
-    const cfg = { ...ALL_KEYS, imageGen: { ...ALL_KEYS.imageGen, provider: "xai" as const } };
+    const cfg = { ...ALL_KEYS, imageGen: { ...ALL_KEYS.imageGen, primary: { provider: "gemini" as const } } };
 
     await expect(generateAvatarImage(cfg, BOT, "owl", fetchMock)).resolves.toEqual({ bytes: JPEG, mime: "image/jpeg" });
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://api.x.ai/v1/images/generations");
-    expect(init?.headers).toMatchObject({ authorization: "Bearer xai-secret" });
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/images/generations");
+    expect(init?.headers).toMatchObject({ authorization: "Bearer gemini-secret" });
     expect(JSON.stringify(init)).not.toContain("openai-secret");
     expect(JSON.stringify(init)).not.toContain("custom-secret");
     expect(JSON.parse(String(init?.body))).toEqual({
-      model: "grok-imagine-image-2.0", prompt: avatarGenerationPrompt(BOT, "owl"),
-      response_format: "b64_json", aspect_ratio: "1:1",
+      model: "gemini-2.5-flash-image", prompt: avatarGenerationPrompt(BOT, "owl"),
+      response_format: "b64_json", size: "1024x1024", n: 1,
     });
   });
 
@@ -90,7 +89,7 @@ describe("avatar image generation", () => {
     expect(url).toBe("http://127.0.0.1:20128/v1/images/generations");
     expect(init?.headers).toMatchObject({ authorization: "Bearer custom-secret" });
     expect(JSON.stringify(init)).not.toContain("openai-secret");
-    expect(JSON.stringify(init)).not.toContain("xai-secret");
+    expect(JSON.stringify(init)).not.toContain("gemini-secret");
     expect(JSON.parse(String(init?.body))).toEqual({
       model: "gateway/model", prompt: avatarGenerationPrompt(BOT, "owl"),
       response_format: "b64_json", size: "1024x1024", n: 1,
@@ -112,7 +111,7 @@ describe("avatar image generation", () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://api.openai.com/v1/images/generations");
     expect(init?.headers).toMatchObject({ authorization: "Bearer openai-secret" });
-    expect(JSON.stringify(init)).not.toContain("xai-secret");
+    expect(JSON.stringify(init)).not.toContain("gemini-secret");
     expect(JSON.stringify(init)).not.toContain("custom-secret");
   });
 
@@ -120,16 +119,16 @@ describe("avatar image generation", () => {
     expect(avatarImageStatus({})).toEqual({
       provider: "openai", configured: false, model: "gpt-image-2", customUrl: "", customModel: "",
       primary: { provider: "openai", model: "gpt-image-2", configured: false }, fallback: null, ready: false, maxPerTurn: 4,
-      openaiConfigured: false, xaiConfigured: false, customKeyConfigured: false, geminiConfigured: false, openrouterConfigured: false,
+      openaiConfigured: false, customKeyConfigured: false, geminiConfigured: false, openrouterConfigured: false,
     });
     expect(avatarImageStatus({ imageGen: { key: "k", primary: { provider: "gemini" }, fallback: { provider: "openai" } } })).toMatchObject({
       primary: { provider: "gemini", configured: false }, fallback: { provider: "openai", configured: true }, ready: true,
     });
     expect(avatarImageStatus(OPENAI).configured).toBe(true);
-    expect(avatarImageStatus({ xai: { key: "xai-secret" } }).configured).toBe(false);
-    expect(avatarImageStatus({ imageGen: { provider: "xai", key: "openai-secret" } }).configured).toBe(false);
-    expect(avatarImageStatus({ ...ALL_KEYS, imageGen: { ...ALL_KEYS.imageGen, provider: "xai" } })).toMatchObject({
-      provider: "xai", configured: true, model: "grok-imagine-image-2.0",
+    expect(avatarImageStatus({ openrouter: { key: "or-secret" } }).configured).toBe(false);
+    expect(avatarImageStatus({ imageGen: { provider: "custom", key: "openai-secret" } }).configured).toBe(false);
+    expect(avatarImageStatus({ ...ALL_KEYS, imageGen: { ...ALL_KEYS.imageGen, primary: { provider: "gemini" } } })).toMatchObject({
+      provider: "gemini", configured: true, model: "gemini-2.5-flash-image",
     });
     expect(JSON.stringify(avatarImageStatus(ALL_KEYS))).not.toContain("secret");
   });
@@ -155,8 +154,8 @@ describe("avatar image generation", () => {
   });
 
   it.each([
-    { imageGen: { provider: "openai" as const }, xai: { key: "xai-secret" } },
-    { imageGen: { provider: "xai" as const, key: "openai-secret", customApiKey: "custom-secret" } },
+    { imageGen: { provider: "openai" as const }, openrouter: { key: "openrouter-secret" } },
+    { imageGen: { primary: { provider: "gemini" as const }, key: "openai-secret", customApiKey: "custom-secret" } },
   ])("does not borrow another provider's credentials when the selected key is missing", async (cfg) => {
     const fetchMock = vi.fn<typeof fetch>();
     await expect(generateAvatarImage(cfg, BOT, "", fetchMock)).rejects.toMatchObject({ status: 409 });

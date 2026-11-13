@@ -138,7 +138,7 @@ function text(value: ReactNode): string {
 }
 
 const engine = (): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription",
   snapshot: { state: "available", version: "1", authenticated: true },
   models: { default: "m", options: [{ id: "m", label: "M" }] },
   capabilities: { computerMcp: true, browserMcp: true },

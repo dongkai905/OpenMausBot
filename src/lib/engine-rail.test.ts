@@ -7,14 +7,14 @@ describe("splitEngineRail", () => {
   it("groups sign-in plans, pasted provider keys and Local engines", () => {
     const { subscription, api, custom } = splitEngineRail([
       { access: "subscription", instanceId: "claude" },
-      { access: "custom", instanceId: "hermes" },
+      { access: "custom", instanceId: "agent-seven" },
       { instanceId: "grok" },
-      { access: "api", instanceId: "mistral" },
+      { access: "api", instanceId: "agent-nine" },
       { access: "custom", instanceId: "qwen" },
     ]);
     expect(subscription.map((row) => row.instanceId)).toEqual(["claude", "grok"]);
-    expect(api.map((row) => row.instanceId)).toEqual(["mistral"]);
-    expect(custom.map((row) => row.instanceId)).toEqual(["hermes", "qwen"]);
+    expect(api.map((row) => row.instanceId)).toEqual(["agent-nine"]);
+    expect(custom.map((row) => row.instanceId)).toEqual(["agent-seven", "qwen"]);
   });
 
   it("hides the second group when nothing is custom-only", () => {
@@ -27,8 +27,8 @@ describe("configuredModelInstances", () => {
   const cloud = { id: "cloud-model", label: "Cloud model" };
   const local = { id: "local-model", label: "Local model", custom: true, loaded: true, provider: "Local host" };
   const instance = (overrides: Partial<InstanceInfo> = {}): InstanceInfo => ({
-    instanceId: "codex",
-    driverKind: "codex",
+    instanceId: "agent-two",
+    driverKind: "customAcp",
     displayName: "Codex",
     access: "subscription",
     snapshot: { state: "available", authenticated: true },
@@ -44,7 +44,7 @@ describe("configuredModelInstances", () => {
     const emptyLocal = instance({ instanceId: "empty-local", access: "custom", models: { default: local.id, options: [] } });
 
     expect(configuredModelInstances([unavailable, empty, ready, unavailableLocal, emptyLocal])).toEqual([ready]);
-    expect(configuredModelInstances([unavailable, empty, ready, unavailableLocal, emptyLocal], "codex")).toEqual([ready]);
+    expect(configuredModelInstances([unavailable, empty, ready, unavailableLocal, emptyLocal], "agent-two")).toEqual([ready]);
   });
 
   it.each([true, false, undefined])("keeps cloud and custom models when authentication is %s", (authenticated) => {
@@ -61,7 +61,7 @@ describe("configuredModelInstances", () => {
 
     const configured = configuredModelInstances([cloudOnly, mixed, legacy]);
 
-    expect(configured.map((engine) => engine.instanceId)).toEqual(["cloud-only", "codex", "legacy"]);
+    expect(configured.map((engine) => engine.instanceId)).toEqual(["cloud-only", "agent-two", "legacy"]);
     expect(configured.map((engine) => engine.models.options)).toEqual([[cloud], [cloud, local], [cloud, local]]);
   });
 
@@ -72,7 +72,7 @@ describe("configuredModelInstances", () => {
   });
 
   it("always keeps the engine the bot runs on, even when its CLI is missing or it lists nothing", () => {
-    const missing = instance({ instanceId: "missing", snapshot: { state: "unavailable", reason: "`codex` CLI not found" } });
+    const missing = instance({ instanceId: "missing", snapshot: { state: "unavailable", reason: "`second` CLI not found" } });
     const empty = instance({ instanceId: "empty", access: "custom", snapshot: { state: "unavailable" }, models: { default: local.id, options: [] } });
     const ready = instance({ instanceId: "ready" });
 
@@ -84,7 +84,7 @@ describe("configuredModelInstances", () => {
   it("judges each Claude account on its own and preserves account order", () => {
     const claude = (id: string, snapshot: InstanceInfo["snapshot"]) => instance({
       instanceId: id,
-      driverKind: "claudeAgent",
+      driverKind: "customAcp",
       displayName: id,
       snapshot,
       models: { default: cloud.id, options: [cloud] },
@@ -122,9 +122,9 @@ describe("configuredModelInstances", () => {
 
 describe("Claude in the picker when Claude Code is signed out or not found", () => {
   const official = [{ id: "claude-opus-5-5", label: "Opus 5.5" }, { id: "claude-sonnet-5", label: "Sonnet 5" }];
-  const ollama = { id: "ollama:qwen3", label: "qwen3", custom: true, provider: "Ollama" };
+  const local = { id: "local:qwen3", label: "qwen3", custom: true, provider: "Ollama" };
   const claude = (snapshot: InstanceInfo["snapshot"], options: InstanceInfo["models"]["options"] = official): InstanceInfo => ({
-    instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", access: "subscription", snapshot,
+    instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription", snapshot,
     models: { default: "claude-opus-5-5", options },
   });
 
@@ -134,21 +134,21 @@ describe("Claude in the picker when Claude Code is signed out or not found", () 
 
   it("keeps a signed-out Claude and its official models, whichever engine the bot is on", () => {
     const signedOut = claude({ state: "available", authenticated: false });
-    for (const selected of [undefined, "codex", "claude"]) {
+    for (const selected of [undefined, "agent-two", "claude"]) {
       expect(configuredModelInstances([signedOut], selected)).toEqual([signedOut]);
     }
   });
 
   it("keeps local models found at startup next to the official ones for a signed-out Claude", () => {
-    const [kept] = configuredModelInstances([claude({ state: "available", authenticated: false }, [...official, ollama])]);
-    expect(kept.models.options).toEqual([...official, ollama]);
+    const [kept] = configuredModelInstances([claude({ state: "available", authenticated: false }, [...official, local])]);
+    expect(kept.models.options).toEqual([...official, local]);
   });
 
   it("keeps a Claude whose CLI is not found only while the bot runs on it", () => {
     const missing = claude({ state: "unavailable", reason: "`claude` CLI not found" });
     expect(configuredModelInstances([missing], "claude")).toEqual([missing]);
     expect(configuredModelInstances([missing])).toEqual([]);
-    expect(configuredModelInstances([missing], "codex")).toEqual([]);
+    expect(configuredModelInstances([missing], "agent-two")).toEqual([]);
   });
 });
 

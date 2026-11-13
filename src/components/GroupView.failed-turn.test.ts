@@ -26,7 +26,7 @@ const { RoomToolChip } = await import("./GroupView");
 const { FailedTurnRow } = await import("./ChatView");
 
 const claude = {
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude",
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude",
   snapshot: { state: "available", authenticated: false },
   install: { command: { darwin: "npm i -g x", linux: "npm i -g x", win32: "npm i -g x" }, signInCommand: "claude /login", server: { package: "@anthropic-ai/claude-code" } },
   authentication: { method: "paste-code" },

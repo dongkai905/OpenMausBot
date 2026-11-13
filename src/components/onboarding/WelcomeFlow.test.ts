@@ -29,11 +29,11 @@ const { CHIEF_FADE_MS, CHIEF_GUARD_MS } = await import("./ChiefIntro");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const claude = (ready: boolean, aiTest?: InstanceInfo["aiTest"]): InstanceInfo => ({
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", install: { docsUrl: "https://example.test" },
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", install: { docsUrl: "https://example.test" },
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] }, ...(aiTest ? { aiTest } : {}),
 });
 const freeOpenCode: InstanceInfo = {
-  instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", install: { docsUrl: "https://example.test" },
+  instanceId: "agent-three", driverKind: "customAcp", displayName: "OpenCode", install: { docsUrl: "https://example.test" },
   snapshot: { state: "available", authenticated: true, freeFallback: true }, models: { default: "opencode/big-pickle", options: [] }, aiTest: "passed",
 };
 const signIn = (): InstanceInfo => ({ ...claude(false), snapshot: { state: "available", authenticated: false }, authentication: { method: "paste-code" } } as InstanceInfo);

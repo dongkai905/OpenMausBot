@@ -34,7 +34,7 @@ describe("the key a Live call uses", () => {
   });
 
   it("is nothing without either key; never an image, compatible-server or other provider's key", () => {
-    const others = { imageGen: { key: "sk-image" }, openaiCompat: { key: "sk-compat" }, openrouter: { key: "sk-or" }, xai: { key: "xai-key" } } as AppConfig;
+    const others = { imageGen: { key: "sk-image" }, openaiCompat: { key: "sk-compat" }, openrouter: { key: "sk-or" } } as AppConfig;
     expect(liveCallKey(others)).toBeNull();
     expect(liveCallKey({ ...others, openai: { key: " " } })).toBeNull();
     expect(liveSettingsFor(others)).toEqual({ configured: false, voice: "", readTypedReplies: true, idleMinutes: 5 });

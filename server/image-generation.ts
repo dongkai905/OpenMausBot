@@ -14,7 +14,6 @@ const imagesApiResponseSchema = z.object({
 
 export interface ImageCredentials {
   imageGen?: ImageGenerationConfig;
-  xai?: { key?: string };
   openrouter?: { key?: string };
 }
 
@@ -57,13 +56,6 @@ const PROVIDERS: Record<ImageProvider, {
     key: (cfg) => cfg.imageGen?.key,
     url: () => "https://api.openai.com/v1/images/generations",
     body: (request) => ({ size: OPENAI_SIZES[request.aspect ?? "1:1"], quality: request.draft ? "low" : "auto", output_format: "webp" }),
-  },
-  xai: {
-    name: "xAI",
-    missing: "Add an xAI API key first",
-    key: (cfg) => cfg.xai?.key,
-    url: () => "https://api.x.ai/v1/images/generations",
-    body: (request) => ({ response_format: "b64_json", aspect_ratio: request.aspect ?? "1:1" }),
   },
   gemini: {
     name: "Gemini",

@@ -335,12 +335,12 @@ describe("remote MCP tool directory", () => {
     const tools = [{ name: "small", description: "Small.", inputSchema: { type: "object", properties: { q: { type: "string" } } } },
       { name: "create_page", description: "Create a page.", inputSchema: createPageSchema() }];
     fake = await startFakeHttpMcp({ tools });
-    start(mcpStdioServer(spec(fake.url))!, { ...process.env, [TOOL_SCHEMA_PROFILE_ENV]: "moonshot" });
+    start(mcpStdioServer(spec(fake.url))!, { ...process.env, [TOOL_SCHEMA_PROFILE_ENV]: "generic" });
     await initialize();
     const [small, page] = (await request("tools/list")).result.tools;
     expect(small).toEqual(tools[0]);
     expect(schemaBytes(page.inputSchema)).toBeLessThanOrEqual(12_000);
-    expect(page.description).toContain("OpenMausBot shortened this tool's parameters to fit Kimi's size limit");
+    expect(page.description).toContain("OpenMausBot shortened this tool's parameters to fit the provider's size limit");
     const closed = once(child!, "close"); child!.kill(); await closed;
 
     start(mcpStdioServer(spec(fake.url))!);

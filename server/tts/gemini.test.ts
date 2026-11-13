@@ -37,7 +37,7 @@ describe("Gemini speech", () => {
   });
 
   it("requires its own credential and keeps it out of status", async () => {
-    const missing: AppConfig = { tts: { provider: "gemini", key: "eleven", fishKey: "fish" }, xai: { key: "xai" } };
+    const missing: AppConfig = { tts: { provider: "gemini", key: "eleven", fishKey: "fish" } };
     expect(providerConfigured(missing)).toBe(false);
     expect(voiceReady(missing, "Kore")).toBe(false);
     expect(() => speak(missing, "hello")).toThrow("Gemini API key");

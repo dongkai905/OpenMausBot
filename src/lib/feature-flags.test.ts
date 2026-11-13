@@ -16,15 +16,15 @@ describe("experimental feature flags", () => {
 
   it("names the engines in use that cannot run the skill review: no background call, or no agents tools", () => {
     const instances = [
-      { instanceId: "codex", displayName: "Codex", capabilities: { backgroundText: true, agentsMcp: true } },
+      { instanceId: "agent-two", displayName: "Codex", capabilities: { backgroundText: true, agentsMcp: true } },
       { instanceId: "pi", displayName: "Pi", capabilities: { backgroundText: false, agentsMcp: true } },
       { instanceId: "chat", displayName: "Groq", capabilities: { backgroundText: true, agentsMcp: false } },
       { instanceId: "old", displayName: "Old server engine" },
       { instanceId: "unused", displayName: "Unused", capabilities: { backgroundText: false } },
     ];
     const on = (...ids: string[]) => ids.map((instanceId) => ({ modelSelection: { instanceId } }));
-    expect(skillReviewUnavailableEngines(on("codex", "codex"), instances)).toEqual([]);
-    expect(skillReviewUnavailableEngines(on("codex", "pi", "pi", "chat", "old", "missing"), instances)).toEqual(["Pi", "Groq", "Old server engine"]);
+    expect(skillReviewUnavailableEngines(on("agent-two", "customAcp"), instances)).toEqual([]);
+    expect(skillReviewUnavailableEngines(on("agent-two", "pi", "pi", "chat", "old", "missing"), instances)).toEqual(["Pi", "Groq", "Old server engine"]);
     expect(skillReviewUnavailableEngines([], instances)).toEqual([]);
   });
 

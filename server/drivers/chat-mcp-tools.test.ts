@@ -204,18 +204,18 @@ describe("Chat MCP session", () => {
     expect(calls).toEqual([dropped ? {} : { url: " " }, { url: "https://example.com" }]);
   });
 
-  it("shows a model behind Moonshot each schema fitted to its limit, and still checks calls against the full one", async () => {
+  it("shows a model behind the provider each schema fitted to its limit, and still checks calls against the full one", async () => {
     const full = wideSchema(110);
     const f = fixture("", full);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const plain = await f.mount();
       expect(plain.definitions[0]!.function.parameters).toEqual(full);
-      const session = await mountChatTools({ custom: { audit: f.server } }, f.controller.signal, false, undefined, undefined, toolSchemaProfile("moonshot"));
+      const session = await mountChatTools({ custom: { audit: f.server } }, f.controller.signal, false, undefined, undefined, toolSchemaProfile("generic"));
       sessions.push(session);
       const [definition] = session.definitions;
       expect(schemaBytes(definition!.function.parameters)).toBeLessThanOrEqual(12_000);
-      expect(definition!.function.description).toContain("OpenMausBot shortened this tool's parameters to fit Kimi's size limit");
+      expect(definition!.function.description).toContain("OpenMausBot shortened this tool's parameters to fit the provider's size limit");
       expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^chat-mcp: audit: kept only the top-level fields of tool "write"'s parameters/));
       expect(() => session.validate("audit_write", { field_000: { label: 5 } })).toThrow("input schema");
       expect(() => session.validate("audit_write", { field_000: { label: "five" } })).not.toThrow();

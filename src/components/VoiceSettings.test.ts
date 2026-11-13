@@ -21,7 +21,7 @@ const { VoiceSettings } = await import("./VoiceSettings");
 const LIBRARY = { id: "lib-1", label: "Library Rachel", description: "irish", publicOwnerId: "owner2" };
 const bot = (id: string): Bot => ({
   id, threadId: "t", name: id, title: "", description: "", color: "green",
-  notifications: true, unread: false, messages: [], modelSelection: { instanceId: "codex", model: "m" },
+  notifications: true, unread: false, messages: [], modelSelection: { instanceId: "agent-two", model: "m" },
 });
 
 let host: HTMLDivElement;
@@ -83,13 +83,13 @@ describe("VoiceSettings", () => {
     expect(onPatch).not.toHaveBeenCalled();
   });
 
-  it("lays the seven voice services out four to a row, OpenAI beside the other online services", async () => {
+  it("lays the six voice services out four to a row, OpenAI beside the other online services", async () => {
     fixture.api.mockResolvedValue({ voices: [] });
     await render(bot("pepper"), vi.fn());
     const radios = [...host.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')];
-    expect(radios.map((radio) => radio.textContent)).toEqual(["ElevenLabs", "Fish Audio", "OpenAI", "Grok (xAI)", "Gemini", "Built-in Mac voices", "Chatterbox (local)"]);
+    expect(radios.map((radio) => radio.textContent)).toEqual(["ElevenLabs", "Fish Audio", "OpenAI", "Gemini", "Built-in Mac voices", "Chatterbox (local)"]);
     expect(radios.map((radio) => radio.className.match(/col-span-\d/)?.[0])).toEqual([
-      "col-span-1", "col-span-1", "col-span-1", "col-span-1", "col-span-1", "col-span-1", "col-span-1",
+      "col-span-1", "col-span-1", "col-span-1", "col-span-1", "col-span-1", "col-span-1",
     ]);
   });
 });

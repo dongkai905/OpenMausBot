@@ -21,7 +21,7 @@ import { BotModelBadge, botModel } from "./BotModelBadge";
 import { BotListItem, botRowProps, type BotRowProps } from "./Sidebar";
 
 const claude = {
-  instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", snapshot: { state: "available" },
+  instanceId: "claude", driverKind: "customAcp", displayName: "Claude", snapshot: { state: "available" },
   models: { default: "sonnet", options: [{ id: "sonnet", label: "Sonnet 4.5" }, { id: "opus", label: "Opus 4.1" }] },
 } as InstanceInfo;
 const bot = (instanceId: string, model: string): Bot => ({

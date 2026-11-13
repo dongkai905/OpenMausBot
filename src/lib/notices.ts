@@ -15,11 +15,6 @@ export const PRODUCT_HUNT_NOTICE = "product-hunt-launch-2026-10";
 export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/mausbot";
 export const PRODUCT_HUNT_UNTIL = Date.UTC(2026, 10, 1);
 export const BOAT_OFFER_NOTICE = "boat-credit-2026-11";
-/** The Move from Grok Bot popup: each person sees it once, first of all, after their welcome. */
-export const GROK_MOVE_NOTICE = "grok-move-2026-11";
-/** The sponsor's card for ModelGo: each person sees it once, on every page but a branded build or a desktop whose organization
- * refuses it, and on the first launch it may show in: first when nothing else is due, else right after the launch's notice. */
-export const MODELGO_OFFER_NOTICE = "modelgo-offer-2026-11";
 /** Update MausBot on your phone: once per phone with an older app after this computer's secure link ended. */
 export const PHONE_UPDATE_NOTICE = "phone-app-update";
 /** A card from the project's announcements file (src/lib/announcements.ts keeps which ones each person saw, and allows one a
@@ -32,7 +27,6 @@ export const ANNOUNCEMENT_NOTICE = "announcement";
  * come after it there. The rest wait for later launches, in this order.
  */
 export const NOTICES = [
-  GROK_MOVE_NOTICE,
   PHONE_UPDATE_NOTICE,
   SIMPLE_MODE_NOTICE,
   WHATS_NEW_NOTICE,
@@ -42,7 +36,6 @@ export const NOTICES = [
   CLOUD_INTRO,
   CLOUD_TRIAL_NOTICE,
   CLOUD_NOTICE,
-  MODELGO_OFFER_NOTICE,
   BOAT_OFFER_NOTICE,
   ANNOUNCEMENT_NOTICE,
   STAR_NOTICE,
@@ -52,14 +45,14 @@ export type NoticeId = (typeof NOTICES)[number];
 
 export type NoticeFacts = Record<NoticeId, boolean | null>;
 
-/** What may still come in a launch another notice took: the product-updates question, the sponsor's card and a card from the
+/** What may still come in a launch another notice took: the product-updates question and a card from the
  * announcements file, which everyone is to see on the first launch they may show in. Each in its place in NOTICES. */
-export const FOLLOWERS: readonly NoticeId[] = [UPDATES_CONSENT_NOTICE, MODELGO_OFFER_NOTICE, ANNOUNCEMENT_NOTICE];
+export const FOLLOWERS: readonly NoticeId[] = [UPDATES_CONSENT_NOTICE, ANNOUNCEMENT_NOTICE];
 /** The followers that are cards of their own: they never go ahead of a notice to act on, nor replace a card still up. */
-const FOLLOWING_CARDS: readonly NoticeId[] = [MODELGO_OFFER_NOTICE, ANNOUNCEMENT_NOTICE];
+const FOLLOWING_CARDS: readonly NoticeId[] = [ANNOUNCEMENT_NOTICE];
 /** Notices the person has to act on. The sponsor's card and an announcement card never go ahead of one, even one left for a
  * later launch: they wait for that launch and follow it there. */
-export const MUST_ACT: readonly NoticeId[] = [GROK_MOVE_NOTICE, PHONE_UPDATE_NOTICE, CLOUD_TRIAL_NOTICE, CLOUD_NOTICE];
+export const MUST_ACT: readonly NoticeId[] = [PHONE_UPDATE_NOTICE, CLOUD_TRIAL_NOTICE, CLOUD_NOTICE];
 
 /** `launch`: the notice this launch already showed (launchNotice), the only one besides FOLLOWERS that may show again in it.
  * `closed`: that notice was closed in this page, so it doesn't come back however its facts read. The following cards follow

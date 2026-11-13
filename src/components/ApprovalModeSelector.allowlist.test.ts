@@ -21,7 +21,7 @@ function nodes(value: ReactNode): Node[] {
 function render(onSelect: (mode: ApprovalMode) => void, onManageCommandAllowlist?: () => void, trustedModesAvailable = true, busy = false) {
   let tree: ReactNode;
   function Capture() {
-    tree = ApprovalModeSelector({ providerName: "Codex", driverKind: "codex", approvalMode: "ask", onSelect, onManageCommandAllowlist, trustedModesAvailable, busy });
+    tree = ApprovalModeSelector({ providerName: "Codex", driverKind: "customAcp", approvalMode: "ask", onSelect, onManageCommandAllowlist, trustedModesAvailable, busy });
     return tree;
   }
   return { html: renderToStaticMarkup(createElement(Capture)), nodes: nodes(tree) };

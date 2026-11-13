@@ -77,7 +77,7 @@ export async function flushAdminActivity(dataDir: string): Promise<void> {
 }
 
 
-/** Name parts that mark a credential (case-insensitive substring), plus `key` alone or as a suffix (apiKey, xai_key). */
+/** Name parts that mark a credential (case-insensitive substring), plus `key` alone or as a suffix (apiKey, openai_key). */
 const SECRET_PARTS = ["token", "secret", "password", "passwd", "passphrase", "credential", "authorization", "cookie", "bearer", "apikey", "api_key"];
 /** Maps whose every value may be a credential: keep the names, hide values. */
 const OPAQUE_MAP = /^(?:headers|env|environment)$/i;
@@ -200,7 +200,6 @@ const CONFIG_CATEGORY: Record<string, AdminActivityCategory> = {
   instances: "engine",
   anthropic: "engine",
   openaiCompat: "engine",
-  xai: "engine",
   defaultModelSelection: "engine",
 };
 

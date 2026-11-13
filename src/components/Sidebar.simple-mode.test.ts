@@ -149,7 +149,7 @@ describe("bot-first sidebar", () => {
 
   it("ends a Simple row's preview line with its engine's faded mark, puts the unread dot at the name line's top right where ⋯ shows, and never moves the name", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [], unread: true, messages: [{ id: "m", role: "bot", kind: "text", text: "Done.", at: 1 }] } as Bot;
     let tree: ReactNode;
     function Capture() { tree = botRow(rowProps("comfortable", candidate)); return tree; }
@@ -169,7 +169,7 @@ describe("bot-first sidebar", () => {
 
   it("fades the collapsed rail's engine badge in both modes", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [] };
     const rail = renderToStaticMarkup(createElement(BotListItem, rowProps("icons", candidate)));
     expect(rail).toMatch(/<span data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
@@ -200,7 +200,7 @@ describe("bot-first sidebar", () => {
     const said: Bot["messages"] = [{ id: "hi", role: "bot", kind: "text", at: 1, text: "Here are the leads from Monday." }];
     const leads = { threadId: "leads", title: "Leads", createdAt: 1 };
     const candidate: Bot = { ...bot, threadId: "leads", messages: said, unread: false, projects: [], tasks: [{ ...leads, busy: true, activity: "working" }], busy: true };
-    noteTurnEvent({ eventId: "e1", provider: "claudeAgent", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
+    noteTurnEvent({ eventId: "e1", provider: "customAcp", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
       type: "turn.progress", activity: "command", itemId: "c1", target: "scrape.py", quiet: { kind: "busy" } } as RuntimeEvent);
     const working = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)));
     expect(working).toContain('<span dir="auto" data-sidebar-working-phrase="" class="truncate">Running a command</span>');
@@ -220,7 +220,7 @@ describe("bot-first sidebar", () => {
     resetTurnLive();
     const candidate: Bot = { ...bot, threadId: "open", messages: [], unread: false, projects: [], busy: true,
       tasks: [{ threadId: "open", title: "Open", createdAt: 1 }, { threadId: "leads", title: "Leads", createdAt: 2, busy: true, activity: "working" }] };
-    noteTurnEvent({ eventId: "e2", provider: "codex", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
+    noteTurnEvent({ eventId: "e2", provider: "agent-two", threadId: "leads", createdAt: "2026-10-28T12:00:00.000Z", turnId: "t1",
       type: "turn.progress", activity: "web", itemId: "w1", target: "Acme construction leads" } as RuntimeEvent);
     expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)))).toContain(">Searching the web</span>");
     resetTurnLive();
@@ -261,7 +261,7 @@ describe("bot-first sidebar", () => {
 
   it("draws no engine mark for a bot with no AI yet or in a group chat, and a faded one in Advanced mode", () => {
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
+    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "customAcp", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [] };
     expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", { ...candidate, modelSelection: { instanceId: "none", model: "m" } })))).not.toContain("data-provider-mark");
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };

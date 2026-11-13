@@ -76,8 +76,8 @@ describe("Usage & billing in Simple mode", () => {
 
   it("leads with the provider whose weekly allowance is most used, and ignores providers that report none or fail", async () => {
     const { busiestWeekly } = await import("./PlanUsage");
-    expect(busiestWeekly({ providers: [provider("claude", true, 34), provider("codex", true, 61), provider("grok", false, 90), provider("kimi", true, null)] }))
-      .toMatchObject({ provider: { id: "codex" }, used: 61 });
+    expect(busiestWeekly({ providers: [provider("claude", true, 34), provider("agent-two", true, 61), provider("grok", false, 90), provider("kimi", true, null)] }))
+      .toMatchObject({ provider: { id: "agent-two" }, used: 61 });
     expect(busiestWeekly({ providers: [provider("grok", false, 90)] })).toBeNull();
     expect(busiestWeekly(null)).toBeNull();
   });

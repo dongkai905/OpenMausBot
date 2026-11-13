@@ -15,13 +15,6 @@ export interface ImageSlotStatus { provider: ImageProvider; model: string; confi
 export interface ConfigStatus {
   /** The workspace's banner picture (GET /api/workspace/banner), by a version that changes with it; null without one. */
   workspaceBanner?: import("@/lib/place-banner").BannerSummary | null;
-  xai?: SavedKey;
-  mistral?: SavedKey;
-  cerebras?: SavedKey;
-  groq?: SavedKey;
-  greenference?: SavedKey;
-  modelgo?: SavedKey;
-  deepseek?: SavedKey;
   meta?: SavedKey;
   /** X research comes with MausBot Cloud plans: `included` while this server holds the plan's relay credential;
    * `unavailable` when the Admin said no to this desktop's paid sign-in. */
@@ -34,7 +27,6 @@ export interface ConfigStatus {
   anthropic?: SavedKey & { everyClaudeBot?: boolean };
   openai?: SavedKey;
   openrouter?: SavedKey;
-  openaiCompat?: SavedKey & { url?: string };
   /** what this server is entitled to; Settings shows only what works here.
    * `license` reaches admins only, and only while the key is inside its
    * warning window or grace period. */
@@ -74,18 +66,15 @@ export interface ConfigStatus {
   /** Prompt-cache keep-warm for idle Claude threads. Absent from older servers. */
   cacheKeepWarm?: { enabled: boolean; windowMinutes: number };
   localVm: { mode: "shared" | "per-bot" | "pool"; maxInstances: number; idleTimeoutMinutes?: number; preserveInstalledApps?: boolean };
-  /** `providerKeys`: names of the keys saved for OpenCode's other
-   * providers, never the keys. */
-  opencodeGo?: SavedKey & { providerKeys?: string[] };
   /** Voice. `configured` = the engine has what it needs (an ElevenLabs or
-   * Fish Audio, Gemini or xAI key, or a Chatterbox server address); `ready` = that AND a voice, which is
+   * Fish Audio, Gemini key, or a Chatterbox server address); `ready` = that AND a voice, which is
    * what it takes to actually speak. The key itself is never echoed back;
    * `baseUrl` is the Chatterbox address; `model` selects Chatterbox or Gemini speech. */
   tts?: {
     configured: boolean;
     ready: boolean;
     voice: string;
-    provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini" | "openai";
+    provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "gemini" | "openai";
     baseUrl?: string;
     model?: string;
     /** Voice note with every reply, for every bot without its own choice. Absent from older servers. */
@@ -133,7 +122,6 @@ export interface ConfigStatus {
     customUrl?: string;
     customModel?: string;
     openaiConfigured?: boolean;
-    xaiConfigured?: boolean;
     customKeyConfigured?: boolean;
     geminiConfigured?: boolean;
     openrouterConfigured?: boolean;

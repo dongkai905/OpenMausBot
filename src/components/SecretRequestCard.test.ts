@@ -54,13 +54,13 @@ const view = (secret: Record<string, unknown>) => renderToStaticMarkup(createEle
   message: secretCard(secret),
 }));
 
-function namedCard(target: "greenferenceApiKey" | "geminiTtsKey", reason: string): Message {
+function namedCard(target: "geminiTtsKey", reason: string): Message {
   return secretCard({
     target,
     ...CREDENTIAL_TARGETS[target],
     description: `${CREDENTIAL_TARGETS[target].description} ${reason} Scout can use it but never read it back.`,
     descriptionParts: {
-      baseCode: target === "greenferenceApiKey" ? "secretCard.greenference.description" : "secretCard.geminiTts.description",
+      baseCode: "secretCard.geminiTts.description",
       reason,
       bot: "Scout",
     },
@@ -147,40 +147,6 @@ describe("SecretRequestCard ask card", () => {
     expect(html).toContain("Try again");
     expect(html).toContain("The bot could not be resumed.");
     expect(html).not.toContain('type="password"');
-  });
-});
-
-describe("SecretRequestCard Greenference copy", () => {
-  it("localizes the Greenference title, description and password field without changing the saved card", () => {
-    const message = namedCard("greenferenceApiKey", "Para preparar o resumo solicitado.");
-    const render = () => renderToStaticMarkup(createElement(SecretRequestCard, { botId: "bot-1", threadId: "thread-1", message }));
-    const english = render();
-    expect(english).toContain('aria-label="Greenference API key"');
-    expect(english).toContain("Runs Greenference models with your own key.");
-    expect(english).toContain('placeholder="Paste your Greenference API key"');
-    expect(english).toContain(escapedText(message.secret!.description));
-    setLocale("pt-br");
-    const portuguese = render();
-    expect(portuguese).toContain('aria-label="Chave de API do Greenference"');
-    expect(portuguese).toContain("Roda modelos do Greenference com sua própria chave. Para preparar o resumo solicitado. Scout pode usar o valor, mas nunca consegue lê-lo.");
-    expect(portuguese).toContain('placeholder="Cole sua chave de API do Greenference"');
-    expect(portuguese).toContain(CREDENTIAL_TARGETS.greenferenceApiKey.helpUrl);
-    expect(message.secret).toMatchObject({ target: "greenferenceApiKey", description: `${CREDENTIAL_TARGETS.greenferenceApiKey.description} Para preparar o resumo solicitado. Scout can use it but never read it back.` });
-    setLocale("en");
-    expect(render()).toBe(english);
-  });
-
-  it.each([
-    { stopped: true },
-    { superseded: true },
-    { provided: true, resumed: true },
-  ])("localizes the Greenference label in settled states %j", (state) => {
-    setLocale("pt-br");
-    const html = view({ target: "greenferenceApiKey", ...CREDENTIAL_TARGETS.greenferenceApiKey, ...state });
-    expect(html).toContain('data-ask-card="settled"');
-    expect(html).toContain('aria-label="Chave de API do Greenference"');
-    expect(html).not.toContain('aria-label="Greenference API key"');
-    expect(html).not.toContain("<input");
   });
 });
 
@@ -322,30 +288,20 @@ describe("SecretRequestCard key analytics", () => {
     expect(JSON.stringify(fixture.track.mock.calls)).not.toContain("ZZtestSECRET");
   });
 
-  it("reports an xAI key saved from chat as unverified: nothing checks it before it is used", async () => {
-    fixture.api.mockResolvedValueOnce({ xai: { configured: true } }).mockResolvedValueOnce({ ok: true });
-    await submit("xaiApiKey", "xai-ZZtestSECRET0123456789");
-    expect(fixture.api.mock.calls[0]).toEqual(["/api/config", { method: "PUT", body: JSON.stringify({ xai: { key: "xai-ZZtestSECRET0123456789" } }) }]);
-    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "xai", via: "chat_request", result: "unverified" }]]);
-  });
-
-  it("saves an Anthropic key in the desktop store as Settings does, keeping Claude sign-ins", async () => {
-    const setCredential = vi.fn().mockResolvedValue({ anthropic: { configured: true } });
-    vi.stubGlobal("window", { ogb: { setCredential } });
-    fixture.api.mockResolvedValueOnce({ ok: true });
-    await submit("anthropicApiKey", "sk-ant-ZZtestSECRET0123456789");
-    expect(setCredential).toHaveBeenCalledExactlyOnceWith("anthropicApiKey", "sk-ant-ZZtestSECRET0123456789", { everyClaudeBot: false });
-    expect(fixture.api.mock.calls.map(([path]) => path)).toEqual(["/api/bots/bot-1/secret-cards/secret-card/provided"]);
-    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "anthropic", via: "chat_request", result: "unverified" }]]);
+  it("reports an OpenAI key saved from chat as unverified: nothing checks it before it is used", async () => {
+    fixture.api.mockResolvedValueOnce({ openai: { configured: true } }).mockResolvedValueOnce({ ok: true });
+    await submit("openaiApiKey", "sk-ZZtestSECRET0123456789");
+    expect(fixture.api.mock.calls[0]).toEqual(["/api/config", { method: "PUT", body: JSON.stringify({ openai: { key: "sk-ZZtestSECRET0123456789" } }) }]);
+    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "openai", via: "chat_request", result: "unverified" }]]);
   });
 
   it("sends a provider key typed on a desktop paired to another computer to that computer's server", async () => {
     const setCredential = vi.fn();
     vi.stubGlobal("window", { ogb: { setCredential, remoteClient: { active: true } } });
-    fixture.api.mockResolvedValueOnce({ anthropic: { configured: true } }).mockResolvedValueOnce({ ok: true });
-    await submit("anthropicApiKey", "sk-ant-ZZtestSECRET0123456789");
+    fixture.api.mockResolvedValueOnce({ openai: { configured: true } }).mockResolvedValueOnce({ ok: true });
+    await submit("openaiApiKey", "sk-ZZtestSECRET0123456789");
     expect(setCredential).not.toHaveBeenCalled();
-    expect(fixture.api.mock.calls[0]).toEqual(["/api/config", { method: "PUT", body: JSON.stringify({ anthropic: { key: "sk-ant-ZZtestSECRET0123456789", everyClaudeBot: false } }) }]);
+    expect(fixture.api.mock.calls[0]).toEqual(["/api/config", { method: "PUT", body: JSON.stringify({ openai: { key: "sk-ZZtestSECRET0123456789" } }) }]);
   });
 
   it("saves the Composio key in the desktop store's slot, as Settings does", async () => {

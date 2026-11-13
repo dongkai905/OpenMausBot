@@ -27,12 +27,12 @@ const engine = (instanceId: string, driverKind: string, displayName: string, acc
   models: { default: options.find((option) => !option.custom)?.id ?? "", options },
   ...extra,
 });
-const claude = (extra: Partial<InstanceInfo> = {}, options = claudeModels) => engine("claude", "claudeAgent", "Claude", "subscription", options, { ...extra, models: { default: "sonnet-5", options } });
-const codex = engine("codex", "codex", "Codex", "subscription", [{ id: "gpt-5.6", label: "GPT-5.6" }, { id: "gpt-5.6-mini", label: "GPT-5.6 mini" }, { id: "gpt-5.5", label: "GPT-5.5" }]);
-const cursor = engine("cursor", "cursorAgent", "Cursor", "subscription", [{ id: "auto", label: "Auto" }]);
-const openaiKey = engine("openai", "openai-compat", "OpenAI", "api", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
-const claudeKey = engine("claudeApi", "claudeAgent", "Claude (API key)", "api", claudeModels.slice(0, 2));
-const pi = engine("pi", "piAgent", "pi", "custom", [
+const claude = (extra: Partial<InstanceInfo> = {}, options = claudeModels) => engine("claude", "customAcp", "Claude", "subscription", options, { ...extra, models: { default: "sonnet-5", options } });
+const second = engine("agent-two", "customAcp", "Codex", "subscription", [{ id: "gpt-5.6", label: "GPT-5.6" }, { id: "gpt-5.6-mini", label: "GPT-5.6 mini" }, { id: "gpt-5.5", label: "GPT-5.5" }]);
+const cursor = engine("cursor", "customAcp", "Cursor", "subscription", [{ id: "auto", label: "Auto" }]);
+const openaiKey = engine("openai", "customAcp", "OpenAI", "api", [{ id: "gpt-5.6", label: "GPT-5.6" }]);
+const claudeKey = engine("claudeApi", "customAcp", "Claude (API key)", "api", claudeModels.slice(0, 2));
+const pi = engine("pi", "customAcp", "pi", "custom", [
   { id: "llama", label: "Llama 4", custom: true },
   { id: "gemma", label: "Gemma 4", custom: true, loaded: true },
 ]);
@@ -66,7 +66,7 @@ describe("a starred model", () => {
   });
 
   it("stays out of another provider, and goes back when unstarred", () => {
-    toggleFavoriteModel("codex", "haiku-5");
+    toggleFavoriteModel("agent-two", "haiku-5");
     expect(rows(menu([claude()]))).toEqual(["Fable 5.1", "Fable 5", "Opus 5.5", "Opus 5"]);
     toggleFavoriteModel("claude", "haiku-5");
     toggleFavoriteModel("claude", "haiku-5");
@@ -86,15 +86,15 @@ describe("a starred model", () => {
   });
 });
 
-describe("Ollama in the Simple model menu", () => {
-  const ollama = engine("openaiCompat", "openai-compat", "Ollama", "api", [
+describe("a local server in the Simple model menu", () => {
+  const local = engine("local-server", "customAcp", "Local server", "custom", [
     { id: "llama3.2:latest", label: "llama3.2:latest", custom: true, local: { bytes: 2_019_393_189, parameters: "3.2B", quantization: "Q4_K_M", tools: true } },
     { id: "gemma2:2b", label: "gemma2:2b", custom: true, local: { bytes: 912_000_000, parameters: "2.6B", tools: false } },
-  ], { serverKind: "ollama" });
+  ]);
 
-  it("is headed Ollama, with no API key, and says what each pulled model is", () => {
-    const built = menu([ollama], { selection: { instanceId: "openaiCompat", model: "" } });
-    expect(built.groups.map((group) => group.label)).toEqual(["Ollama"]);
+  it("is headed by its own name, with no API key, and says what each pulled model is", () => {
+    const built = menu([local], { selection: { instanceId: "local-server", model: "" } });
+    expect(built.groups.map((group) => group.label)).toEqual(["Local server"]);
     const body = built.groups[0]!.body;
     expect(body.kind === "models" && body.rows.map((row) => [row.label, row.detail])).toEqual([
       ["llama3.2:latest", "3.2B · Q4_K_M · 2 GB"],
@@ -103,11 +103,11 @@ describe("Ollama in the Simple model menu", () => {
   });
 
   it("says what the selected model is too", () => {
-    const built = menu([ollama], { selection: { instanceId: "openaiCompat", model: "gemma2:2b" } });
-    expect(built.current).toMatchObject({ label: "gemma2:2b", meta: "2.6B · 912 MB · No tools", title: "Ollama · gemma2:2b · 2.6B · 912 MB · No tools" });
+    const built = menu([local], { selection: { instanceId: "local-server", model: "gemma2:2b" } });
+    expect(built.current).toMatchObject({ label: "gemma2:2b", meta: "2.6B · 912 MB · No tools", title: "Local server · gemma2:2b · 2.6B · 912 MB · No tools" });
   });
 
-  it("keeps the API key heading for another OpenAI-compatible server", () => {
+  it("keeps the API key heading for a server that needs one", () => {
     expect(menu([openaiKey]).groups.map((group) => group.label)).toEqual(["OpenAI · API key"]);
   });
 });
@@ -136,14 +136,14 @@ describe("the Simple model menu", () => {
   });
 
   it("lists every ready provider at once: the current one first, then sign-ins, API keys and local engines", () => {
-    const built = menu([codex, openaiKey, pi, claude(), claudeKey]);
+    const built = menu([second, openaiKey, pi, claude(), claudeKey]);
     expect(built.groups.map((group) => group.label)).toEqual(["Claude", "OpenAI", "OpenAI · API key", "Claude · API key", "pi"]);
     expect(rows(built, 1)).toEqual(["GPT-5.6", "GPT-5.6 mini", "GPT-5.5"]);
     expect(rows(built, 3)).toEqual(["Sonnet 5", "Fable 5.1"]);
   });
 
   it("offers three suggestions in a provider that does not hold the current model", () => {
-    const built = menu([claude(), engine("other", "codex", "Codex", "subscription", claudeModels.slice(0, 5))]);
+    const built = menu([claude(), engine("other", "customAcp", "Codex", "subscription", claudeModels.slice(0, 5))]);
     expect(rows(built, 1)).toHaveLength(3);
     expect(body(built, 1)).toMatchObject({ toggle: "more", total: 5 });
   });
@@ -153,8 +153,8 @@ describe("the Simple model menu", () => {
   });
 
   it("names each signed-in account of one family, and keeps a signed-out sibling one click from signing in", () => {
-    const work = engine("claude-work", "claudeAgent", "Work", "subscription", claudeModels.slice(0, 2));
-    const home = { ...engine("claude-home", "claudeAgent", "Home", "subscription", claudeModels.slice(0, 2)),
+    const work = engine("claude-work", "customAcp", "Work", "subscription", claudeModels.slice(0, 2));
+    const home = { ...engine("claude-home", "customAcp", "Home", "subscription", claudeModels.slice(0, 2)),
       snapshot: { state: "available" as const, authenticated: false } };
     const built = menu([claude(), work, home]);
     expect(built.groups.map((group) => [group.label, group.body.kind])).toEqual([
@@ -166,12 +166,12 @@ describe("the Simple model menu", () => {
 
   it("says why a provider cannot run: set up, sign in, managed, or nothing listed yet", () => {
     const missing = { ...cursor, snapshot: { state: "unavailable" as const, reason: "not found" } };
-    const signedOut = { ...codex, snapshot: { state: "available" as const, authenticated: false } };
+    const signedOut = { ...second, snapshot: { state: "available" as const, authenticated: false } };
     const managed = { ...openaiKey, policy: { organizationName: "Acme", reason: "Company models only." } };
-    const plan = engine("chatgpt", "codex", "ChatGPT plan", "subscription", [], { snapshot: { state: "available", authenticated: true, chatgptPlan: true } });
+    const plan = engine("chatgpt", "customAcp", "ChatGPT plan", "subscription", [], { snapshot: { state: "available", authenticated: true, chatgptPlan: true } });
     const built = menu([claude(), missing, signedOut, managed, plan]);
     expect(Object.fromEntries(built.groups.map((group) => [group.instance.instanceId, group.body]))).toMatchObject({
-      cursor: { kind: "setUp" }, codex: { kind: "signIn" }, openai: { kind: "policy", organization: "Acme" }, chatgpt: { kind: "empty", loading: false },
+      cursor: { kind: "setUp" }, second: { kind: "signIn" }, openai: { kind: "policy", organization: "Acme" }, chatgpt: { kind: "empty", loading: false },
     });
   });
 
@@ -185,17 +185,17 @@ describe("the Simple model menu", () => {
   });
 
   it("keeps a signed-out engine's local models with a way to sign in for its own", () => {
-    const signedOut = claude({ snapshot: { state: "available", authenticated: false } }, [...claudeModels, { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }]);
-    const built = menu([signedOut], { selection: { instanceId: "claude", model: "ollama::qwen3" } });
-    expect(built.current).toMatchObject({ label: "qwen3 (Ollama)", warning: false });
+    const signedOut = claude({ snapshot: { state: "available", authenticated: false } }, [...claudeModels, { id: "local::qwen3", label: "qwen3 (Local)", custom: true }]);
+    const built = menu([signedOut], { selection: { instanceId: "claude", model: "local::qwen3" } });
+    expect(built.current).toMatchObject({ label: "qwen3 (Local)", warning: false });
     expect(body(built)).toMatchObject({ kind: "models", rows: [], signInForOwn: true });
     const onOfficial = menu([signedOut]);
     expect(onOfficial.current).toMatchObject({ meta: "Sign-in required", warning: true });
-    expect(rows(onOfficial)).toEqual(["qwen3 (Ollama)"]);
+    expect(rows(onOfficial)).toEqual(["qwen3 (Local)"]);
   });
 
   it("marks local models apart only where a provider mixes them with its own", () => {
-    const withLocal = claude({}, [...claudeModels.slice(0, 2), { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }]);
+    const withLocal = claude({}, [...claudeModels.slice(0, 2), { id: "local::qwen3", label: "qwen3 (Local)", custom: true }]);
     expect(body(menu([withLocal]))).toMatchObject({ localFrom: 1 });
     expect(body(menu([claude(), pi]), 1)).toMatchObject({ localFrom: null });
     expect(rows(menu([claude(), pi]), 1)).toEqual(["Gemma 4", "Llama 4"]);
@@ -203,12 +203,12 @@ describe("the Simple model menu", () => {
 
   it("says it is looking for local models while a provider with none yet is probed", () => {
     expect(body(menu([claude()], { probing: new Set(["claude"]) }))).toMatchObject({ probing: true });
-    const withLocal = claude({}, [...claudeModels, { id: "ollama::qwen3", label: "qwen3 (Ollama)", custom: true }]);
+    const withLocal = claude({}, [...claudeModels, { id: "local::qwen3", label: "qwen3 (Local)", custom: true }]);
     expect(body(menu([withLocal], { probing: new Set(["claude"]) }))).toMatchObject({ probing: false });
   });
 
   it("tells same-named models apart by their route", () => {
-    const routes = engine("pi", "piAgent", "pi", "custom", [
+    const routes = engine("pi", "customAcp", "pi", "custom", [
       { id: "anthropic/sonnet", label: "Claude Sonnet 4.5", custom: true, provider: "anthropic" },
       { id: "bedrock/sonnet", label: "Claude Sonnet 4.5", custom: true, provider: "amazon-bedrock" },
       { id: "openai/gpt", label: "GPT-5.6", custom: true, provider: "openai" },
@@ -220,15 +220,15 @@ describe("the Simple model menu", () => {
   });
 
   it("offers the bot's model to a thread on its own once, in the follow row, not again in its provider", () => {
-    const own = menu([claude(), codex], { bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" }, follows: false } });
+    const own = menu([claude(), second], { bot: { name: "Pepper", selection: { instanceId: "agent-two", model: "gpt-5.6" }, follows: false } });
     expect(own.follow).toBe(true);
     expect(rows(own, 1)).toEqual(["GPT-5.6 mini", "GPT-5.5"]);
     const onlyModel = menu([claude(), cursor], { bot: { name: "Pepper", selection: { instanceId: "cursor", model: "auto" }, follows: false } });
     expect(onlyModel.groups.map((group) => group.label)).toEqual(["Claude"]);
-    expect(rows(menu([claude(), codex], { bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" } } }), 1))
+    expect(rows(menu([claude(), second], { bot: { name: "Pepper", selection: { instanceId: "agent-two", model: "gpt-5.6" } } }), 1))
       .toEqual(["GPT-5.6", "GPT-5.6 mini", "GPT-5.5"]);
-    const router = engine("router", "openai-compat", "OpenRouter", "api", [1, 2, 3, 4].map((index) => ({ id: `r-${index}`, label: `Router ${index}` })));
-    const searched = menu([claude(), codex, router], { query: "gpt-5.6", bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" }, follows: false } });
+    const router = engine("router", "customAcp", "OpenRouter", "api", [1, 2, 3, 4].map((index) => ({ id: `r-${index}`, label: `Router ${index}` })));
+    const searched = menu([claude(), second, router], { query: "gpt-5.6", bot: { name: "Pepper", selection: { instanceId: "agent-two", model: "gpt-5.6" }, follows: false } });
     expect(searched.follow).toBe(false);
     expect(rows(searched)).toEqual(["GPT-5.6", "GPT-5.6 mini"]);
   });
@@ -238,7 +238,7 @@ describe("the Simple model menu", () => {
     expect(auto.current).toMatchObject({ label: "Cursor Auto", title: "Cursor · Auto" });
     expect(modelName(cursor, "auto")).toBe("Cursor Auto");
     expect(modelName(claude(), "sonnet-5")).toBe("Claude Sonnet 5");
-    expect(modelName(codex, "gpt-5.6")).toBe("GPT-5.6");
+    expect(modelName(second, "gpt-5.6")).toBe("GPT-5.6");
     expect(modelName(pi, "llama")).toBe("Llama 4");
     expect(modelName(undefined, "gone-model")).toBe("gone-model");
     expect(modelName(cursor, "gone-model")).toBe("gone-model");
@@ -246,18 +246,18 @@ describe("the Simple model menu", () => {
 
   it("names the picked Antigravity thinking level on the current model, as its row in the list does (#4160)", () => {
     const variants = [{ id: "low", label: "Low" }, { id: "medium", label: "Medium" }];
-    const gemini = engine("antigravity", "antigravityAgent", "Google Gemini", "subscription", [
+    const gemini = engine("agent-four", "customAcp", "Google Gemini", "subscription", [
       { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", variants },
     ], { capabilities: { modelVariants: true } });
-    const picked = menu([gemini], { selection: { instanceId: "antigravity", model: "gemini-3.8-flash", variant: "medium" } });
+    const picked = menu([gemini], { selection: { instanceId: "agent-four", model: "gemini-3.8-flash", variant: "medium" } });
     expect(picked.current).toMatchObject({ label: "Gemini 3.8 Flash · Medium" });
     expect(picked.current?.title).toBe("Google Gemini · Gemini 3.8 Flash · Medium");
-    const pickedLow = menu([gemini], { selection: { instanceId: "antigravity", model: "gemini-3.8-flash", variant: "low" } });
+    const pickedLow = menu([gemini], { selection: { instanceId: "agent-four", model: "gemini-3.8-flash", variant: "low" } });
     expect(pickedLow.current).toMatchObject({ label: "Gemini 3.8 Flash · Low" });
     expect(rows(picked)).toEqual(["Gemini 3.8 Flash · Low"]);
     expect(modelName(gemini, "gemini-3.8-flash")).toBe("Gemini 3.8 Flash");
     expect(modelName(gemini, "gemini-3.8-flash", "gone")).toBe("Gemini 3.8 Flash");
-    expect(modelName({ ...gemini, driverKind: "opencodeGo" }, "gemini-3.8-flash", "medium")).toBe("Gemini 3.8 Flash");
+    expect(modelName({ ...gemini, driverKind: "customAcp" }, "gemini-3.8-flash", "medium")).toBe("Gemini 3.8 Flash");
     expect(modelName(gemini, "gemini-3.8-flash", "low")).toBe("Gemini 3.8 Flash · Low");
   });
 
@@ -282,42 +282,23 @@ describe("the Simple model menu", () => {
   });
 
   it("counts only models a person can pick toward the search box", () => {
-    const missing = engine("cursor", "cursorAgent", "Cursor", "subscription", claudeModels.slice(0, 6), { snapshot: { state: "unavailable", reason: "not found" } });
-    const managed = { ...engine("router", "openai-compat", "Router", "api", claudeModels), policy: { organizationName: "Acme", reason: "No." } };
+    const missing = engine("cursor", "customAcp", "Cursor", "subscription", claudeModels.slice(0, 6), { snapshot: { state: "unavailable", reason: "not found" } });
+    const managed = { ...engine("router", "customAcp", "Router", "api", claudeModels), policy: { organizationName: "Acme", reason: "No." } };
     expect(menu([claude(), missing, managed]).search).toBe(false);
   });
 
   it("searches only past twelve models, across every provider, with the current model checked in place", () => {
-    expect(menu([claude(), codex]).search).toBe(false);
-    const many = engine("router", "openai-compat", "OpenRouter", "api",
+    expect(menu([claude(), second]).search).toBe(false);
+    const many = engine("router", "customAcp", "OpenRouter", "api",
       Array.from({ length: SIMPLE_SEARCH_AFTER }, (_, index) => ({ id: `model-${index}`, label: `Router ${index}` })));
     expect(menu([claude(), many], { query: "sonnet" }).search).toBe(true);
-    const found = menu([claude(), codex, many], { query: "sonnet 5" });
+    const found = menu([claude(), second, many], { query: "sonnet 5" });
     expect(found.current).toBeNull();
     expect(found.groups.map((group) => group.label)).toEqual(["Claude"]);
     expect((found.groups[0]!.body as Extract<Menu["groups"][number]["body"], { kind: "models" }>).rows.map((row) => [row.label, row.current]))
       .toEqual([["Sonnet 5", true]]);
     expect(found.results).toBe(1);
-    expect(menu([claude(), codex, many], { query: "zzz" })).toMatchObject({ groups: [], results: 0 });
-  });
-});
-
-describe("a model that needs a newer CLI", () => {
-  const gated = claudeModels.map((option) => option.id === "opus-5-5" ? { ...option, needsCliUpdate: "2.1.321" } : option);
-  const pick = (model: string) => ({ instanceId: "claude", model });
-  const menuOn = (model: string) => simpleModelMenu({
-    instances: [claude({}, gated)], listed: [claude({}, gated)], selection: pick(model),
-    bot: { name: "Scout", selection: pick(model) }, query: "", expanded: new Set(["claude"]), probing: new Set(), loading: false,
-  });
-
-  it("stays listed but cannot be picked", () => {
-    const body = menuOn("sonnet-5").groups[0]!.body;
-    if (body.kind !== "models") throw new Error("expected the models");
-    expect(body.rows.filter((row) => row.blocked).map((row) => row.option.id)).toEqual(["opus-5-5"]);
-  });
-
-  it("offers the update on the current row instead of failing the turn", () => {
-    expect(menuOn("opus-5-5").current).toMatchObject({ warning: true, blocked: true, meta: "Update Claude" });
+    expect(menu([claude(), second, many], { query: "zzz" })).toMatchObject({ groups: [], results: 0 });
   });
 });
 

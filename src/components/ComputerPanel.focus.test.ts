@@ -44,7 +44,7 @@ const { ComputerPanel } = await import("./ComputerPanel");
 const { BotEditorStore, initialState } = await import("@/state/store");
 
 const engine = (instanceId: string) => ({
-  instanceId, driverKind: "claudeAgent", displayName: instanceId, access: "subscription",
+  instanceId, driverKind: "customAcp", displayName: instanceId, access: "subscription",
   snapshot: { state: "available", version: "1", authenticated: true },
   models: { default: "m", options: [{ id: "m", label: "M" }] },
   capabilities: { computerMcp: true, browserMcp: true },

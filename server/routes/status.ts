@@ -154,7 +154,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
         return json(res, 400, { error: `provider must be one of ${PROVIDER_KEY_KINDS.join(", ")}` });
       }
       const kind = provider as ProviderKeyKind;
-      const saved = { openai: cfg.openai, openrouter: cfg.openrouter, openaiCompat: cfg.openaiCompat }[kind];
+      const saved = { openai: cfg.openai, openrouter: cfg.openrouter }[kind];
       if (body?.key !== undefined && typeof body.key !== "string") {
         return json(res, 400, { error: "key must be a string" });
       }
@@ -164,11 +164,9 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
       const url = typeof body?.url === "string" && body.url.trim() ? body.url.trim() : (saved && "url" in saved ? saved.url : undefined);
       res.setHeader("cache-control", "no-store");
       const verdict = await checkProviderKey({ provider: kind, key, url });
-      if (kind !== "anthropic") {
-        const base = providerBaseUrl(kind, url);
-        if (verdict.ok) noteKeyAccepted(base, key);
-        else if (verdict.reason === "rejected") noteKeyRejected(base, key);
-      }
+      const base = providerBaseUrl(kind, url);
+      if (verdict.ok) noteKeyAccepted(base, key);
+      else if (verdict.reason === "rejected") noteKeyRejected(base, key);
       return json(res, 200, verdict);
     }
 

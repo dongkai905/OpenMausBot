@@ -1,6 +1,6 @@
 // Settings → Import: everything that brings work in from elsewhere, in one place. "From your AI apps" brings the skills
 // and MCP servers another AI tool keeps on this computer.
-import { BookOpen, Check, ChevronDown, Info, Loader2, Plug } from "lucide-react";
+import { BookOpen, Check, Info, Loader2, Plug } from "lucide-react";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { SettingRow, SettingsLook, SettingsRows, Switch } from "./SettingsPrimitives";
 
@@ -10,22 +10,15 @@ import { t } from "@/lib/i18n";
 import { importOutcome, localSetupImport, setupImportApi, skillsSummary, toolsSummary, type SetupImportClient } from "@/lib/setup-import";
 import { useStore } from "@/state/store";
 import { detectionCount, detectionSources, type SetupDetection, type SetupImportResult, type SetupSource } from "../../shared/setup-import";
-import { GrokBotMark } from "./GrokBotMark";
-import { GrokMoveDialog } from "./lazy-screens";
-import { ClaudeMark, CodexMark, CursorMark, PresetProviderMark } from "./ProviderIcons";
+import { CursorMark, PresetProviderMark } from "./ProviderIcons";
 
 function SourceMarks({ sources }: { sources: readonly SetupSource[] }) {
-  const marks = [...new Set(sources.map((source) => (source === "claudeDesktop" ? "claudeCode" : source)))];
+  const marks = [...new Set(sources)];
   return (
     <span className="mr-1.5 inline-flex items-center gap-1 align-[-1px]" aria-hidden="true">
-      {marks.map((source) => {
-        switch (source) {
-          case "codex": return <CodexMark key={source} size={12} />;
-          case "cursor": return <CursorMark key={source} size={12} />;
-          case "gemini": return <PresetProviderMark key={source} preset="google" size={12} />;
-          default: return <ClaudeMark key={source} size={12} />;
-        }
-      })}
+      {marks.map((source) => source === "cursor"
+        ? <CursorMark key={source} size={12} />
+        : <PresetProviderMark key={source} preset="google" size={12} />)}
     </span>
   );
 }
@@ -215,46 +208,18 @@ function AiAppsImport({ client, local }: { client: SetupImportClient; local: boo
     onSkip={() => (status === "failed" ? setStatus("idle") : setDetection({ skills: [], tools: [] }))} />;
 }
 
-export function GrokImportSection() {
-  const [started, setStarted] = useState(false);
-  const [open, setOpen] = useState(false);
-  if (useContext(SettingsLook)) {
-    return (
-      <div data-import-section="grok" className="flex flex-col">
-        <SettingRow title={t("settings.import.moveTitle")} subtitle={t("settings.import.grokLine")}>
-          <button type="button" className="ui-button" data-grok-move-open aria-expanded={open} onClick={() => { setStarted(true); setOpen(!open); }}>{t(open ? "common.close" : "settings.import.moveAction")}</button>
-        </SettingRow>
-        {started && <div className={open ? "px-4 pb-3" : "hidden"}><GrokMoveDialog inline onClose={() => { setStarted(false); setOpen(false); }} /></div>}
-      </div>
-    );
-  }
-  return (
-    <section data-import-section="grok" className="rounded-xl bg-card p-4">
-      <div className="flex items-center gap-2 text-[15px] font-medium text-ink"><GrokBotMark size={16} />{t("settings.import.grokTitle")}</div>
-      <div className="mt-0.5 text-[13px] leading-relaxed text-ink-secondary">{t("settings.import.grokSubtitle")}</div>
-      <button type="button" data-grok-move-open aria-expanded={open} onClick={() => { setStarted(true); setOpen(!open); }} className={cn(BUTTON, "mt-3")}>
-        {t("settings.import.grokTitle")}
-        <ChevronDown size={14} aria-hidden="true" className={cn("transition-transform", open && "rotate-180")} />
-      </button>
-      {started && <div className={open ? undefined : "hidden"}><GrokMoveDialog inline onClose={() => { setStarted(false); setOpen(false); }} /></div>}
-    </section>
-  );
-}
-
 export function ImportSettings({ client = setupImportApi }: { client?: SetupImportClient }) {
   const { state } = useStore();
   if (useContext(SettingsLook)) {
     return (
       <SettingsRows>
         <AiAppsImport client={client} local={localSetupImport(state.config?.cloudHome === true)} />
-        <GrokImportSection />
       </SettingsRows>
     );
   }
   return (
     <div className="flex flex-col gap-4">
       <AiAppsImport client={client} local={localSetupImport(state.config?.cloudHome === true)} />
-      <GrokImportSection />
     </div>
   );
 }

@@ -11,22 +11,8 @@ describe("a server's mark comes from its host", () => {
     ["https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1", "aws"],
     ["https://generativelanguage.googleapis.com/v1beta/openai", "google"],
     ["https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1/endpoints/openapi", "google"],
-    ["https://api.x.ai/v1", "xai"],
-    ["https://api.deepseek.com", "deepseek"],
-    ["https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://workspace-123.us-east-1.maas.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://workspace-123.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://workspace-123.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1", "qwen"],
-    ["https://api.moonshot.ai/v1", "moonshot"],
-    ["https://api.moonshot.cn/v1", "moonshot"],
-    ["https://api.mistral.ai/v1", "mistral"],
-    ["https://api.cohere.com/compatibility/v1", "cohere"],
-    ["https://api.cohere.ai/compatibility/v1", "cohere"],
     ["https://openrouter.ai/api/v1", "openrouter"],
     ["https://api.anthropic.com/v1", "anthropic"],
-    ["https://api.llama.com/compat/v1", "meta"],
   ])("%s shows %s", (url, preset) => {
     expect(serverIconPreset(url)).toBe(preset);
   });
@@ -34,10 +20,10 @@ describe("a server's mark comes from its host", () => {
   it("ignores the port, the scheme between http and https, letter case and a trailing dot", () => {
     expect(serverIconPreset("https://api.openai.com:443/v1")).toBe("openai");
     expect(serverIconPreset("https://api.openai.com:8443/v1")).toBe("openai");
-    expect(serverIconPreset("http://api.deepseek.com/v1")).toBe("deepseek");
-    expect(serverIconPreset("HTTPS://API.DeepSeek.COM/v1")).toBe("deepseek");
+    expect(serverIconPreset("http://api.openai.com/v1")).toBe("openai");
+    expect(serverIconPreset("HTTPS://API.OPENAI.COM/v1")).toBe("openai");
     expect(serverIconPreset("https://api.openai.com./v1")).toBe("openai");
-    expect(serverIconPreset("HTTPS://WORKSPACE-123.CN-BEIJING.MAAS.ALIYUNCS.COM.:8443/compatible-mode/v1")).toBe("qwen");
+    expect(serverIconPreset("HTTPS://OPENROUTER.AI.:8443/api/v1")).toBe("openrouter");
   });
 
   it.each([
@@ -89,22 +75,17 @@ describe("an instance's mark", () => {
   const server = (url: unknown, extra: object = {}) => ({ driver: "openai-compat", config: { url, key: "sk-fixture" }, ...extra });
 
   it("is the mark of whoever runs an OpenAI-compatible server", () => {
-    expect(instanceIcon(server("https://api.deepseek.com/v1"))).toEqual({ icon: { kind: "preset", preset: "deepseek" } });
-    expect(instanceIcon(server("https://dashscope-intl.aliyuncs.com/compatible-mode/v1"))).toEqual({ icon: { kind: "preset", preset: "qwen" } });
-    expect(instanceIcon(server("https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"))).toEqual({ icon: { kind: "preset", preset: "qwen" } });
-  });
-
-  it("is Ollama's mark for a server on Ollama's port or added as Ollama", () => {
-    expect(instanceIcon(server("http://127.0.0.1:11434/v1"))).toEqual({ icon: { kind: "preset", preset: "ollama" } });
-    expect(instanceIcon({ driver: "openai-compat", config: { url: "http://gpu-box.local:8080/v1", catalog: "ollama" } })).toEqual({ icon: { kind: "preset", preset: "ollama" } });
+    expect(instanceIcon(server("https://api.openai.com/v1"))).toEqual({ icon: { kind: "preset", preset: "openai" } });
+    expect(instanceIcon(server("https://openrouter.ai/api/v1"))).toEqual({ icon: { kind: "preset", preset: "openrouter" } });
+    expect(instanceIcon(server("https://api.anthropic.com/v1"))).toEqual({ icon: { kind: "preset", preset: "anthropic" } });
   });
 
   it("keeps a stored icon, preset or custom, over the server's", () => {
-    const preset = { kind: "preset", preset: "cohere" } as const;
+    const preset = { kind: "preset", preset: "openrouter" } as const;
     const custom = { kind: "custom", dataUrl: "data:image/png;base64,iVBORw0KGgo=" } as const;
-    expect(instanceIcon(server("https://api.deepseek.com/v1", { icon: preset }))).toEqual({ icon: preset });
-    expect(instanceIcon(server("https://api.deepseek.com/v1", { icon: custom }))).toEqual({ icon: custom });
-    expect(instanceIcon(server("https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", { icon: custom }))).toEqual({ icon: custom });
+    expect(instanceIcon(server("https://api.openai.com/v1", { icon: preset }))).toEqual({ icon: preset });
+    expect(instanceIcon(server("https://api.openai.com/v1", { icon: custom }))).toEqual({ icon: custom });
+    expect(instanceIcon(server("https://openrouter.ai/api/v1", { icon: custom }))).toEqual({ icon: custom });
     expect(instanceIcon({ driver: "claudeAgent", icon: preset })).toEqual({ icon: preset });
   });
 

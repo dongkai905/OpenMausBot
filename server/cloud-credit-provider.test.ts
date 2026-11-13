@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLOUD_CREDIT_INSTANCE, CloudCreditProvider, cloudCreditInstanceConfig, parseCreditModels } from "./cloud-credit-provider.ts";
 import type { InstanceConfigMap, ProviderInstance, RuntimeEvent } from "./contracts.ts";
-import { OpenAICompatDriver } from "./drivers/openai-compat.ts";
 import { ProviderRegistry } from "./harness/registry.ts";
-import { recordEvents } from "./testing/events.ts";
 import { TRIAL_CREDIT_REFUSED } from "./trial-credit.ts";
 
 const TOKEN = `omb_ai_${"t".repeat(43)}`;
@@ -43,8 +41,6 @@ describe("what the credit's engine is made of", () => {
       config: { url: RELAY, apiKeyEnv: "OPENMAUSBOT_TRIAL_CREDIT_KEY", provider: "", model: "claude-haiku-4-5", managedModels: ["claude-haiku-4-5", "claude-sonnet-5"] },
       environment: { OPENMAUSBOT_TRIAL_CREDIT_KEY: TOKEN } });
     expect(JSON.stringify(configs)).not.toMatch(/ANTHROPIC|claudeAgent|codex|\/messages/);
-    expect(OpenAICompatDriver.decodeConfig(entry.config)).toEqual({ url: RELAY, apiKeyEnv: "OPENMAUSBOT_TRIAL_CREDIT_KEY",
-      model: "claude-haiku-4-5", managedModels: ["claude-haiku-4-5", "claude-sonnet-5"], key: undefined, provider: undefined });
   });
 });
 
@@ -234,46 +230,4 @@ describe("the credit's engine on a Cloud home", () => {
     }
   });
 
-  it("through the real chat engine: a turn goes to the relay's chat completions with the token as a Bearer key, and the relay's 402 reads as one plain sentence", async () => {
-    const requests: Array<{ url: string; method: string; authorization: string | null; body: string }> = [];
-    let usedUp = false;
-    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input), headers = new Headers(init?.headers);
-      requests.push({ url, method: init?.method ?? "GET", authorization: headers.get("authorization"), body: String(init?.body ?? "") });
-      if (url === `${RELAY}/models`) return json(200, MODELS);
-      if (url === `${RELAY}/chat/completions`) return usedUp ? refusal(402, "Your $5 of Claude credit is used up. To keep your bots working, connect your own Claude or ChatGPT account, or an API key, on your Cloud.")
-        : json(200, { id: "c1", object: "chat.completion", model: "claude-haiku-4-5", choices: [{ index: 0, message: { role: "assistant", content: "Hello from the credit" }, finish_reason: "stop" }],
-          usage: { prompt_tokens: 12, completion_tokens: 4 } });
-      return json(404, { error: { message: "Not found" } });
-    });
-    vi.stubGlobal("fetch", fetch);
-    const registry = new ProviderRegistry([OpenAICompatDriver]);
-    const provider = make({ registry, fetch });
-    await provider.start();
-    const instance = registry.get(CLOUD_CREDIT_INSTANCE)!;
-    expect(instance.driverKind).toBe("openai-compat");
-    expect(instance.models.default).toBe("claude-haiku-4-5");
-    expect(await instance.snapshot()).toMatchObject({ state: "available", authenticated: true, billing: "metered" });
-    const recorder = recordEvents(instance.adapter);
-    await instance.adapter.sendTurn({ threadId: "credit-thread", text: "hi", model: "claude-haiku-4-5" });
-    expect(await recorder.until(event => event.type === "turn.completed")).toMatchObject({ ok: true });
-    const turn = requests.find(request => request.url === `${RELAY}/chat/completions`)!;
-    expect(turn).toMatchObject({ method: "POST", authorization: `Bearer ${TOKEN}` });
-    expect(JSON.parse(turn.body)).toMatchObject({ model: "claude-haiku-4-5" });
-    expect(JSON.parse(turn.body)).not.toHaveProperty("provider");
-    expect(requests.map(request => request.url.slice(RELAY.length)).every(path => ["/models", "/chat/completions"].includes(path))).toBe(true);
-    expect(requests.every(request => !request.url.includes("/v1/v1") && !request.url.includes("/messages"))).toBe(true);
-    usedUp = true;
-    recorder.events.length = 0;
-    await instance.adapter.sendTurn({ threadId: "credit-thread-2", text: "more", model: "claude-haiku-4-5" });
-    await recorder.until(event => event.type === "turn.completed");
-    const failed = recorder.events.find(event => event.type === "runtime.error")!;
-    expect(failed).toMatchObject({ message: TRIAL_CREDIT_REFUSED.used_up, setup: true, trialCredit: "used_up" });
-    expect(JSON.stringify(recorder.events)).not.toMatch(/insufficient_quota|HTTP 402/);
-    expect(JSON.stringify(recorder.events)).not.toContain(TOKEN);
-    await vi.waitFor(() => expect(provider.status()).toBe("used_up"));
-    expect(await registry.get(CLOUD_CREDIT_INSTANCE)!.snapshot()).toEqual({ state: "unavailable", reason: TRIAL_CREDIT_REFUSED.used_up });
-    recorder.stop();
-    await registry.dispose(CLOUD_CREDIT_INSTANCE);
-  });
 });

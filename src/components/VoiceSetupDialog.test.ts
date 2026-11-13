@@ -46,7 +46,7 @@ const { useBotSettingsDerived } = await import("./bot-settings/useBotSettingsDer
 const pepper: Bot = {
   id: "pepper", threadId: "t", name: "Pepper", title: "", description: "", color: "green",
   notifications: true, unread: false, messages: [],
-  modelSelection: { instanceId: "codex", model: "m" },
+  modelSelection: { instanceId: "agent-two", model: "m" },
 };
 
 type Props = Parameters<typeof VoiceSetupDialog>[0];

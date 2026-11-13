@@ -8,26 +8,20 @@ import { t } from "@/lib/i18n";
 import { BoatOfferPanel } from "../BoatOffer";
 import { LiveProviderSettings } from "../LiveProviderSettings";
 import { VoiceEveryReplySetting } from "../VoiceEveryReplySetting";
-import { BuiltInReplyWait, LmStudioServer, OtherOpenAiCompatServers } from "../OpenAiCompatServers";
-import { OllamaServer } from "../OllamaServer";
 import { KEY_CATALOG, KEY_SECTIONS, keyMatches, savedState, type KeyEntry, type KeyId, type KeySectionId } from "./key-catalog";
 import { finishKeyFocus, useKeyFocus, type KeyFocusRequest } from "./key-focus";
-import { AnthropicEveryClaudeBot, OpenAiCompatUrl, OpenCodeProviderKeys, VpsConnection } from "./KeyPanels";
+import { AnthropicEveryClaudeBot, VpsConnection } from "./KeyPanels";
 import { KEY_CONTENT, KEY_ROW, KeyRow, MaskedKey, RowHeading, type KeyStatus } from "./KeyRow";
 
 const CARD = "rounded-xl bg-card in-data-[settings-look=simple]:rounded-[12px] in-data-[settings-look=simple]:border-[0.5px] in-data-[settings-look=simple]:border-(--settings-edge) in-data-[settings-look=simple]:bg-menu";
 const HIGHLIGHT_MS = 1600;
 
 const PANELS: Partial<Record<KeyId, (visible: boolean) => ReactNode>> = {
-  opencodeProviders: () => <OpenCodeProviderKeys />,
-  ollama: (visible) => <OllamaServer visible={visible} />,
-  lmStudio: () => <LmStudioServer heading={false} />,
   vps: () => <VpsConnection />,
 };
 
 const EXTRAS: Partial<Record<KeyId, () => ReactNode>> = {
   anthropic: () => <AnthropicEveryClaudeBot />,
-  openaiCompat: () => <><OpenAiCompatUrl /><BuiltInReplyWait /><OtherOpenAiCompatServers /></>,
   box: () => <BoatOfferPanel />,
   liveKey: () => <LiveProviderSettings />,
 };

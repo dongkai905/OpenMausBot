@@ -11,7 +11,7 @@ import { Select } from "./Select";
 import { productName } from "@/lib/brand";
 
 const PROVIDER_LABEL: Record<ImageProvider, string> = {
-  openai: "OpenAI", xai: "Grok (xAI)", gemini: "Gemini", openrouter: "OpenRouter", custom: "Custom",
+  openai: "OpenAI", gemini: "Gemini", openrouter: "OpenRouter", custom: "Custom",
 };
 const OWN_KEYS = {
   openai: { credential: "openaiImageApiKey", patch: (key: string) => ({ imageGen: { key } }), label: "imageGen.key.openai" },
@@ -19,12 +19,11 @@ const OWN_KEYS = {
   custom: { credential: "customImageApiKey", patch: (key: string) => ({ imageGen: { customApiKey: key } }), label: "imageGen.key.custom" },
 } as const satisfies Partial<Record<ImageProvider, { credential: string; patch: (key: string) => object; label: LocaleKey }>>;
 const SHARED_KEYS = {
-  xai: { label: "imageGen.key.xai", note: "imageGen.key.sharedXai" },
   openrouter: { label: "imageGen.key.openrouter", note: "imageGen.key.sharedOpenrouter" },
 } as const satisfies Partial<Record<ImageProvider, { label: LocaleKey; note: LocaleKey }>>;
 const KEY_URL: Partial<Record<ImageProvider, string>> = {
   openai: "https://platform.openai.com/api-keys", gemini: "https://aistudio.google.com/apikey",
-  xai: "https://console.x.ai", openrouter: "https://openrouter.ai/keys",
+  openrouter: "https://openrouter.ai/keys",
 };
 
 type Slot = "primary" | "fallback";
@@ -49,7 +48,6 @@ type ImageGenStatus = NonNullable<ConfigStatus["imageGen"]>;
 
 function keyConfigured(status: ImageGenStatus | undefined, provider: ImageProvider): boolean {
   if (provider === "openai") return status?.openaiConfigured === true;
-  if (provider === "xai") return status?.xaiConfigured === true;
   if (provider === "gemini") return status?.geminiConfigured === true;
   if (provider === "openrouter") return status?.openrouterConfigured === true;
   return status?.customKeyConfigured === true;
@@ -256,7 +254,7 @@ function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status
   const setVerdict = (next: { ok: boolean; text: string } | null) => setTested(next && { ...next, models });
   const configured = keyConfigured(status, provider);
   const own = provider === "openai" || provider === "gemini" || provider === "custom" ? OWN_KEYS[provider] : null;
-  const shared = provider === "xai" || provider === "openrouter" ? SHARED_KEYS[provider] : null;
+  const shared = provider === "openrouter" ? SHARED_KEYS[provider] : null;
   const customUrl = url ?? status?.customUrl ?? "";
 
   const run = async (work: () => Promise<ConfigStatus>) => {
@@ -274,7 +272,7 @@ function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status
     }
   };
   const saveKey = (key: string) => run(async () => {
-    if (provider === "xai" || provider === "openrouter") return saveCredential(provider, key, false);
+    if (provider === "openrouter") return saveCredential(provider, key, false);
     return window.ogb?.setCredential && own
       ? window.ogb.setCredential(own.credential, key)
       : api("/api/config", { method: "PUT", body: JSON.stringify(own!.patch(key)) });

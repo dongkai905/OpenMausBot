@@ -137,10 +137,8 @@ export function KeyRow({
   const saved = savedState(entry, state.config);
   const engineRejected = (state.instances ?? []).some((instance) => instance.access === "api" && keyForInstance(instance.instanceId) === entry.id
     && instance.snapshot.state === "available" && instance.snapshot.authenticated === false);
-  // A key engine with its own CLI (DeepSeek Harness) can't use a saved key until that CLI runs here.
-  // The Grok CLI signs in with a grok.com account and drops XAI_API_KEY, so installing it never puts the xAI key to use.
   const keyEngines = saved.configured
-    ? (state.instances ?? []).filter((instance) => instance.driverKind !== "grokAgent" && keyForInstance(instance.instanceId) === entry.id)
+    ? (state.instances ?? []).filter((instance) => keyForInstance(instance.instanceId) === entry.id)
     : [];
   const missingEngine = keyEngines.some((instance) => instance.snapshot.state === "available")
     ? undefined

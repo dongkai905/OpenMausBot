@@ -239,14 +239,14 @@ it("T1 records a person's turn as a root that runs and completes", () => scenari
 it("T2 parks the root on a credential card and runs it again with the provided line", () => scenario(async (f) => {
   f.script(f.clive.id,
     { key: "C1", match: [SECRET_PROVIDED], reply: "T2-DONE: the model is set up." },
-    { key: "C0", match: ["T2-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: "T2 fixture model" } }], reply: "T2-ASKED: waiting for the key." });
+    { key: "C0", match: ["T2-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: "T2 fixture model" } }], reply: "T2-ASKED: waiting for the key." });
   const job = f.clive.activeTaskId;
-  await f.say(f.clive.id, job, "T2-JOB: set up the Grok model; ask me for the key you need.");
+  await f.say(f.clive.id, job, "T2-JOB: set up the OpenAI model; ask me for the key you need.");
   await f.final(job, "T2-ASKED");
   await expect.poll(() => f.roots()[0]?.status, { timeout: 15_000 }).toBe("needs_input");
   const card = (await f.messages(job)).find((message: any) => message.kind === "secret");
   expect(card).toBeDefined();
-  expect(card.secret).toMatchObject({ target: "xaiApiKey" });
+  expect(card.secret).toMatchObject({ target: "openaiApiKey" });
   expect(card.secret.resumed).toBeUndefined();
   const parked = f.roots()[0];
   expect(parked).toMatchObject({ status: "needs_input", cards: [card.id], executions: 1 });
@@ -260,7 +260,7 @@ it("T2 parks the root on a credential card and runs it again with the provided l
   await f.final(job, "T2-TYPED-DONE");
   await expect.poll(() => f.roots().map((row: any) => row.status), { timeout: 15_000 }).toEqual(["needs_input", "completed"]);
   expect(f.roots()[0]).toMatchObject({ id: parked.id, cards: [card.id], executions: 1 });
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${f.clive.id}/secret-cards/${card.id}/provided`, { threadId: job });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: true });
@@ -529,9 +529,9 @@ const browserPlace = async (f: any) => {
 };
 
 it("T8 Stop while parked on a credential card cancels the root and stops the card; a key provided afterwards is saved but starts nothing", () => scenario(async (f) => {
-  f.script(f.clive.id, { key: "C0", match: ["T8-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: "T8 fixture model" } }], reply: "T8-ASKED: waiting for the key." });
+  f.script(f.clive.id, { key: "C0", match: ["T8-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: "T8 fixture model" } }], reply: "T8-ASKED: waiting for the key." });
   const job = f.clive.activeTaskId;
-  await f.say(f.clive.id, job, "T8-JOB: set up the Grok model; ask me for the key you need.");
+  await f.say(f.clive.id, job, "T8-JOB: set up the OpenAI model; ask me for the key you need.");
   await f.final(job, "T8-ASKED");
   await expect.poll(() => f.roots()[0]?.status, { timeout: 15_000 }).toBe("needs_input");
   const card = (await f.messages(job)).find((message: any) => message.kind === "secret");
@@ -543,7 +543,7 @@ it("T8 Stop while parked on a credential card cancels the root and stops the car
   expect(stopped).toMatchObject({ stopped: true });
   expect(stopped.resumed).toBeUndefined();
   expect(stopped.provided).toBeUndefined();
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${f.clive.id}/secret-cards/${card.id}/provided`, { threadId: job });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: false });
@@ -656,14 +656,14 @@ it("T9 parks the root on a sign-in card and runs it again with the signed-in lin
 it("T10 parks a teammate's turn on its credential card, tells the Chief at once, and the key answers the teammate", () => scenario(async (f) => {
   const mira = (await f.cli("new-bot", "--name", "Mira", "--section", "Engineering")).bot;
   expect((await f.api("PATCH", `/api/bots/${f.clive.id}`, { chiefOfStaff: true, managedSections: ["Engineering"], acknowledgePeerScope: true })).status).toBe(200);
-  const brief = "T10-BRIEF: set up the Grok model for the export; ask for the key you need.";
+  const brief = "T10-BRIEF: set up the OpenAI model for the export; ask for the key you need.";
   f.script(f.clive.id,
     { key: "C0", match: ["T10-JOB"], steps: [{ arguments: { bot_ids: [mira.id], message: brief } }], reply: "C0: Mira is on it." },
     { key: "C-WAITS", match: ["[From @Mira (bot) · note on assignment", "T10-JOB"], reply: "C-WAITS: Mira waits on the key; nothing else is open." },
     { key: "C1", match: [SETTLED, REPORT_FROM_MIRA, "T10-RESULT"], reply: "T10-FINAL: the export model is set up." });
   f.script(mira.id,
     { key: "M2", match: ["T10-BRIEF", SECRET_PROVIDED], reply: "T10-RESULT: the key is in and the export runs." },
-    { key: "M1", match: ["T10-BRIEF"], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: "T10 export model" } }], reply: "M1: I asked for the key." });
+    { key: "M1", match: ["T10-BRIEF"], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: "T10 export model" } }], reply: "M1: I asked for the key." });
   const job = f.clive.activeTaskId;
   await f.say(f.clive.id, job, "T10-JOB: have Mira set up the export model and own the result.");
   const children = () => f.db().assignments.filter((row: any) => row.parentId);
@@ -682,7 +682,7 @@ it("T10 parks a teammate's turn on its credential card, tells the Chief at once,
   await expect.poll(() => f.roots()[0].status, { timeout: 15_000 }).toBe("waiting");
   expect(children()[0]).toMatchObject({ status: "needs_input", cards: [card.id] });
   expect((await f.task(mira.id, work)).busy).toBe(false);
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${mira.id}/secret-cards/${card.id}/provided`, { threadId: work });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: true });
@@ -772,14 +772,14 @@ const answerStartsNothing = async (f: StallFixture, job: string) => {
 };
 
 it("T12 a turn the watchdog stops after it posted a credential card fails as stalled and stops the card", () => scenario(async (f) => {
-  f.script(f.clive.id, { key: "C0", match: ["T12-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "xaiApiKey", reason: "T12 fixture model" } }],
+  f.script(f.clive.id, { key: "C0", match: ["T12-JOB"], steps: [{ tool: "request_credential", arguments: { credential_id: "openaiApiKey", reason: "T12 fixture model" } }],
     gateFile: f.gate("c0"), reply: "T12-LATE: never shown." });
   const job = f.clive.activeTaskId;
-  await f.say(f.clive.id, job, "T12-JOB: set up the Grok model; ask me for the key you need.");
+  await f.say(f.clive.id, job, "T12-JOB: set up the OpenAI model; ask me for the key you need.");
   await expect.poll(async () => (await f.messages(job)).find((message: { kind: string }) => message.kind === "secret")?.id, { timeout: 30_000 }).toBeTruthy();
   const card = (await f.messages(job)).find((message: { kind: string }) => message.kind === "secret");
   await stallOverCards(f, job, [card.id]);
-  expect((await f.api("PUT", "/api/config", { xai: { key: "xai-fixture-key" } })).status).toBe(200);
+  expect((await f.api("PUT", "/api/config", { openai: { key: "openai-fixture-key" } })).status).toBe(200);
   const provided = await f.api("POST", `/api/bots/${f.clive.id}/secret-cards/${card.id}/provided`, { threadId: job });
   expect(provided.status, JSON.stringify(provided.body)).toBe(200);
   expect(provided.body).toEqual({ provided: true, resumed: false });

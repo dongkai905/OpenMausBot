@@ -38,7 +38,7 @@ export function onKeyRejectionChange(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** xAI answers a wrong key with HTTP 400, not 401. */
+/** A wrong key is not always answered with 401: a provider may answer 400 or 403 instead. */
 export function rejectsKey(status: number, body: string): boolean {
   if (/\b(?:quota|billing|credits?|rate.?limit|insufficient.?(?:balance|funds))\b/i.test(body)) return false;
   if (status === 401) return true;

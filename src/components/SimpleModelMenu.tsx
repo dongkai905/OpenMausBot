@@ -74,7 +74,7 @@ export function FavoriteStar({ instanceId, model, name }: { instanceId: string; 
 
 function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: MenuModelRow; onPick: SimpleMenuActions["onPick"] }) {
   const { option } = row;
-  const reason = row.blocked ? t(option.needsCliUpdate ? "chat.claudeUpdate.offer" : "model.orgBlocked") : undefined;
+  const reason = row.blocked ? t("model.orgBlocked") : undefined;
   return (
     <div className="group/model relative">
     <button
@@ -116,7 +116,7 @@ function GroupBody({ group, props }: { group: MenuGroup; props: SimpleModelMenuP
     case "signIn":
       return (
         <button type="button" data-menu-row data-simple-set-up tabIndex={-1} onClick={(event) => props.onSetUp(instance, event.detail === 0)}
-          title={t("model.simple.needsSetup", { name: group.account ?? group.provider })} className={MENU_ROW}>
+          title={t("model.simple.needsSetup", { name: group.provider })} className={MENU_ROW}>
           <Gutter>{body.kind === "setUp" ? <Download size={16} strokeWidth={MENU_STROKE} className={MENU_ICON} aria-hidden="true" /> : <LogIn size={16} strokeWidth={MENU_STROKE} className={MENU_ICON} aria-hidden="true" />}</Gutter>
           <span className="min-w-0 flex-1 truncate">{body.kind === "setUp" ? t("model.simple.setUp") : t("model.simple.signIn")}</span>
           <Forward />

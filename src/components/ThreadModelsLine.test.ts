@@ -13,7 +13,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
 const { ThreadModelsLine } = await import("./ThreadModelsLine");
 
 const opus = { instanceId: "claude", model: "claude-opus-5" };
-const codex = { instanceId: "codex", model: "gpt-5-codex" };
+const second = { instanceId: "agent-two", model: "gpt-5-second" };
 const task = (threadId: string, overrides: Partial<Task> = {}): Task => ({ threadId, title: threadId, createdAt: 1, ...overrides });
 const ada = (tasks: Task[]): Bot => ({
   id: "ada", threadId: "first", name: "Ada", title: "", description: "", notifications: true, color: "green", unread: false,
@@ -32,13 +32,13 @@ describe("ThreadModelsLine", () => {
   });
 
   it("shows nothing for a server too old to say whether a thread follows", () => {
-    expect(html(ada([task("old", { modelSelection: codex })]))).toBe("");
+    expect(html(ada([task("old", { modelSelection: second })]))).toBe("");
   });
 
   it("counts the threads on a model of their own", () => {
     const bot = ada([
       task("first", { modelSelection: opus, followsBotModel: true }),
-      task("one", { modelSelection: codex, followsBotModel: false }),
+      task("one", { modelSelection: second, followsBotModel: false }),
       task("two", { modelSelection: { ...opus, effort: "high" }, followsBotModel: false }),
     ]);
     expect(html(bot)).toContain("2 threads use their own model.");
@@ -46,7 +46,7 @@ describe("ThreadModelsLine", () => {
   });
 
   it("says one thread in the singular", () => {
-    const line = html(ada([task("one", { modelSelection: codex, followsBotModel: false })]));
+    const line = html(ada([task("one", { modelSelection: second, followsBotModel: false })]));
     expect(line).toContain("1 thread uses its own model.");
     expect(line).toContain("Switch it too");
   });

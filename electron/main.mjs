@@ -2731,7 +2731,7 @@ ipcMain.handle("desktop:capabilities", async (event) =>
   }),
 );
 
-async function saveWorkspaceCredential(name, value, options) {
+async function saveWorkspaceCredential(name, value) {
   const patchFor = CREDENTIAL_PATCH[name];
   if (!patchFor || typeof value !== "string") {
     throw new Error("Unsupported credential");
@@ -2749,7 +2749,7 @@ async function saveWorkspaceCredential(name, value, options) {
         { "content-type": "application/json" },
         { packaged: app.isPackaged, token: desktopMutationToken },
       ),
-      body: JSON.stringify(patchFor(secret, options)),
+      body: JSON.stringify(patchFor(secret)),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) throw credentialSaveError(response.status, body, nativeT);
@@ -2771,7 +2771,7 @@ async function saveWorkspaceCredential(name, value, options) {
 }
 
 installCredentialStoreIpc({ ipcMain, localOnly, dialog, windowFor: (sender) => BrowserWindow.fromWebContents(sender), t: nativeT, appName: () => app.name, unreadable: () => credentialStoreUnavailable, quitting: () => desktopShutdownStarted, moveAside: () => fs.renameSync(CREDENTIALS_FILE, `${CREDENTIALS_FILE}.unreadable-${Date.now()}`), log: slog, relaunch: relaunchAfterDesktopRemoteChange });
-ipcMain.handle("credential:set", localOnly("credential:set", (_event, name, value, options) => saveWorkspaceCredential(name, value, options)));
+ipcMain.handle("credential:set", localOnly("credential:set", (_event, name, value) => saveWorkspaceCredential(name, value)));
 
 ipcMain.handle("approvals:set-trusted-mode", localOnly("approvals:set-trusted-mode", (_event, botId, mode, options) => {
   // A separately launched dev server is outside this trust path: never degrade this grant to loopback HTTP.

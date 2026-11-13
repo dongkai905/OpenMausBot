@@ -6,36 +6,21 @@ type Row = { id: string; driverKind: string; snapshot?: { freeFallback?: boolean
 const row = (id: string, driverKind: string, snapshot?: Row["snapshot"]): Row => ({ id, driverKind, ...(snapshot ? { snapshot } : {}) });
 const ids = (rows: readonly Row[]) => rows.map((entry) => entry.id);
 
-// The default fleet's own order: grok, kimi, droid, cursor, claude, codex, chatgpt, antigravity, opencodeGo, …
-const grok = row("grok", "grokAgent");
-const kimi = row("kimi", "kimiAgent");
-const droid = row("droid", "droidAgent");
-const claude = row("claude", "claudeAgent");
-const codex = row("codex", "codex");
-const chatgpt = row("chatgpt", "codex");
-const antigravity = row("antigravity", "antigravityAgent");
-const openCodeFree = row("opencodeGo", "opencodeGo", { freeFallback: true });
-const openCode = row("opencodeGo", "opencodeGo");
-const xai = row("xai", "grok");
-const gemini = row("gemini", "geminiAgent");
+const first = row("first", "customAcp");
+const second = row("second", "customAcp");
+const third = row("third", "customAcp");
+const backup = row("backup", "customAcp", { freeFallback: true });
 
 describe("one ranking of the AIs a new person has", () => {
-  it("puts a Claude account first, then a ChatGPT plan, then Gemini, then Grok, then the rest in config order", () => {
-    expect(ids(rankAis([grok, kimi, droid, claude, codex, chatgpt, antigravity, openCodeFree])))
-      .toEqual(["claude", "codex", "chatgpt", "antigravity", "grok", "kimi", "droid", "opencodeGo"]);
-    expect(ids(rankAis([xai, gemini, kimi]))).toEqual(["gemini", "xai", "kimi"]);
-  });
-
-  it("keeps OpenCode on free models only last, and a signed-in OpenCode among the rest", () => {
-    expect(ids(rankAis([openCodeFree, kimi]))).toEqual(["kimi", "opencodeGo"]);
-    expect(ids(rankAis([openCode, kimi]))).toEqual(["opencodeGo", "kimi"]);
-    expect(ids(rankAis([openCodeFree]))).toEqual(["opencodeGo"]);
+  it("keeps the order it is given, and puts an AI with only free models last", () => {
+    expect(ids(rankAis([first, second, third]))).toEqual(["first", "second", "third"]);
+    expect(ids(rankAis([backup, second]))).toEqual(["second", "backup"]);
   });
 
   it("never reorders the list it is given", () => {
-    const list = [grok, claude];
+    const list = [first, second];
     rankAis(list);
-    expect(ids(list)).toEqual(["grok", "claude"]);
+    expect(ids(list)).toEqual(["first", "second"]);
     expect(rankAis([])).toEqual([]);
   });
 });

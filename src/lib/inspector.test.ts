@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { summarizeNative, summarizeRuntime, toRows, type InspectorEntry } from "./inspector";
 
-const base = { eventId: "e", provider: "claudeAgent" as const, threadId: "t", createdAt: "2026-08-17T10:00:00.000Z" };
+const base = { eventId: "e", provider: "customAcp" as const, threadId: "t", createdAt: "2026-08-17T10:00:00.000Z" };
 
 describe("summarizeRuntime", () => {
   it("labels turn boundaries and failures by tone", () => {

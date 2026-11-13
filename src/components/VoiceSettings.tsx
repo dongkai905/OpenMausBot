@@ -99,8 +99,7 @@ export function VoiceSettings({
       ? t("voice.hostLabel", { provider: t("voice.elevenlabs.label") })
       : provider === "chatterbox"
         ? t("voice.hostLabel", { provider: t("voice.chatterboxLabel") })
-        : provider === "openai" ? t("voice.hostLabel", { provider: "OpenAI" })
-          : provider === "xai" ? t("voice.grok.host") : t("voice.host");
+        : provider === "openai" ? t("voice.hostLabel", { provider: "OpenAI" }) : t("voice.host");
   const systemVoicesAvailable = capabilities.host.platform === "darwin";
   const hostConfigured = Boolean(tts?.configured);
   const included = Boolean(tts?.included);
@@ -206,7 +205,7 @@ export function VoiceSettings({
       .finally(() => current() && setAddingVoice(null));
   };
 
-  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini" | "openai") => {
+  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "gemini" | "openai") => {
     if (next === provider || switching || (next === "system" && !systemVoicesAvailable)) return;
     setSwitching(true);
     setKeyDraft({ provider: null, value: "" });
@@ -272,7 +271,7 @@ export function VoiceSettings({
   const selectedVoice = usesLocalSystem ? deviceVoice : (bot.voice ?? "");
   const ready = usesLocalSystem || (hostConfigured && Boolean(selectedVoice || tts.voice));
   const selectedDescription = voices.find((voice) => voice.id === selectedVoice)?.description;
-  const providerName = cloudProvider?.name ?? (provider === "xai" ? "Grok" : provider === "chatterbox" ? "Chatterbox" : t("voice.macBuiltIn"));
+  const providerName = cloudProvider?.name ?? (provider === "chatterbox" ? "Chatterbox" : t("voice.macBuiltIn"));
   const everyReply = bot.voiceNoteEveryReply ?? tts?.everyReply === true;
 
   return (
@@ -288,8 +287,6 @@ export function VoiceSettings({
                 ? systemVoicesAvailable
                   ? ` ${t("voice.macInstalled")}`
                   : ` ${t("voice.macUnavailable")}`
-                : provider === "xai"
-                  ? ` ${t("voice.grok.sharedKey")}`
                 : provider === "chatterbox"
                   ? ` ${t("voice.chatterboxShared")}`
                   : ` ${t("voice.providerShared", { provider: cloudProvider?.name ?? t("voice.provider") })}`}</>}
@@ -331,7 +328,6 @@ export function VoiceSettings({
               { value: "elevenlabs", label: t("voice.elevenlabs.label"), available: true, span: "col-span-1" },
               { value: "fish", label: t("voice.fish.label"), available: true, span: "col-span-1" },
               { value: "openai", label: "OpenAI", available: true, span: "col-span-1" },
-              { value: "xai", label: t("voice.grok.label"), available: true, span: "col-span-1" },
               { value: "gemini", label: "Gemini", available: true, span: "col-span-1" },
               { value: "system", label: t("voice.macBuiltIn"), available: systemVoicesAvailable, span: "col-span-1" },
               { value: "chatterbox", label: t("voice.chatterboxLocal"), available: true, span: "col-span-1" },
@@ -421,12 +417,6 @@ export function VoiceSettings({
           <p>{t("voice.openai.description")}</p>
           {!hostConfigured && <p>{t("voice.openai.missingKey")} <KeysLink id="openai" /></p>}
         </div>
-      )}
-
-      {provider === "xai" && (
-        <p className="mt-4 text-[13px] text-ink-secondary">
-          {hostConfigured ? t("voice.grok.ready") : <>{t("voice.grok.missingKey")} <KeysLink id="xai" /></>}
-        </p>
       )}
 
       {!workspaceConfigurationLocked && provider === "chatterbox" && (

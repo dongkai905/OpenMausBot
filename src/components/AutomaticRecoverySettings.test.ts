@@ -56,7 +56,7 @@ const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve()
 beforeEach(() => {
   fixture.values = [];
   fixture.config = {};
-  fixture.instances = [{ instanceId: "backup", driverKind: "codex", displayName: "Backup engine",
+  fixture.instances = [{ instanceId: "backup", driverKind: "customAcp", displayName: "Backup engine",
     snapshot: { state: "available", authenticated: true }, models: { default: "m", options: [{ id: "m", label: "Backup model" }] } }];
   fixture.api.mockReset();
   fixture.dispatch.mockReset().mockImplementation(({ config }: { config: ConfigStatus }) => { fixture.config = config; });

@@ -33,11 +33,9 @@ export function SecretRequestCard({
   const { dispatch } = useStore();
   const secret = message.secret!;
   const localize = activeLocale() !== "en";
-  const greenference = localize && secret.target === "greenferenceApiKey";
-  const modelgo = localize && secret.target === "modelgoApiKey";
   const gemini = localize && secret.target === "geminiTtsKey";
-  const label = greenference ? t("keys.greenference.label") : modelgo ? t("keys.modelgo.label") : gemini ? t("keys.label.geminiTts") : secret.label;
-  const placeholder = greenference ? t("keys.greenference.placeholder") : modelgo ? t("keys.modelgo.placeholder") : gemini ? t("voice.gemini.keyPlaceholder") : secret.placeholder;
+  const label = gemini ? t("keys.label.geminiTts") : secret.label;
+  const placeholder = gemini ? t("voice.gemini.keyPlaceholder") : secret.placeholder;
   const parts = secret.descriptionParts;
   const suppliedDescription = localize && parts
     ? [t(parts.baseCode), parts.reason, t("server.connect.secretNeverRead", { bot: parts.bot })].filter(Boolean).join(" ")
@@ -161,7 +159,7 @@ export function SecretRequestCard({
         const store = desktopStore(desktopCredentialSlot(target));
         if (isConfigCredentialTarget(target)) {
           const status: ConfigStatus = store
-            ? await store(next, target === "anthropicApiKey" ? { everyClaudeBot: false } : undefined)
+            ? await store(next)
             : await api(request.path, { method: request.method, body: JSON.stringify(request.body) });
           dispatch({ type: "configStatus", config: status });
         } else await api(request.path, { method: request.method, body: JSON.stringify(request.body) });

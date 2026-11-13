@@ -59,13 +59,13 @@ describe("bot patch queue", () => {
     await queue.flush("bot-1");
     queue.enqueue(
       "bot-1",
-      { modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" } },
+      { modelSelection: { instanceId: "agent-two", model: "gpt-5.6-sol" } },
       bot(),
     );
     await vi.runAllTicks();
     expect(send).toHaveBeenLastCalledWith(
       "bot-1",
-      { modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" } },
+      { modelSelection: { instanceId: "agent-two", model: "gpt-5.6-sol" } },
       expect.any(AbortSignal),
       expect.objectContaining({ id: "bot-1" }),
       false,

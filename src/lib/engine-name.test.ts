@@ -6,14 +6,11 @@ import { setLocale } from "./i18n";
 afterEach(() => setLocale("en"));
 
 describe("engineDisplayName", () => {
-  it("translates only the server's own default names", () => {
+  it("shows the engine's own name, in whatever language the person named it in", () => {
     setLocale("pt-br");
-    expect(engineDisplayName({ instanceId: "claudeApi", displayName: "Claude (API key)" })).toBe("Claude (chave de API)");
-    expect(engineDisplayName({ instanceId: "chatgpt", displayName: "ChatGPT plan" })).toBe("Plano do ChatGPT");
-    expect(engineDisplayName({ instanceId: "openaiCompat", displayName: "Other (OpenAI-compatible)" })).toBe("Outro (compatível com OpenAI)");
-    expect(engineDisplayName({ instanceId: "claudeApi", displayName: "Work key" })).toBe("Work key");
-    expect(engineDisplayName({ instanceId: "codex", displayName: "ChatGPT plan" })).toBe("ChatGPT plan");
+    expect(engineDisplayName({ instanceId: "my-agent", displayName: "Meu Agente" })).toBe("Meu Agente");
+    expect(engineDisplayName({ instanceId: "my-agent", displayName: "My Agent" })).toBe("My Agent");
     setLocale("en");
-    expect(engineDisplayName({ instanceId: "claudeApi", displayName: "Claude (API key)" })).toBe("Claude (API key)");
+    expect(engineDisplayName({ instanceId: "my-agent", displayName: "My Agent" })).toBe("My Agent");
   });
 });

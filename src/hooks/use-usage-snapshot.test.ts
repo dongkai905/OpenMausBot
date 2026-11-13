@@ -28,7 +28,7 @@ function ready(patch: Partial<AppState> = {}): AppState {
     hydrated: true,
     routinesLoadState: "ready",
     config: { box: { configured: false }, composio: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 } } as ConfigStatus,
-    instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", snapshot: { state: "available", authenticated: true }, models: { default: "", options: [] } } as InstanceInfo],
+    instances: [{ instanceId: "claude", driverKind: "customAcp", displayName: "Claude", snapshot: { state: "available", authenticated: true }, models: { default: "", options: [] } } as InstanceInfo],
     webhookIngress: { available: true, baseUrl: "http://127.0.0.1:8800" },
     ...patch,
   };

@@ -10,7 +10,6 @@ import {
 import type { Routine } from "@/lib/routines";
 import { api, useStore, type Message } from "@/state/store";
 import { failedTurnNotice } from "@/lib/failed-turn";
-import { codexUsageLimitReached } from "../../shared/codex-usage-limit";
 import { openBotSettings } from "./bot-panel/panel-link";
 import { threadUpdatedLabel } from "./SidebarThreadRow";
 
@@ -58,8 +57,9 @@ export function usePastLimitNotice(tool: NonNullable<Message["tool"]>, messageAt
     return () => { if (timer) clearTimeout(timer); };
   }, [at]);
   if (typeof at !== "number" || !Number.isFinite(at) || typeof messageAt !== "number" || messageAt > at || clock < at) return null;
+  // A sign-in failure is not a usage-limit refusal, whatever reset time it carries.
+  if (tool.setup) return null;
   const { cause, notice } = failedTurnNotice(tool);
-  if (!codexUsageLimitReached(cause)) return null;
   return (
     <details className="my-1 w-fit max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-lg border border-hairline/40 bg-raised px-3 py-2 text-[12px] text-ink-secondary">
       <summary className="cursor-pointer">{t("chat.error.pastUsageLimit")}</summary>
