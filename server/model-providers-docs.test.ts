@@ -1,16 +1,13 @@
 // Pins each workaround the "Other model providers" docs page gives to the code it depends on: when one fails, update the page.
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PROVIDER_CREDENTIAL_ENV, WORKSPACE_CREDENTIAL_ENV, stripWorkspaceCredentialEnv } from "./config.ts";
-import { removeTempDir } from "./testing/cleanup.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PAGE = readFileSync(join(ROOT, "apps", "docs", "content", "docs", "providers", "model-providers.mdx"), "utf8");
-const EN = JSON.parse(readFileSync(join(ROOT, "src", "locales", "en.json"), "utf8")) as Record<string, string>;
 
 function section(heading: string): string {
   const lines = PAGE.split(/\r?\n/u);
@@ -22,20 +19,6 @@ function section(heading: string): string {
 }
 
 const flat = (text: string) => text.replace(/\s+/gu, " ");
-
-const scratchDirs: string[] = [];
-const scratch = (prefix: string) => {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-};
-
-afterEach(async () => {
-  for (const dir of scratchDirs.splice(0)) await removeTempDir(dir);
-});
-
-
-
 
 describe("Keys exported on a server", () => {
   const exported = ["OPENROUTER_API_KEY", "FIREWORKS_API_KEY", "TOGETHER_API_KEY"];

@@ -19,7 +19,7 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
-  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config, bots: fixture.bots, instances: [{ instanceId: "agent-two", driverKind: "customAcp" }, { instanceId: "claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", driverKind: "customAcp" }] }, dispatch: fixture.dispatch }) };
+  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config, bots: fixture.bots, instances: [{ instanceId: "agent-two", driverKind: "customAcp" }, { instanceId: "acct-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", driverKind: "customAcp" }] }, dispatch: fixture.dispatch }) };
 });
 vi.mock("./DesktopCapabilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("./DesktopCapabilities")>(),
@@ -110,13 +110,13 @@ describe("composer call button", () => {
 
   it("starts the call with the same telemetry as the header button did", () => {
     render().button.props.onClick!();
-    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "agent-two", mode: "turns" });
+    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "custom_acp", mode: "turns" });
     expect(fixture.startCall).toHaveBeenCalledWith("pepper");
     expect(fixture.endCall).not.toHaveBeenCalled();
   });
 
   it("names the engine, never the instance id, for an added account", () => {
-    const added = { ...bot, modelSelection: { instanceId: "claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", model: "m" } };
+    const added = { ...bot, modelSelection: { instanceId: "acct-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", model: "m" } };
     let tree: ReactNode = null;
     function Capture() {
       const element = CallButton({ bot: added }) as ReactElement<Parameters<typeof CallTargetButton>[0]>;
@@ -125,7 +125,7 @@ describe("composer call button", () => {
     }
     renderToStaticMarkup(createElement(Capture));
     findButton(tree)!.props.onClick!();
-    expect(fixture.track.mock.calls).toEqual([["call_started", { driver: "claude", mode: "turns" }]]);
+    expect(fixture.track.mock.calls).toEqual([["call_started", { driver: "custom_acp", mode: "turns" }]]);
   });
 
   it("shows a hang-up state during the call and hangs up", () => {
@@ -163,7 +163,7 @@ describe("composer call button", () => {
     button.props.onClick!();
     expect(getUserMedia).toHaveBeenCalledTimes(1);
     expect(liveMedia()).toMatchObject({ phase: "starting", botId: "pepper" });
-    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "agent-two", mode: "live" });
+    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "custom_acp", mode: "live" });
   });
 
   it("is a Live call on a server's page in the Windows app and the Mac app alike", () => {

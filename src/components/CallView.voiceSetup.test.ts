@@ -33,7 +33,7 @@ vi.mock("react", async (original) => ({
 }));
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
-  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config, bots: fixture.bots, instances: [{ instanceId: "agent-two", driverKind: "customAcp" }, { instanceId: "claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", driverKind: "customAcp" }] }, dispatch: fixture.dispatch }) };
+  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config, bots: fixture.bots, instances: [{ instanceId: "agent-two", driverKind: "customAcp" }, { instanceId: "acct-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c", driverKind: "customAcp" }] }, dispatch: fixture.dispatch }) };
 });
 vi.mock("@/lib/thread-preferences", () => ({ useShowThreads: () => fixture.showThreads }));
 vi.mock("./DesktopCapabilities", async (importOriginal) => ({
@@ -172,7 +172,7 @@ describe("setting up a voice from the call button", () => {
     expect(fixture.dialog!.ready).toBe(true);
 
     (fixture.dialog!.onStartCall as () => void)();
-    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "agent-two", mode: "turns" });
+    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "custom_acp", mode: "turns" });
     expect(fixture.startCall).toHaveBeenCalledWith("pepper");
     expect(render().html).not.toContain("data-voice-setup-stub");
   });
@@ -270,7 +270,7 @@ describe("setting up a voice from the call button", () => {
     click(find(render(), "data-call-button"));
     expect(getUserMedia).toHaveBeenCalledTimes(1);
     expect(liveMedia()).toMatchObject({ phase: "starting", botId: "pepper", threadId: "t" });
-    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "agent-two", mode: "live" });
+    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "custom_acp", mode: "live" });
     const after = render();
     expect(after.html).not.toContain("Set up voice");
     expect(after.html).not.toContain("Call unavailable");

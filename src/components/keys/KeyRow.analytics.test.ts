@@ -73,7 +73,6 @@ describe("a row with its own Get a key link", () => {
   const link = (props: Parameters<typeof KeyRow>[0]) => render(props).find((node) => node.type === "a")! as ReactElement<Props & { href?: string }>;
 
   it("points that link at exactly the provider's address", async () => {
-    fixture.api.mockResolvedValueOnce({ openai: { configured: true, last4: KEY.slice(-4) } }).mockResolvedValueOnce({ ok: true });
     expect(link({ id: "openai" }).props.href).toBe(URL_EXACT);
   });
 

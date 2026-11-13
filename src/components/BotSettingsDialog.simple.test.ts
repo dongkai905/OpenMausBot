@@ -794,28 +794,20 @@ describe("the Bot settings page", () => {
   });
 
   it.each([["auto", "Decide for me", undefined], ["edits", "Auto-accept edits", undefined], ["custom", "Custom", "Change this in Advanced mode"]] as const)(
-    "shows a bot in %s mode as a third, selected pill it cannot pick again, beside the two choices", (mode, label, tooltip) => {
+    "shows a bot in %s mode as a third, selected pill it cannot pick again, beside the two choices, and writes nothing until the person picks", (mode, label, tooltip) => {
       fixture.derived.approvalMode = mode;
-      const rendered = settingsPage(makeBot());
+      const rendered = settingsPage(makeBot({ approvalMode: mode }));
       const acts = segment(rendered, "data-approval-choice");
       expect(acts.options.map((option) => [option.value, option.label, Boolean(option.disabled)])).toEqual([["ask", "Ask me first", false], ["full", "Just do it", false], [mode, label, true]]);
       expect((acts.options[2] as { tooltip?: string }).tooltip).toBe(tooltip);
       expect(pressed(rendered.html, "data-approval-choice")).toEqual([mode]);
+      expect(patch).not.toHaveBeenCalled();
       acts.onChange(mode);
       expect(fixture.dispatch).not.toHaveBeenCalled();
       acts.onChange("ask");
       expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateBot", botId: "scout", patch: { approvalMode: "ask", applyToAllThreads: true } });
     },
   );
-
-  it("shows legacy Antigravity Auto as Ask without a third pill or a change to the saved mode", () => {
-    fixture.derived.engine = engine({ driverKind: "customAcp" });
-    fixture.derived.approvalMode = "auto";
-    const rendered = settingsPage(makeBot({ approvalMode: "auto" }));
-    expect(segment(rendered, "data-approval-choice").options).toHaveLength(2);
-    expect(pressed(rendered.html, "data-approval-choice")).toEqual(["ask"]);
-    expect(patch).not.toHaveBeenCalled();
-  });
 
   it("lets the approval level change while the bot is busy and says from when", () => {
     const rendered = settingsPage(makeBot({ busy: true }));

@@ -57,8 +57,8 @@ describe("a saved key", () => {
   });
 
   it("says Saved, not Connected, for a key nothing can test", () => {
-    fixture.config = { meta: { configured: true, last4: "9z9z" } };
-    const html = render({ id: "meta" });
+    fixture.config = { savedKeys: { geminiTtsKey: { configured: true, last4: "9z9z" } } };
+    const html = render({ id: "geminiTts" });
     expect(html).toContain(">Saved<");
     expect(html).not.toContain(">Connected<");
     expect(html).toContain("••••••••9z9z");
