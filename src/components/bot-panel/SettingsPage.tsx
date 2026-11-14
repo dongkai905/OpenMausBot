@@ -26,8 +26,6 @@ import { useSlackManagementUrl } from "../bot-settings/useSlackManagement";
 import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerived";
 import { useThreadApproval } from "../thread-approval";
 import { BackupAis } from "./BackupAis";
-import { HeavyBotRow } from "./HeavyBotRow";
-import { SoulChanges } from "./SoulChanges";
 import type { SimplePageId } from "./page-registry";
 import { buttonCls, Card, ColRow, NavRow, RowIcon, rowCls, RowText, Segmented, SwitchRow, TrashButton, type SegmentOption } from "./rows";
 
@@ -120,7 +118,6 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
                 placeholder: t("botSettings.simple.instructionsPlaceholder", { name }),
               }}
             />
-            <SoulChanges bot={bot} />
             {editingInstructions && (
               <div className="flex justify-end">
                 <button type="button" data-panel-done="soul" onClick={() => { void flushBotPatches(bot.id); onEditInstructions?.(false); }} className={buttonCls}>
@@ -147,7 +144,6 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
         )}
       </Card>
 
-      <HeavyBotRow bot={bot} />
 
       <Card anchor="approval">
         <ColRow data-panel-row="approval">

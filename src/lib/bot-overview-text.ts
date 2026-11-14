@@ -1,29 +1,5 @@
 import { locales, type LocaleKey } from "@/locales";
 import { activeLocale, t } from "@/lib/i18n";
-import { niceTime, scheduleLabel } from "@/lib/schedule-label";
-import type { OverviewRoutineLine } from "@/lib/bot-overview-types";
-
-const LAST_RUN: Record<string, LocaleKey> = {
-  completed: "botOverview.routine.last.completed", failed: "botOverview.routine.last.failed", missed: "botOverview.routine.last.missed",
-  cancelled: "botOverview.routine.last.cancelled", running: "botOverview.routine.last.running", queued: "botOverview.routine.last.queued",
-  waiting: "botOverview.routine.last.waiting",
-};
-
-export function overviewRoutineText(routine: OverviewRoutineLine | undefined, locale = activeLocale()): string | null {
-  if (!routine || locale === "en") return null;
-  if (routine.paused) return t("botOverview.routine.paused", { name: routine.name });
-  const last = routine.lastRun;
-  if (last && !Object.hasOwn(LAST_RUN, last.status)) return null;
-  try {
-    return [
-      t("botOverview.routine.line", { schedule: scheduleLabel(routine.schedule), name: routine.name }),
-      ...(routine.nextRunAt != null ? [t("botOverview.routine.next", { time: niceTime(routine.nextRunAt) })] : []),
-      ...(last ? [t(LAST_RUN[last.status]!, { time: niceTime(last.at) })] : []),
-    ].join(" ");
-  } catch {
-    return null;
-  }
-}
 
 const EXACT: Record<string, LocaleKey> = {
   "Works in its private workspace.": "botOverview.line.privateWorkspace",
@@ -101,8 +77,6 @@ export function overviewLineText(line: string, managedSections?: readonly string
   if (folder) return t("botOverview.line.folder", { folder: folder[1]! });
   const skill = /^Knows how to (.+)\.$/.exec(line);
   if (skill) return t("botOverview.line.skill", { skill: skill[1]! });
-  const webhook = /^Listens for “(.+)” webhooks\.$/.exec(line);
-  if (webhook) return t("botOverview.line.webhook", { name: webhook[1]! });
   return line;
 }
 

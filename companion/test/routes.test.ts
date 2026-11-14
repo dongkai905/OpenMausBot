@@ -111,14 +111,7 @@ describe("what the app may do", () => {
     ["POST", "/api/live/call/end"],
     ["GET", "/api/live/call"],
     ["PATCH", "/api/live/settings"],
-    ["GET", "/api/routines"],
-    ["POST", "/api/routines"],
-    ["PATCH", "/api/routines/routine_1"],
-    ["DELETE", "/api/routines/routine_1"],
-    ["POST", "/api/routines/routine_1/run"],
-    ["POST", "/api/routine-runs/run_1/cancel"],
-    ["POST", "/api/routine-runs/run_1/seen"],
-    // The stopped turn's "Continue when your limit resets" makes a one-time automation, like POST /api/routines.
+    // The stopped turn's "Continue when your limit resets" makes a one-time automation.
     ["POST", "/api/limit-resets/continue"],
     ["GET", "/api/connectors/catalog"],
     ["GET", "/api/connectors/connected"],
@@ -154,8 +147,6 @@ describe("what it may not", () => {
       ["GET", "/api/devices"],
       ["GET", "/api/companion"],
       ["POST", "/api/local-computer/start"],
-      ["POST", "/api/webhooks"],
-      ["POST", "/api/webhooks/wh_1/rotate"],
       ["DELETE", "/api/connectors/gmail"],
       ["POST", "/api/teams/import"],
     ] as Array<[string, string]>) {
@@ -198,22 +189,6 @@ describe("what it may not", () => {
     expect(ask("GET", "/api/companion/endpoints")).toBeNull();
     expect(ask("POST", "/api/companion/endpoints")?.status).toBe(403);
     expect(ask("GET", "/api/companion/endpoints/extra")?.status).toBe(403);
-  });
-
-  it("describes only refused routine operations as computer-only", () => {
-    for (const [method, path] of [
-      ["GET", "/api/routines/routine_1"],
-      ["PUT", "/api/routines/routine_1"],
-      ["POST", "/api/routines/routine_1/cancel"],
-    ] as Array<[string, string]>) {
-      const denial = ask(method, path);
-      expect(denial, `${method} ${path}`).toEqual({
-        status: 403,
-        error: "this routine operation is only available on your computer",
-      });
-    }
-    expect(ask("GET", "/api/routines")).toBeNull();
-    expect(ask("POST", "/api/routines/routine_1/run")).toBeNull();
   });
 
   it("keeps the unpaired-phone notice for the companion alone", () => {

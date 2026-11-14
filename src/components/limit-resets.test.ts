@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// The engines' usage limits on screen: the warning with "Move to after reset", the usage bars in the model button with
-// their card, the stopped turn's Continue button, and the calendar's reset marker that a bot or an automation is dropped on.
+// The engines' usage limits on screen: the usage bars in the model button with their card, and the reset markers the
+// calendar shows.
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EngineLimit } from "../../shared/limit-reset";
 import { failedTurnTool } from "../../shared/failed-turn";
-import type { Routine } from "@/lib/routines";
 import type { Bot, InstanceInfo } from "@/state/store";
 
 const fixture = vi.hoisted(() => ({
@@ -31,11 +30,8 @@ vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 const { setLocale } = await import("@/lib/i18n");
 const limits = await import("@/lib/limit-resets");
-const { automationSentence, isDone, statusLine } = await import("@/lib/automations");
-const { LimitWarnings } = await import("./automations/LimitWarnings");
 const { UsageAlert, UsageBars, UsageRows } = await import("./EngineUsage");
 const { FailedTurnRow } = await import("./ChatView");
-const { CalendarGrid } = await import("./RoutineCalendarPage");
 
 const NOW = new Date(2026, 9, 19, 10, 0, 0).getTime();
 const RESET = new Date(2026, 9, 19, 15, 40, 0).getTime();
@@ -44,10 +40,6 @@ const HOVER_MS = 300;
 const HOUR = 3_600_000;
 const claude = (used: number, blocked = false): EngineLimit => ({ engine: "claude", name: "Claude", driver: "claude", window: "5-hour", usedPercent: used, resetsAt: RESET, blocked });
 const bot = { id: "scout", name: "Scout", hidden: false, threadId: "t-main", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" }, tasks: [] } as unknown as Bot;
-const routine = (id: string, nextRunAt: number, extra: Partial<Routine> = {}): Routine => ({
-  id, name: id, prompt: "Finish the report.", target: "bot", botId: "scout", runOn: "maus", enabled: true,
-  schedule: { type: "daily", time: "11:00", weekdays: [0, 1, 2, 3, 4, 5, 6] }, durationMinutes: 30, nextRunAt, createdAt: 0, updatedAt: 0, ...extra,
-});
 
 let root: Root | null = null;
 function mount(element: ReturnType<typeof createElement>) {
@@ -79,7 +71,7 @@ beforeEach(() => {
   fixture.dispatch.mockReset();
   fixture.api.mockReset();
   fixture.api.mockImplementation(async () => ({ checkedAt: NOW, engines: [claude(92)] }));
-  fixture.state = { bots: [bot], routines: [], instances: [] as InstanceInfo[], config: {}, groups: [] };
+  fixture.state = { bots: [bot], instances: [] as InstanceInfo[], config: {}, groups: [] };
   limits.rememberLimits({ checkedAt: NOW, engines: [claude(92)] });
 });
 afterEach(() => {
@@ -96,49 +88,10 @@ describe("the words", () => {
     expect(limits.nearLimitEngines([claude(89), { ...claude(90), engine: "agent-two" }]).map((limit) => limit.engine)).toEqual(["agent-two"]);
   });
 
-  it("read a limit-reset automation as a sentence, and say when its time is not known", () => {
-    const automation = { kind: "schedule" as const, name: "Report", instructions: "Finish the report.", schedule: { type: "limit_reset" as const, engine: "claude", repeat: "once" as const, at: null } };
-    expect(automationSentence(automation, "Scout")).toBe("When your Claude limit resets, Scout finishes the report");
-    expect(automationSentence({ ...automation, schedule: { ...automation.schedule, repeat: "every_reset" } }, "Scout")).toBe("Each time your Claude limit resets, Scout finishes the report");
-    expect(statusLine({ ...automation, id: "r", botId: "scout", enabled: true, nextRunAt: null, runs: [] }, NOW)).toContain("runs when the limit resets (time not known yet)");
-    expect(isDone({ schedule: { ...automation.schedule, at: NOW - 1 } }, NOW)).toBe(true);
-    expect(isDone({ schedule: { ...automation.schedule, at: null } }, NOW)).toBe(false);
-  });
-
-  it("find the automations due before a reset on a bot that uses that engine", () => {
-    const due = limits.dueBeforeReset([
-      routine("before", NOW + HOUR), routine("after", RESET + 2 * 60_000), routine("paused", NOW + HOUR, { enabled: false }),
-      routine("other-bot", NOW + HOUR, { botId: "second-bot" }), routine("limit", NOW + HOUR, { schedule: { type: "limit_reset", engine: "claude", repeat: "once", at: null } }),
-    ], (botId) => botId === "scout" ? "claude" : "agent-two", claude(92), NOW);
-    expect(due.map((candidate) => candidate.id)).toEqual(["before"]);
-  });
-
   it("put each known reset in the calendar's range", () => {
     expect(limits.resetMarkers([claude(92), { ...claude(10), engine: "agent-two", name: "Codex", resetsAt: null }], NOW, NOW + 24 * HOUR, NOW))
       .toEqual([{ engine: "claude", name: "Claude", at: RESET }]);
     expect(limits.resetMarkers([claude(92)], RESET + 1, RESET + HOUR, NOW)).toEqual([]);
-  });
-});
-
-describe("the Automations page warning", () => {
-  it("shows the engine near its limit and moves just the next run of what is due before the reset", async () => {
-    fixture.state = { ...fixture.state, routines: [routine("brief", NOW + HOUR)] };
-    const moved = routine("brief", RESET + 60_000);
-    fixture.api.mockImplementation(async (path: unknown) => String(path).startsWith("/api/limit-resets/after-reset") ? { routine: moved } : { checkedAt: NOW, engines: [claude(92)] });
-    const container = mount(createElement(LimitWarnings));
-    const warning = container.querySelector('[data-limit-warning="claude"]')!;
-    expect(warning.textContent).toContain("Claude: 92% used · resets 3:40 PM");
-    expect(warning.textContent).toContain("1 automation runs before then");
-    flushSync(() => button(container, "Move to after reset").click());
-    await settle();
-    expect(fixture.api).toHaveBeenCalledWith("/api/limit-resets/after-reset", { method: "POST", body: JSON.stringify({ routineId: "brief", engine: "claude" }) });
-    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "routinePatched", routine: moved });
-  });
-
-  it("stays away while every engine has room", () => {
-    limits.rememberLimits({ checkedAt: NOW, engines: [claude(40)] });
-    fixture.api.mockImplementation(async () => ({ checkedAt: NOW, engines: [claude(40)] }));
-    expect(mount(createElement(LimitWarnings)).innerHTML).toBe("");
   });
 });
 
@@ -271,20 +224,6 @@ describe("the bars", () => {
 });
 
 describe("the chat", () => {
-  it("offers Continue on a turn its limit stopped, which sets up the automation in this conversation", async () => {
-    const created = routine("continue", RESET + 60_000, { schedule: { type: "limit_reset", engine: "claude", repeat: "once", at: RESET + 60_000 } });
-    fixture.api.mockImplementation(async (path: unknown) => String(path) === "/api/limit-resets/continue" ? { routine: created } : { checkedAt: NOW, engines: [claude(100, true)] });
-    const tool = failedTurnTool("This Claude account has reached its 5-hour limit, which resets Oct 19, 3:40 PM (UTC).", { limitResetsAt: RESET });
-    const container = mount(createElement(FailedTurnRow, { tool, engine: undefined, botId: "scout", threadId: "t-1", onRetry: vi.fn() }));
-    expect([...container.querySelectorAll("button")].map((candidate) => candidate.textContent?.trim())).toEqual(["Continue at 3:40 PM when your limit resets"]);
-    flushSync(() => button(container, "Continue at 3:40 PM when your limit resets").click());
-    await settle();
-    expect(fixture.api).toHaveBeenCalledWith("/api/limit-resets/continue", { method: "POST", body: JSON.stringify({ botId: "scout", threadId: "t-1" }) });
-    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "routinePatched", routine: created });
-    // The button goes once React renders the update its answer set, which a busy runner can schedule after any one tick.
-    await vi.waitFor(() => expect(container.textContent).not.toContain("Continue at"));
-  });
-
   it("offers Retry as before once the reset has passed, or when the engine named no reset", () => {
     const passed = mount(createElement(FailedTurnRow, { tool: failedTurnTool("limit", { limitResetsAt: NOW - 1 }), engine: undefined, botId: "scout", threadId: "t-1", onRetry: vi.fn() }));
     expect(passed.textContent).toContain("Retry");
@@ -292,37 +231,3 @@ describe("the chat", () => {
   });
 });
 
-describe("the calendar", () => {
-  const marker = { engine: "claude", name: "Claude", at: RESET };
-  const grid = (onDropOnReset = vi.fn(), onCreate = vi.fn()) => mount(createElement(CalendarGrid, {
-    anchor: new Date(2026, 9, 19).getTime(), days: 1, items: [], bots: [bot], groups: [], markers: [marker],
-    onOpen: vi.fn(), onCreate, onMove: vi.fn(), onResize: vi.fn(), onDropOnReset,
-  }));
-  const drop = (target: Element, type: string, value: string) => {
-    const transfer = { types: [type], getData: (asked: string) => asked === type ? value : "", dropEffect: "none" };
-    for (const name of ["dragover", "drop"]) {
-      const event = new Event(name, { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "dataTransfer", { value: transfer });
-      flushSync(() => target.dispatchEvent(event));
-    }
-  };
-
-  it("draws each engine's next reset as a labelled marker", () => {
-    const container = grid();
-    const shown = container.querySelector('[data-limit-marker="claude"]')!;
-    expect(shown.textContent).toBe("Claude resets 3:40 PM");
-    expect(shown.getAttribute("title")).toBe("Drop a bot or an automation here to run it when Claude's limit resets");
-  });
-
-  it("turns a bot or an automation dropped on the marker into a limit-reset automation, not a fixed time", () => {
-    const onDropOnReset = vi.fn();
-    const onCreate = vi.fn();
-    const container = grid(onDropOnReset, onCreate);
-    const shown = container.querySelector('[data-limit-marker="claude"]')!;
-    drop(shown, "application/x-openmaus-bot", "scout");
-    expect(onDropOnReset).toHaveBeenLastCalledWith({ botId: "scout" }, marker);
-    drop(shown, "application/x-openmaus-calendar-event", JSON.stringify({ kind: "routine", id: "brief", at: NOW + HOUR }));
-    expect(onDropOnReset).toHaveBeenLastCalledWith({ event: { kind: "routine", id: "brief", at: NOW + HOUR } }, marker);
-    expect(onCreate).not.toHaveBeenCalled();
-  });
-});

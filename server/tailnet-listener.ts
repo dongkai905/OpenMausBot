@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { isIP, type Socket } from "node:net";
 import { networkInterfaces } from "node:os";
 
-import { IDLE_HTTP_SERVER } from "./due-timer.ts";
+import { IDLE_HTTP_SERVER } from "./work-timer.ts";
 import { bareAddress, inTailscaleRange, isTailnetName, tailnetHosts, tailnetInterfaceAddresses, tailnetOrigin } from "../electron/tailnet.mjs";
 
 /** `addresses: "interface"` follows whatever Tailscale's own interface carries. */

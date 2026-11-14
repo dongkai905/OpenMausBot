@@ -104,12 +104,12 @@ export function announcementPlan(surface: AnnouncementSurface, view: CloudPlanVi
 
 const PROVIDER_KEYS = ["anthropic", "openai", "openrouter", "meta"] as const;
 
-export function announcementConditions(state: Pick<AppState, "config" | "bots" | "routines" | "routinesLoadState">): AnnouncementFacts["conditions"] {
+export function announcementConditions(state: Pick<AppState, "config" | "bots">): AnnouncementFacts["conditions"] {
   const config = state.config as Partial<Record<(typeof PROVIDER_KEYS)[number], { configured?: boolean }>> | null;
   return {
     no_api_key: Boolean(config) && !PROVIDER_KEYS.some((key) => config?.[key]?.configured === true),
     one_bot_only: state.bots.filter((bot) => !bot.hidden).length === 1,
-    no_routine: state.routinesLoadState === "ready" && state.routines.length === 0,
+    no_routine: false,
   };
 }
 

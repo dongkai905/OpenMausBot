@@ -7,7 +7,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
-import type { RoutineRun } from "../routines.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 import type { HostTurnResult } from "../coordinator.ts";
 import { writeFileAtomic } from "../atomic.ts";
@@ -111,7 +110,6 @@ export interface FirstHourDeps {
   wrote(bot: BotRecord, threadId: string): void;
   /** The Cloud's welcome steps are done: the Chief's chat is where it opens. */
   welcomeDone(): void;
-  runs(): RoutineRun[];
   ledger: Pick<ValueLedger, "totals">;
 }
 
@@ -362,9 +360,7 @@ export function createFirstHour(deps: FirstHourDeps) {
   }
 
   function tally(): ValueTally {
-    const since = state?.startedAt ?? 0;
-    const routines = deps.runs().filter((run) => run.status === "completed" && run.deliver !== "brief" && run.report?.state === "posted" && (run.finishedAt ?? 0) >= since).length;
-    return { ...deps.ledger.totals(), routines };
+    return { ...deps.ledger.totals(), routines: 0 };
   }
 
   /** What was done, in the person's words, or undefined when nothing was. */

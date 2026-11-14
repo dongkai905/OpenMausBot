@@ -7,35 +7,10 @@ import {
   limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
 } from "@/lib/limit-resets";
-import type { Routine } from "@/lib/routines";
 import { api, useStore, type Message } from "@/state/store";
 import { failedTurnNotice } from "@/lib/failed-turn";
 import { openBotSettings } from "./bot-panel/panel-link";
 import { threadUpdatedLabel } from "./SidebarThreadRow";
-
-/** The stopped turn's "Continue at 3:40 PM when your limit resets": one click sets up a one-time automation in this
- * conversation that picks up where it stopped. Undefined when there is nothing to offer. */
-export function useLimitResetContinue(botId: string | undefined, threadId: string | undefined, resetsAt: number | undefined) {
-  const { dispatch } = useStore();
-  const [state, setState] = useState<"idle" | "working" | "set">("idle");
-  if (!botId || !threadId || !resetsAt || resetsAt <= Date.now() || state === "set") return undefined;
-  return {
-    label: t("chat.limit.continueAt", { time: resetTime(resetsAt) }),
-    onClick: () => {
-      if (state === "working") return;
-      setState("working");
-      void api<{ routine?: Routine }>("/api/limit-resets/continue", { method: "POST", body: JSON.stringify({ botId, threadId }) })
-        .then((response) => {
-          if (response.routine) dispatch({ type: "routinePatched", routine: response.routine });
-          setState("set");
-        })
-        .catch((cause) => {
-          setState("idle");
-          dispatch({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
-        });
-    },
-  };
-}
 
 /** A usage-limit refusal whose reset time has passed stays in the transcript as evidence, collapsed, not as a current
  * blocker: the reset passing does not prove today's quota is available again. Null while the refusal is still current. */

@@ -2,7 +2,6 @@ import { waitNoticeText } from "./wait-notice-text.ts";
 import { redactParams } from "../shared/redact.ts";
 import type { Notification } from "../shared/notification.ts";
 import { buildNotification } from "./notify.ts";
-import type { RoutineManager, RoutineRun } from "./routines.ts";
 import type { BotRecord, Store } from "./store.ts";
 import type { WaitManager, WaitManagerOptions } from "./waits.ts";
 
@@ -13,14 +12,27 @@ export interface WaitHostDeps {
   threadBusy(botId: string, threadId: string): boolean;
   wrote(bot: BotRecord, threadId: string): void;
   notify(notification: Notification | null): void;
-  enqueue(input: Parameters<RoutineManager["enqueueWebhook"]>[0]): { id: string };
+  enqueue(input: WaitFollowUp): { id: string };
   cloudHome: boolean;
   now?: () => number;
 }
 
+/** What a wait's follow-up needs to start a turn of its own. */
+export interface WaitFollowUp {
+  webhookId: string;
+  webhookName: string;
+  prompt: string;
+  botId: string;
+  runOn: "maus";
+  deliveryId: string;
+  receivedAt: number;
+  eventSource: "wait";
+  resultsThreadId?: string;
+}
+
 /** The chat a wait's follow-up run works in: the one it was asked in, never on a Cloud home or in a room. */
 export function waitRunChat(
-  run: Pick<RoutineRun, "botId" | "resultsThreadId">,
+  run: { botId: string; resultsThreadId?: string },
   directChat: (botId: string, threadId: string) => boolean,
   cloudHome: boolean,
 ): string | null {

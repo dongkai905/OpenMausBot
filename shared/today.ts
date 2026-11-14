@@ -2,23 +2,21 @@
 // what only the person can unblock, and an estimate of the time it saved.
 import type { PlaceRow } from "./place-view.ts";
 import type { OutcomeCategory, OutcomeCounts } from "./today-outcomes.ts";
-import type { RoutineRunTrigger } from "./routines.ts";
 import type { ServerTextParams } from "./server-text.ts";
 import type { TrialCreditRefusal } from "./trial-credit.ts";
 
-/** Who opened a piece of work: a schedule, a webhook, another bot, a call
- * through the API, a message relayed from another app, or the person. */
-export type TodayStarter = RoutineRunTrigger | "bot" | "api" | "relay" | "person";
+/** Who opened a piece of work: another bot, a call through the API, a message
+ * relayed from another app, or the person. */
+export type TodayStarter = "bot" | "api" | "relay" | "person";
 
 export interface TodayLine {
-  /** Stable within a report: a digest message id or a routine run id. */
+  /** Stable within a report: a digest message id. */
   id: string;
   at: number;
   botId: string;
-  /** Absent when the work never reached a conversation (a missed run). */
+  /** Absent when the work never reached a conversation. */
   threadId?: string;
-  routineId?: string;
-  /** A routine's name, or the first sentence of the bot's last reply. */
+  /** The first sentence of the bot's last reply. */
   title: string;
   ok: boolean;
   /** The failure's own words, when the work failed. */
@@ -49,15 +47,11 @@ export interface TodayReport {
   /** Categories with at least one finished outcome, in OUTCOME_CATEGORIES order. */
   tiles: Array<{ category: OutcomeCategory; count: number }>;
   minutesSaved: number;
-  /** Routine runs (scheduled, webhook, manual and startup) that finished in the window. */
-  routines: { ok: number; failed: number };
   needsYou: NeedsYouItem[];
   /** Newest first, at most TODAY_MAX_LINES. */
   lines: TodayLine[];
   /** Finished lines left out past TODAY_MAX_LINES. */
   moreLines: number;
-  /** Routines the viewer can see, so an empty page can name its next step. */
-  routineCount: number;
 }
 
 export const TODAY_MAX_LINES = 300;

@@ -11,7 +11,7 @@ vi.mock("@/state/store", async (importOriginal) => {
 });
 
 const { ConversationShareDialogs } = await import("./ConversationShareDialogs");
-const { closeConversationDialog, openConversationDialog, savesToTeamMemory, shareChoices } = await import("./conversation-share");
+const { closeConversationDialog, openConversationDialog, shareChoices } = await import("./conversation-share");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -62,12 +62,6 @@ describe("which actions a conversation offers", () => {
     expect(shareChoices(bot, { private: true }, false), "off a team").toEqual({ team: false, person: false });
   });
 
-  it("saves to team memory for a team bot the person can chat with, never their own MausBot", () => {
-    expect(savesToTeamMemory({ yourAccess: "chat" }, true)).toBe(true);
-    expect(savesToTeamMemory({ yourAccess: "view" }, true)).toBe(false);
-    expect(savesToTeamMemory({ defaultBot: { person: "rui@acme.test" } }, true)).toBe(false);
-    expect(savesToTeamMemory({ yourAccess: "chat" }, false)).toBe(false);
-  });
 });
 
 describe("the confirm step", () => {
@@ -111,28 +105,4 @@ describe("the confirm step", () => {
     expect(dialog()?.querySelector('[role="alert"]')?.textContent).toBe("Scout is still working here. Share it once it's done.");
   });
 
-  it("saves a message to team memory in one click, with Undo taking it out again", async () => {
-    answer = (method) => (method === "POST" ? reply(201, { entry: { id: "e1", text: "x", at: 1, yours: true } }) : reply(200, { ok: true, removed: true }));
-    await show({ kind: "memory", botId: "scout", threadId: "t9", messageId: "m1", text: "We ship the launch\non 3 March" });
-    expect(dialog(), "no dialog, no editing first").toBeNull();
-    expect(sent).toEqual([{ method: "POST", path: "/api/bots/scout/memory/team", body: { threadId: "t9", messageId: "m1", text: "We ship the launch\non 3 March" } }]);
-    const toast = document.querySelector<HTMLElement>("[data-access-toast]")!;
-    expect(toast.textContent).toContain("Saved to Scout's team memory");
-    await act(async () => [...toast.querySelectorAll("button")].find((each) => each.textContent === "Undo")!.click());
-    await settle();
-    expect(sent.at(-1)).toEqual({ method: "DELETE", path: "/api/bots/scout/memory/team/e1", body: undefined });
-    expect(document.querySelector("[data-access-toast]")).toBeNull();
-  });
-
-  it("says why a save was refused and tries again when asked", async () => {
-    let tries = 0;
-    answer = () => (++tries === 1 ? reply(409, { error: "This conversation came in from outside the team, so nothing from it goes into team memory." }) : reply(201, { entry: { id: "e2", text: "x", at: 1 } }));
-    await show({ kind: "memory", botId: "scout", threadId: "t9", messageId: "m1", text: "Launch: 3 March" });
-    const toast = () => document.querySelector<HTMLElement>("[data-access-toast]");
-    expect(toast()?.textContent).toContain("This conversation came in from outside the team");
-    await act(async () => [...toast()!.querySelectorAll("button")].find((each) => each.textContent === "Try again")!.click());
-    await settle();
-    expect(sent.filter((each) => each.method === "POST").length).toBe(2);
-    expect(toast()?.textContent).toContain("Saved to Scout's team memory");
-  });
 });

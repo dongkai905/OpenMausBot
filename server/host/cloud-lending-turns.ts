@@ -1,10 +1,9 @@
 // Which turns on a Cloud home may use the Mac lent to it, read from the harness's own records (server/cloud-lending.ts
 // decides), and the plain words a turn that can't is told. A room member turn acts for the person's line that started
 // its run, for that turn generation alone, while the run lasts.
-import { answersOwnersLine, changedRoutineRefusalText, cloudHomeLendingRefusal, cloudHomeOwnTurnRefusal, cloudLendingRefusalText, handedOnForOwner, ON_THE_CARD, ONLY_THE_PERSON, teamLendingRefusal, type CloudLendingRefusal, type CloudLendingTurn } from "../cloud-lending.ts";
+import { answersOwnersLine, cloudHomeLendingRefusal, cloudHomeOwnTurnRefusal, cloudLendingRefusalText, handedOnForOwner, ON_THE_CARD, ONLY_THE_PERSON, teamLendingRefusal, type CloudLendingRefusal, type CloudLendingTurn } from "../cloud-lending.ts";
 import { unstamped } from "../cloud-owner-lines.ts";
 import { deviceWord } from "../lent-computers.ts";
-import type { Routine, RoutineManager, RoutineRun } from "../routines.ts";
 import type { Message, Store } from "../store.ts";
 import type { RoomRun } from "./acting-person.ts";
 import type { createLendingLifts } from "./lending-lifts.ts";
@@ -21,13 +20,8 @@ export interface CloudLendingTurnsDeps {
   threadStarter(threadId: string): string | undefined;
   ownerPerson(person: string | undefined): boolean;
   cardAnswerer: CloudLendingTurn["cardAnswerer"];
-  activeRoutineRun(threadId: string): RoutineRun | null;
-  ownerStartedRun(runId: string): boolean;
-  routineRunIsOwners(run: RoutineRun, botId: string, threadId: string): boolean;
   /** Someone else's turn changed this bot's memory since the owner last reviewed it. */
   memoryChangedBySomeoneElse(botId: string): boolean;
-  routines(): Pick<RoutineManager, "listRoutines"> | null;
-  routineAuthors: { authored(id: string, routine: Routine): boolean } | null;
   lentPlatform(): Parameters<typeof deviceWord>[0];
   /** The owner's card, which lifts a lock for a line of theirs; none on a team. */
   lifts?: () => Pick<ReturnType<typeof createLendingLifts>, "raise" | "declined" | "outsideAllowed"> | null;
@@ -57,15 +51,7 @@ export function createCloudLendingTurns(deps: CloudLendingTurnsDeps) {
       openedForOwner: openedForOwner(capability.threadId),
       ownerPerson: deps.ownerPerson,
       cardAnswerer: deps.cardAnswerer,
-      routineRun: () => {
-        const run = deps.activeRoutineRun(capability.threadId);
-        if (!run || run.threadId !== capability.threadId || store.taskByThread(capability.botId, capability.threadId)?.routineRunId !== run.id) return null;
-        return {
-          triggerSource: run.triggerSource ?? (run.manual ? "manual" : "schedule"),
-          ownerStarted: deps.ownerStartedRun(run.id),
-          ownerAuthored: deps.routineRunIsOwners(run, capability.botId, capability.threadId),
-        };
-      },
+      routineRun: () => null,
     };
   }
 
@@ -106,8 +92,6 @@ export function createCloudLendingTurns(deps: CloudLendingTurnsDeps) {
     const { conversation, memoryChanged } = shut;
     if (!conversation && !memoryChanged) return null;
     if (deps.team) return teamLendingRefusal(deps.team);
-    const changed = conversation === "not-owner" && !memoryChanged ? changedRoutine(capability) : undefined;
-    if (changed !== undefined) return changedRoutineRefusalText(changed, deviceWord(deps.lentPlatform()));
     const thread = store.messagesFor(capability.threadId);
     const others = thread.filter((line) => line.role === "user" && !deps.ownerPerson(line.peerAsk ? undefined : line.sender?.id));
     return cloudLendingRefusalText(conversation ?? "memory-changed", { room: Boolean(store.groupByThread(capability.threadId)), fromBefore: others.length > 0 && others.every(unstamped),
@@ -132,18 +116,6 @@ export function createCloudLendingTurns(deps: CloudLendingTurnsDeps) {
   /** What the owner's phones take: every gate, with work handed on for the owner not counting as the owner's. */
   function cloudOwnTurnRefusal(capability: Turn): CloudLendingRefusal | "memory-changed" | null {
     return deps.memoryChangedBySomeoneElse(capability.botId) ? "memory-changed" : conversationGate(capability, cloudHomeOwnTurnRefusal);
-  }
-
-  /** The name of the routine this turn runs, when the run is refused only because the routine is no longer the owner's
-   * (someone else changed it); a webhook's or another app's run, or one somebody else started by hand, is not this. */
-  function changedRoutine(capability: Turn): string | undefined {
-    const turn = cloudLendingTurn(capability);
-    const automation = turn.request?.automation;
-    if (automation === undefined || automation === "webhook" || automation === "api") return undefined;
-    const run = turn.routineRun();
-    if (!run || run.ownerAuthored || run.triggerSource === "webhook" || run.triggerSource === "api" || (run.triggerSource === "manual" && !run.ownerStarted)) return undefined;
-    const routineId = deps.activeRoutineRun(capability.threadId)?.routineId;
-    return deps.routines()?.listRoutines().find((routine) => routine.id === routineId)?.name;
   }
 
   /** A bot opened this conversation (a hand-off's work thread, one a bot started itself, a Chief's notices). */
@@ -188,13 +160,8 @@ export function createCloudLendingTurns(deps: CloudLendingTurnsDeps) {
     return deps.cloudHome && conversationGate(capability) === null;
   }
 
-  function cloudReportFromOthers(line: Message): boolean {
-    if (line.webhookPost) return true;
-    const routineId = line.automation?.routineId ?? (line.kind === "routine.run" ? line.routineRun?.routineId : undefined);
-    if (!routineId) return false;
-    // An outside event's run belongs to no routine, so its words are never the owner's.
-    const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === routineId);
-    return !routine || deps.routineAuthors?.authored(routine.id, routine) !== true;
+  function cloudReportFromOthers(_line: Message): boolean {
+    return false;
   }
 
   return {

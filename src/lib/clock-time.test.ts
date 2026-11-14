@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clockOptions, formatTime, namesLocale } from "./clock-time";
 import { formatTime as legacyFormatTime } from "./format-time";
 import { setLocale } from "./i18n";
-import { niceTime } from "./schedule-label";
 
 const at = new Date(2026, 9, 23, 9, 5).getTime();
 
@@ -35,7 +34,7 @@ describe("a time of day", () => {
       vi.stubGlobal("navigator", { language: region });
       setLocale("en");
       const before = new Date(at).toLocaleTimeString(region, { hour: "numeric", minute: "2-digit" });
-      expect([formatTime(at), niceTime(at)], region).toEqual([before, before]);
+      expect(formatTime(at), region).toBe(before);
       expect(clockOptions(region, true), region).toEqual({ hour: "numeric" });
       expect(namesLocale(), region).toBe("en-US");
     }
@@ -43,7 +42,7 @@ describe("a time of day", () => {
 
   it("writes a 24-hour clock with two-digit hours and the minutes in pt-BR", () => {
     setLocale("pt-br");
-    expect([formatTime(at), niceTime(at)]).toEqual(["09:05", "09:05"]);
+    expect(formatTime(at)).toBe("09:05");
     expect(clockOptions("pt-BR", true)).toEqual({ hour: "2-digit", minute: "2-digit" });
   });
 });

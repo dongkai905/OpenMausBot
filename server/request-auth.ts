@@ -412,17 +412,6 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/tts\/voices$/ },
   { methods: ["POST"], path: /^\/api\/tts\/prepare$/ },
   { methods: ["POST"], path: /^\/api\/tts\/speak$/ },
-  // routines: the input carries no cwd or permission field
-  { methods: ["GET"], path: /^\/api\/routines$/ },
-  { methods: ["POST"], path: /^\/api\/routines$/ },
-  { methods: ["PATCH", "DELETE"], path: /^\/api\/routines\/[\w-]+$/ },
-  { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
-  { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
-  { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
-  // webhook list is secret-free; creating or rotating one is not
-  { methods: ["GET"], path: /^\/api\/webhooks$/ },
-  // app-event automations: the list carries no credential; creating or changing one is the owner's
-  { methods: ["GET"], path: /^\/api\/app-triggers$/ },
   // counts and lines from the threads this viewer can see; engine and app fixes only for an admin
   { methods: ["GET"], path: /^\/api\/today$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
@@ -433,14 +422,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["PUT"], path: /^\/api\/me\/welcome$/ },
   // their own "Email me when I'm away" switch on a Team Cloud
   { methods: ["GET", "PUT"], path: /^\/api\/me\/away-emails$/ },
-  // what a bot remembers about the signed-in person on a Team Cloud: their own layer only (routes/bot-memory.ts ownLayer)
-  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/memory\/mine$/ },
-  { methods: ["GET", "PUT", "DELETE"], path: /^\/api\/bots\/[\w-]+\/memory\/mine\/file$/ },
-  // a Team Cloud member sharing their own private conversation, and saving a line to a bot's team memory: the handler
-  // lets only the conversation's person share it and only its author or an admin remove a line (routes/conversation-share.ts)
+  // a Team Cloud member sharing their own private conversation: the handler lets only the conversation's
+  // person share it and only its author or an admin remove a line (routes/conversation-share.ts)
   { methods: ["GET", "POST"], path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+\/share$/ },
-  { methods: ["GET", "POST"], path: /^\/api\/bots\/[\w-]+\/memory\/team$/ },
-  { methods: ["DELETE"], path: /^\/api\/bots\/[\w-]+\/memory\/team\/[\w-]+$/ },
   // a Team Cloud's member moving a bot of their own in: it answers with a sign-in for that one bot
   { methods: ["POST"], path: /^\/api\/team-move-in$/ },
   // a Team Cloud member's own connections: only the session's own person, never a value back
@@ -596,8 +580,8 @@ function mutatingPublicRoute(method: string, path: string): boolean {
   ) return true;
   // Hands out a desktop's VNC password and control.
   if (path.startsWith("/api/desktop-viewer/")) return true;
-  // Hand out a stored secret to a loopback reader: a webhook's address, a Local VM's viewer password.
-  if (upper === "GET" && (/^\/api\/webhooks\/[\w-]+\/address$/.test(path) || /^\/api\/(?:bots\/[\w-]+\/)?local-computer$/.test(path))) return true;
+  // Hand out a stored secret to a loopback reader: a Local VM's viewer password.
+  if (upper === "GET" && /^\/api\/(?:bots\/[\w-]+\/)?local-computer$/.test(path)) return true;
   // Drives a bot's browser: a WebSocket upgrade is a GET, but what it carries is input.
   if (/^\/api\/bots\/[\w-]+\/browser\/stream$/.test(path)) return true;
   if (["GET", "HEAD", "OPTIONS"].includes(upper)) return false;

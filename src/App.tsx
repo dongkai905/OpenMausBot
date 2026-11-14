@@ -145,7 +145,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeDrawer = useCallback(() => { setDrawerOpen(false); menuButtonRef.current?.focus(); }, []);
   const previousViewRef = useRef(state.activeView);
-  const calendarOriginRef = useRef<"chat" | "team-map" | "web-panel">("chat");
+  const automationsOriginRef = useRef<"chat" | "team-map" | "web-panel">("chat");
   const loading = loadingLine({ connected: state.connected, hydrated: state.hydrated === true, developer: import.meta.env.DEV });
   const group = state.groups.find((g) => g.id === state.selectedId);
   const chiefStep = useChiefStepOpen();
@@ -155,8 +155,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   const roomPanelOpen = useRoomPanelShown({ group, state, simple: !advanced && !remoteClient });
   const sidePanelOpen = (Boolean(bot) && (state.settingsOpen || state.computerOpen || state.inspectorOpen || state.activityOpen)) || roomPanelOpen || (notificationFeed && state.notificationsOpen) || inboxShown;
   const collapseSidebar = sidePanelOpen && !sidebarAndPanelFit;
-  const calendarFocus = state.activeView === "routines" && state.routinesFocus.view === "calendar";
-  const notificationTray = notificationFeed && !calendarFocus;
+  const notificationTray = notificationFeed;
 
   const noEngines =
     state.connected &&
@@ -236,8 +235,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   }, [state.selectedId, bot?.threadId, group?.threadId, state.activeView, state.pluginsOpen, state.settingsOpen]);
 
   useEffect(() => {
-    if (state.activeView === "routines" && previousViewRef.current !== "routines") {
-      calendarOriginRef.current = previousViewRef.current === "team-map" || previousViewRef.current === "web-panel" ? previousViewRef.current : "chat";
+    if (state.activeView === "automations" && previousViewRef.current !== "automations") {
+      automationsOriginRef.current = previousViewRef.current === "team-map" || previousViewRef.current === "web-panel" ? previousViewRef.current : "chat";
     }
     previousViewRef.current = state.activeView;
   }, [state.activeView]);
@@ -262,20 +261,17 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     dispatch({ type: "toggleComputer", open: true });
   };
 
-  const closeCalendar = useCallback(() => {
-    if (calendarOriginRef.current === "team-map") {
+  const closeAutomations = useCallback(() => {
+    if (automationsOriginRef.current === "team-map") {
       dispatch({ type: "showTeamMap" });
       return;
     }
-    if (calendarOriginRef.current === "web-panel" && state.webPanelId) {
+    if (automationsOriginRef.current === "web-panel" && state.webPanelId) {
       dispatch({ type: "showWebPanel", id: state.webPanelId });
       return;
     }
     dispatch({ type: "select", id: state.selectedId });
   }, [dispatch, state.selectedId, state.webPanelId]);
-  const openCalendarRoom = useCallback((id: string) => {
-    dispatch({ type: "select", id });
-  }, [dispatch]);
 
   const nativeViewOverlayOpen =
     drawerOpen ||
@@ -321,7 +317,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
 
   const framed = windowFramed(capabilities);
   const strips = <>
-    <UpdateBanner sidebarIndicator={framed || (!calendarFocus && (sidebarInline || drawerOpen))} />
+    <UpdateBanner sidebarIndicator={framed || sidebarInline || drawerOpen} />
     <CloudAsleepStrip />
     <LiveConnectionStrip connected={state.connected} hydrated={state.hydrated === true} />
     <CloudSendStrip cloudHome={state.config?.cloudHome === true} />
@@ -335,7 +331,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       <ConversationShareDialogs />
       {!framed && strips}
       <div className="relative flex min-h-0 flex-1">
-      {!calendarFocus && <button
+      <button
         type="button"
         ref={menuButtonRef}
         aria-label={t("app.openBotList")}
@@ -345,15 +341,15 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       >
         <Menu size={18} className="max-md:hidden" />
         <ChevronLeft size={20} aria-hidden="true" className="hidden max-md:block" />
-      </button>}
-      {drawerOpen && !calendarFocus && (
+      </button>
+      {drawerOpen && (
         <div
           aria-hidden
           onMouseDown={(e) => e.target === e.currentTarget && setDrawerOpen(false)}
           className="absolute inset-0 z-30 bg-black/50 md:hidden"
         />
       )}
-      {!calendarFocus && <PlacesRail />}
+      <PlacesRail />
       <NewLocalFromMenu />
       {/* A framed window shows the app, its sidebar and the chat or page, as one square pane under the top bar and beside
           the window's rail, running to the window's right and bottom edges. */}
@@ -361,11 +357,11 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         className={framed ? "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-app" : "contents"}>
       {framed && strips}
       <div className={framed ? "relative flex min-h-0 flex-1" : "contents"}>
-      {!calendarFocus && <Sidebar
+      <Sidebar
         collapseToIcons={collapseSidebar}
         open={drawerOpen}
         onClose={closeDrawer}
-      />}
+      />
       {state.activeView === "team-map" ? (
         <TeamMapPage />
       ) : state.activeView === "files" ? (
@@ -374,8 +370,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <WebPanelPage />
       ) : state.activeView === "published-apps" ? (
         <PublishedAppsPage />
-      ) : state.activeView === "routines" ? (
-        <TriggersPage onBack={closeCalendar} onOpenRoom={openCalendarRoom} />
+      ) : state.activeView === "automations" ? (
+        <TriggersPage onBack={closeAutomations} />
       ) : !remoteClient && localVmWorkspaceBotId ? (
         <LocalVmWorkspace
           primaryBotId={localVmWorkspaceBotId}
@@ -456,12 +452,12 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       {/* After the modals: same z-50 tier, so DOM order keeps the palette on top. */}
       <CommandPalette onOpenChange={setPaletteOpen} />
       {/* Blink resolves -webkit-app-region in DOM order, so this no-drag twin after the headers cuts the drawer button back out. */}
-      {!calendarFocus && <span
+      <span
         aria-hidden
         data-drawer-button-no-drag
         style={captionChrome.noDragStyle}
         className="pointer-events-none absolute left-3 top-3 size-[30px] md:hidden"
-      />}
+      />
       </div>
       {/* Last child on purpose: Blink resolves -webkit-app-region in DOM order, so no-drag buttons must follow every drag region. */}
       <WindowCaptionButtons

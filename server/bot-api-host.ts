@@ -3,6 +3,7 @@
 // person, is told the message came from outside, and anything that needs an approval waits for the person in the thread.
 // Inside: the app's routes to switch it on, mint a key and switch it off, open only to whoever may edit the bot.
 import { z } from "zod";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { redactSecretsInText } from "../shared/redact.ts";
 import { BOT_API_UPGRADE, botApiEndpoint, type BotApiReply } from "../shared/bot-api.ts";
@@ -13,7 +14,35 @@ import type { RequestAuth } from "./request-auth.ts";
 import { PASS, type RouteHandler } from "./routes/table.ts";
 import { parseJson, schemaIssue } from "./schema.ts";
 import type { Message, Store } from "./store.ts";
-import { bearerSecret, header, json, readRawBody, type IngressDoor } from "./webhook-ingress.ts";
+import { json } from "./harness/http.ts";
+
+/** The public door the receiver hands a request to: it answers the ones it owns and lets the rest through. */
+type IngressDoor = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
+
+const MAX_BODY_BYTES = 256 * 1024;
+
+function header(req: IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function bearerSecret(req: IncomingMessage): string {
+  const authorization = header(req, "authorization") ?? "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || header(req, "x-openmaus-secret")?.trim() || "";
+}
+
+async function readRawBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > MAX_BODY_BYTES) throw Object.assign(new Error("Body is too large"), { status: 413 });
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, bytes).toString("utf8");
+}
 
 /** How long a call waits by default before answering "working" with its thread id. Under the 60 s that Fly's proxy is reported
  * (community.fly.io, staff replies, 2022-2024) to allow a connection with no bytes: a dropped answer would lose the thread id. */

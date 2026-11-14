@@ -16,7 +16,7 @@ import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.
 import { INSTRUCTION_FILE, restorePaths, validRelative } from "./workspace-backup-paths.ts";
 import { cjkSearchText } from "./cjk-search.ts";
 import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEnginePath, managedTaskSkillLink, portableWorkspaceConfig, redownloadedOrgLibraryPath, restoredWorkspaceConfig } from "./workspace-backup-policy.ts";
-import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
+import { omittedAsTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
@@ -393,11 +393,10 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           walk(source, path, [...chain, source]);
         } else if (stat.isFile()) {
           let copied: { size: number; mode: number; sha256: string };
-          if (path === "config.json" || path === "webhooks.json" || (privacy && (path === "bots.json" || path === "routines.json"))) {
+          if (path === "config.json" || path === "webhooks.json" || (privacy && path === "bots.json")) {
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
             else if (path === "bots.json") writeJson(destination, withoutTeamPrivate(value, privacy!));
-            else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!));
             else {
               if (!record(value)) throw new Error("Invalid webhook definitions in workspace backup.");
               if (Array.isArray(value.webhooks)) for (const webhook of value.webhooks) if (record(webhook)) { delete webhook.secretHash; delete webhook.sealedSecret; }
@@ -729,7 +728,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     paths.definitions(value);
     if (Array.isArray(value)) for (const group of value) if (record(group) && typeof group.bulletin === "string") group.bulletin = paths.text(group.bulletin);
   });
-  for (const name of ["config.json", "routines.json", "calendar-calls.json"]) changeJson(name, (value) => paths.definitions(value));
+  for (const name of ["config.json"]) changeJson(name, (value) => paths.definitions(value));
   for (const entry of installed) {
     if (entry.type !== "file" || entry.size > MAX_METADATA_BYTES || !INSTRUCTION_FILE.test(entry.path)) continue;
     const before = readFileSync(join(prepared, entry.path), "utf8");
@@ -757,43 +756,6 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     folder(join(prepared, home));
     cpSync(source, join(prepared, home, ".browser-profiles"), { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false });
   }
-  changeJson("routines.json", (value) => {
-    if (!record(value)) throw new Error("Invalid routine definitions in workspace backup.");
-    if (Array.isArray(value.routines)) for (const routine of value.routines) if (record(routine)) {
-      routine.enabled = false;
-      if (typeof routine.prompt === "string") routine.prompt = paths.text(routine.prompt);
-    }
-    if (Array.isArray(value.runs)) for (const run of value.runs) {
-      if (record(run) && ["queued", "running", "waiting"].includes(String(run.status))) {
-        run.status = "failed";
-        run.error = "This queued or active run was not resumed after workspace restore.";
-        run.finishedAt = Date.now();
-        if (run.target === "room-goal") run.goalStatus = "failed";
-      }
-    }
-  });
-  changeJson("webhooks.json", (value) => {
-    if (!record(value)) throw new Error("Invalid webhook definitions in workspace backup.");
-    const destination = existsSync(join(dataDir, "webhooks.json")) ? privateJson(join(dataDir, "webhooks.json")) : {};
-    const oldHooks = record(destination) && Array.isArray(destination.webhooks) ? destination.webhooks : [];
-    if (Array.isArray(value.webhooks)) for (const webhook of value.webhooks) if (record(webhook)) {
-      webhook.enabled = false;
-      webhook.verificationPending = false;
-      const previous = oldHooks.find((old) => record(old) && old.id === webhook.id && old.endpointId === webhook.endpointId);
-      // A migrated hook needs a secret rotation: an unknown hash cannot authenticate a caller.
-      const kept = record(previous) && typeof previous.secretHash === "string" && /^[a-f0-9]{64}$/.test(previous.secretHash);
-      webhook.secretHash = kept ? previous.secretHash : randomBytes(32).toString("hex");
-      if (kept && typeof previous.sealedSecret === "string" && previous.sealedSecret) webhook.sealedSecret = previous.sealedSecret;
-    }
-  });
-  changeJson("calendar-calls.json", (value) => {
-    if (!record(value)) throw new Error("Invalid calendar definitions in workspace backup.");
-    if (Array.isArray(value.calls)) for (const call of value.calls) if (record(call)) call.nextRunAt = null;
-  });
-  changeJson("app-triggers.json", (value) => {
-    if (!record(value)) throw new Error("Invalid app automations in workspace backup.");
-    if (Array.isArray(value.triggers)) for (const trigger of value.triggers) if (record(trigger)) trigger.enabled = false;
-  });
   if (existsSync(join(prepared, "delegations.json"))) writeJson(join(prepared, "delegations.json"), {});
   if (existsSync(join(prepared, "browser-cleanups.json"))) writeJson(join(prepared, "browser-cleanups.json"), []);
   for (const entry of manifest.entries) {

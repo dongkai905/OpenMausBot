@@ -134,10 +134,6 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "GET", path: /^\/api\/bots\/[\w-]+\/mcp-servers$/ },
   // Team memory edits are content, not execution policy. The section rides as
   // a query string.
-  { method: "GET", path: /^\/api\/team-memory$/ },
-  { method: "POST", path: /^\/api\/team-memory$/ },
-  { method: "PATCH", path: /^\/api\/team-memory\/[\w-]+$/ },
-  { method: "DELETE", path: /^\/api\/team-memory\/[\w-]+$/ },
   // The harness rejects fields outside identity, soul (byte-capped), avatar,
   // notifications and voice preferences.
   { method: "PATCH", path: /^\/api\/bots\/[\w-]+\/profile$/ },
@@ -211,15 +207,8 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   // dropped.
   { method: "POST", path: /^\/api\/presence\/active$/ },
 
-  // Webhook management stays denied below.
-  { method: "GET", path: /^\/api\/routines$/ },
-  { method: "POST", path: /^\/api\/routines$/ },
-  { method: "PATCH", path: /^\/api\/routines\/[\w-]+$/ },
-  { method: "DELETE", path: /^\/api\/routines\/[\w-]+$/ },
-  { method: "POST", path: /^\/api\/routines\/[\w-]+\/run$/ },
-  { method: "POST", path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
   // The stopped turn's "Continue when your limit resets": a one-time automation in an existing
-  // conversation, less than POST /api/routines already allows.
+  // conversation.
   { method: "POST", path: /^\/api\/limit-resets\/continue$/ },
 
   // Opaque ids and aliases only. Account removal is allowed (the handler proves
@@ -259,16 +248,7 @@ const EXPLAINED: ReadonlyArray<{ path: RegExp; error: string }> = [
   },
   { path: /^\/api\/config$/, error: "API keys can only be changed on your computer" },
   { path: /^\/api\/local-computer(\/|$)/, error: "the Local VM is set up on your computer" },
-  {
-    // Creating one exposes an endpoint to the internet.
-    path: /^\/api\/webhooks(\/|$)/,
-    error: "webhooks are set up on your computer",
-  },
   { path: /^\/api\/connectors(\/|$)/, error: "connected apps are set up on your computer" },
-  {
-    path: /^\/api\/routines(\/|$)/,
-    error: "this routine operation is only available on your computer",
-  },
   { path: /^\/api\/teams(\/|$)/, error: "teams are imported and exported on your computer" },
 ];
 

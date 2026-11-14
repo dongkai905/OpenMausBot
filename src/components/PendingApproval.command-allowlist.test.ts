@@ -104,12 +104,6 @@ describe("remembering exact command approvals", () => {
     }));
   });
 
-  it("never offers a routine card from before Triggers v2 for a decision at all", () => {
-    const routine = message({ routineRequest: { version: 1, requestId: "request-1", botId: bot.id, threadId: "thread-1", createdAt: 1,
-      operation: { action: "run_now", routineId: "routine-1", expectedUpdatedAt: 1 } } });
-    expect(pendingApprovals([routine])).toEqual([]);
-  });
-
   it("puts the decision on the same row and Cancel turn behind the chevron", () => {
     const pending = pendingApprovals([message()])[0]!;
     const slot = (part: "primary" | "more") =>

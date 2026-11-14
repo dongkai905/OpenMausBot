@@ -1,6 +1,5 @@
 // `hookCoverage`: "full" when a hook or protocol delivered untruncated results, "preview" when only the driver's bounded
 // preview, "none" when the turn showed no tool activity.
-import type { MemoryJournalEntry } from "./memory-journal.ts";
 import type { Message } from "./store.ts";
 
 import type { DigestFiles, DigestTool, HookCoverage, TurnDigest } from "../shared/digest.ts";
@@ -24,6 +23,12 @@ export const MAX_MEMORY = 20;
 export const REPLY_CHARS = 200;
 export const RENDER_BYTES = 1_500;
 
+/** A change to a memory file, as the digest records it. */
+export interface DigestMemoryChange {
+  path: string;
+  kind: "created" | "edited" | "deleted";
+}
+
 export interface DigestInput {
   turnId: string;
   botId: string;
@@ -31,7 +36,7 @@ export interface DigestInput {
   at: number;
   durationMs: number;
   activities: readonly Message[];
-  memory: readonly MemoryJournalEntry[];
+  memory: readonly DigestMemoryChange[];
   files?: DigestFiles;
   reply: string;
   usage?: TurnDigest["usage"];

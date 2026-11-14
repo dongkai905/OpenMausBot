@@ -21,16 +21,16 @@ export function voiceNoteTexts(m: Pick<Message, "attachments">): string[] {
 
 /** What a provider reads for a message: its text, then each voice note's words. This is the exact string the
  * turn fold used to store as the message text, so moving the words onto the attachment changed no replay.
- * A room post (`peerPost`, stamped on every post_to_room append) or a webhook post (`webhookPost`) never had
+ * A room post (`peerPost`, stamped on every post_to_room append) never had
  * its note folded in — the note is usually the caption itself — so those keep their post text alone. */
-export function contextText(m: Pick<Message, "text" | "attachments" | "peerPost" | "webhookPost">): string {
-  const spoken = m.peerPost !== undefined || m.webhookPost ? [] : voiceNoteTexts(m);
+export function contextText(m: Pick<Message, "text" | "attachments" | "peerPost">): string {
+  const spoken = m.peerPost !== undefined ? [] : voiceNoteTexts(m);
   return spoken.length ? [m.text?.trim(), ...spoken].filter(Boolean).join("\n\n") : m.text ?? "";
 }
 
 /** A Live call's row (kind "call") and an engine's own compaction marker (kind "compaction", engineCompaction) are
  * records for people, never context. */
-export function isContextMessage(m: Pick<Message, "kind" | "text" | "digest" | "engineCompaction" | "roomRequest" | "attachments" | "peerPost" | "webhookPost">): boolean {
+export function isContextMessage(m: Pick<Message, "kind" | "text" | "digest" | "engineCompaction" | "roomRequest" | "attachments" | "peerPost">): boolean {
   return Boolean(((m.kind === "text" || m.kind === "widget" || m.kind === "app") && contextText(m)) || (m.kind === "digest" && m.digest) || (m.kind === "compaction" && !m.engineCompaction) || m.roomRequest?.phase === "result");
 }
 

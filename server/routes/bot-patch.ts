@@ -21,12 +21,10 @@ import type { createApprovalModeSupport } from "../harness-capabilities.ts";
 import type { ProviderRegistry } from "../harness/registry.ts";
 import type { hostedModelPolicy } from "../hosted-models.ts";
 import { MAX_MCP_SERVERS, mcpServerNameError } from "../mcp-registry.ts";
-import type { MemoryUpkeep } from "../memory-upkeep.ts";
 import { phoneAppsFor } from "../phones/access.ts";
 import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
 import { memberBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import { parseConnectorTools } from "../connector-tools.ts";
 import { sectionKey, type BotRecord, type GroupRecord, type Store, type TaskRecord } from "../store.ts";
@@ -44,11 +42,9 @@ export interface BotPatchRouteDeps {
   sessions: Pick<SessionRegistry, "isLive">;
   browserRuntime: Pick<BrowserRuntime, "heldBy">;
   browserLive: Pick<BrowserLive, "closeForBot">;
-  memoryUpkeep: Pick<MemoryUpkeep, "dropBot">;
   cacheKeepWarm: Pick<CacheKeepWarm, "refresh">;
   hostedModels: ReturnType<typeof hostedModelPolicy>;
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
-  routines(): RoutineManager | null;
   activeVpsThreads: { has(botId: string): boolean };
   /** Full access comes only from the workspace policy. */
   hostedWorkspace: boolean;
@@ -88,7 +84,7 @@ export interface BotPatchRouteDeps {
 
 export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
   const {
-    store, cfg, registry, sessions, browserRuntime, browserLive, memoryUpkeep, cacheKeepWarm, hostedModels, supportsApprovalMode, activeVpsThreads,
+    store, cfg, registry, sessions, browserRuntime, browserLive, cacheKeepWarm, hostedModels, supportsApprovalMode, activeVpsThreads,
     hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
     broadcast, wireBot, publicGroupState, audienceChanged, storedAvatarExists, requestedTaskBot, threadBusy, activeGroupTurnForBot,
     checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
@@ -97,7 +93,6 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
   const pinnedClientThread = pinnedClientThreadGuard(store);
   return async ({ req, res, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
-    const routines = deps.routines();
     const requirePinnedClientThread = pinnedClientThread(auth, req);
     m = path.match(/^\/api\/bots\/([\w-]+)$/);
     if (m && method === "PATCH") {
@@ -231,7 +226,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.mainThreadChoice !== undefined) {
         const chosen = typeof body.mainThreadChoice === "string" ? deps.mainThreadTasks(m[1]).find((task) => task.threadId === body.mainThreadChoice) : null;
         if (body.mainThreadChoice === null) patch.mainThreadChoice = undefined;
-        else if (chosen && !chosen.routineRunId && chosen.archivedAt === undefined) patch.mainThreadChoice = chosen.threadId;
+        else if (chosen && chosen.archivedAt === undefined) patch.mainThreadChoice = chosen.threadId;
         else return json(res, 400, { error: "mainThreadChoice must be one of this bot's conversations" });
       }
       if (section !== undefined) patch.section = section ?? undefined;
@@ -620,8 +615,6 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       }
       if (existingBot?.computer === "local" && computerSpecified && requestedComputer !== "local") {
         await interruptAllDirectThreads(existingBot.id);
-        const routine = routines!.activeBotRunForBot(existingBot.id);
-        if (routine) await routines!.cancelRun(routine.id);
         const groupTurn = activeGroupTurnForBot(existingBot.id);
         if (groupTurn) {
           cancelGroupTurnOperations(groupTurn.group.id, groupTurn.threadId);
@@ -699,7 +692,6 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       }
       if (!bot) return json(res, 404, { error: "no such bot" });
       if (body.applyToAllThreads === true && requestedApprovalMode !== "custom") store.setAllThreadApprovalMode(bot.id, requestedApprovalMode);
-      if (body.memoryUpkeep === false || body.memoryEnabled === false) memoryUpkeep.dropBot(bot.id);
       if (body.cacheKeepWarm !== undefined) cacheKeepWarm.refresh();
       if (computerSpecified && requestedComputer !== undefined) store.clearAutoSurfacePins(m[1], requestedComputer);
       if (normalizedSelection && movedTask) store.patchTask(bot.id, movedTask.threadId, { modelSelection: undefined,

@@ -261,7 +261,7 @@ function SectionAttention({ attention, label, alert }: { attention?: SidebarSect
       {alert && (
         <>
           <span data-testid="section-alert" aria-hidden="true" className="size-2 shrink-0 rounded-full bg-danger" />
-          <span className="sr-only">{t("computer.routines.needsYou")}</span>
+          <span className="sr-only">{t("automations.status.needsYou")}</span>
         </>
       )}
     </>

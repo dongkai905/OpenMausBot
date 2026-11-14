@@ -12,7 +12,6 @@ import type { CloudTeam, TeamRole } from "../cloud-team.ts";
 import type { PersonInbox } from "../host/person-inbox.ts";
 import { NO_SUCH_CONVERSATION } from "../host/team-private.ts";
 import type { ConversationShare, ConversationShares } from "../host/conversation-shares.ts";
-import type { TeamMemorySaves } from "../host/team-memory-saves.ts";
 import type { Notification } from "../../shared/notification.ts";
 import { personKey } from "../person-key.ts";
 import type { RequestAuth } from "../request-auth.ts";
@@ -21,19 +20,14 @@ import type { BotRecord, Message, Store } from "../store.ts";
 import { userError } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
-/** Longer words are cut to one note (team-memory-saves.ts); this only bounds what a request may carry. */
-const TEAM_MEMORY_BODY_MAX = 100_000;
 const SHARE = /^\/api\/bots\/([\w-]{1,128})\/tasks\/([\w-]{1,128})\/share$/;
-const TEAM_MEMORY = /^\/api\/bots\/([\w-]{1,128})\/memory\/team(?:\/([\w-]{1,64}))?$/;
 
 const shareBody = z.object({ with: z.union([z.literal("team"), z.object({ email: z.string().email().max(320) })]) });
-const saveBody = z.object({ threadId: z.string().regex(/^[\w-]{1,128}$/), messageId: z.string().regex(/^[\w-]{1,128}$/), text: z.string().max(TEAM_MEMORY_BODY_MAX) });
 
 export interface ConversationShareDeps {
   team: CloudTeam | null;
   store(): Pick<Store, "bot" | "taskByThread" | "messagesFor" | "onChange">;
   shares: ConversationShares;
-  saves: TeamMemorySaves;
   starter(threadId: string): string | undefined;
   audienceOf(threadId: string): Audience;
   /** Whether this session may read the conversation (VisibleSet.thread). */
@@ -88,12 +82,11 @@ export function createConversationSharing(deps: ConversationShareDeps): { routes
 
   const routes: RouteHandler = async ({ req, res, path, method, auth, json, readBody }) => {
     const share = SHARE.exec(path);
-    const memory = share ? null : TEAM_MEMORY.exec(path);
-    if (!share && !memory) return PASS;
+    if (!share) return PASS;
     const me = deps.team ? signedIn(auth) : null;
     if (!me) return json(res, 404, { error: "not found" });
     const store = deps.store();
-    const bot = store.bot((share ?? memory)![1]!);
+    const bot = store.bot(share[1]!);
     if (!bot) return json(res, 404, userError("serverError.bot.missing"));
 
     if (share) {
@@ -132,41 +125,15 @@ export function createConversationSharing(deps: ConversationShareDeps): { routes
       if (recipient) tell(to, bot, threadId, "server.share.withYouTitle", "server.share.withYou", { name: deps.nameOf(me.email), title: task.title || bot.name, bot: bot.name }, { name: deps.nameOf(me.email), email: me.email });
       return json(res, 200, { shared: sharedAs(saved) });
     }
-
-    const entryId = memory![2];
-    if (method === "GET" && !entryId) {
-      const entries = deps.saves.list(bot.id, me).map((entry) => ({ id: entry.id, text: entry.line, at: entry.at, ...(entry.person === me.person ? { yours: true } : {}) }));
-      return json(res, 200, { entries });
-    }
-    if (method === "DELETE" && entryId) {
-      const removed = deps.saves.remove(bot.id, entryId, me);
-      if (removed === "not-yours") return json(res, 403, userError("serverError.teamMemory.notYours"));
-      return json(res, 200, { ok: true, removed: removed === "removed" });
-    }
-    if (method !== "POST" || entryId) return PASS;
-    const parsed = saveBody.safeParse(await readBody(req));
-    if (!parsed.success) return json(res, 400, { error: "threadId, messageId and text are required" });
-    const { threadId, messageId } = parsed.data;
-    if (!store.taskByThread(bot.id, threadId) || !deps.sees(auth, threadId)) return json(res, 404, { error: NO_SUCH_CONVERSATION });
-    if (bot.defaultBot) return json(res, 409, userError("serverError.share.ownBot"));
-    if (!atLeast(deps.levelOf(auth, bot.id), "chat")) return json(res, 403, userError("serverError.bot.viewOnly", { bot: bot.name }));
-    if (!store.messagesFor(threadId).some((message) => message.id === messageId)) return json(res, 404, { error: "no such message" });
-    if (deps.outside(threadId)) return json(res, 409, userError("serverError.teamMemory.outside"));
-    const text = parsed.data.text.replace(/\s+/g, " ").trim();
-    if (!text) return json(res, 400, userError("serverError.teamMemory.empty"));
-    const entry = deps.saves.add({ botId: bot.id, person: me.person, name: deps.nameOf(me.email), text });
-    return json(res, 201, { entry: { id: entry.id, text: entry.line, at: entry.at, yours: true } });
   };
 
-  /** Someone left the team: a conversation shared between them and one other person becomes the other's own, and the
-   * lines they saved to team memory stay without them. */
+  /** Someone left the team: a conversation shared between them and one other person becomes the other's own. */
   function personLeft(person: string): void {
     for (const { threadId, to } of deps.shares.personLeft(person)) {
       deps.handTo(threadId, to);
       const botId = deps.botOf(threadId);
       if (botId) deps.audienceChanged(botId, threadId);
     }
-    deps.saves.personLeft(person);
   }
 
   if (deps.team) deps.store().onChange((change) => { if (change.type === "message") handedBackAndForth(change.threadId, change.message); });

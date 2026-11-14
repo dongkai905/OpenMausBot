@@ -11,7 +11,6 @@ const manifest = (extra = {}) => ({
     { key: "login:example.test|alice", kind: "login", label: "example.test", parts: { saved: "1" } },
     { key: "bot:juno", kind: "bot", label: "Juno", id: "juno", parts: { soul: "j1" } },
   ],
-  memory: [{ bot: "ember", path: "MEMORY.md", hash: "m1" }],
   rooms: [{ id: "r1", name: "Launch", members: ["ember"], threads: ["t-room"] }],
   connections: ["key:openrouter", "mcp:docs"],
   conversations: [{ threadId: "t-ember", bot: "ember", rows: 4, newest: "e4" }, { threadId: "t-juno", bot: "juno", rows: 1, newest: "j1" }, { threadId: "t-room", room: "r1", rows: 2, newest: "r2" }],
@@ -51,18 +50,17 @@ test("a part changed on both sides since it last went keeps My Cloud's, and so d
     "changed only here, and not on My Cloud: it should have gone");
 });
 
-test("a move's check names what My Cloud lacks: items, parts, memory, rooms, connections and conversations, leaving out what was removed there", () => {
+test("a move's check names what My Cloud lacks: items, parts, rooms, connections and conversations, leaving out what was removed there", () => {
   const here = manifest();
   const there = manifest({ items: here.items.filter((item) => item.key !== "skill:ember:notes" && item.key !== "bot:juno").map((item) => item.key === "bot:ember" ? { ...item, parts: { soul: "s2", team: "t1" } } : item),
-    memory: [], rooms: [], connections: ["key:openrouter"], conversations: [] });
+    rooms: [], connections: ["key:openrouter"], conversations: [] });
   assert.deepEqual(manifestGaps(here, there), {
     items: [{ key: "skill:ember:notes", kind: "skill", label: "notes" }, { key: "bot:juno", kind: "bot", label: "Juno" }],
     parts: [{ key: "bot:ember", label: "Ember", parts: ["soul"] }],
-    memory: [{ bot: "ember", path: "MEMORY.md" }],
     rooms: [{ id: "r1", name: "Launch" }],
     connections: ["mcp:docs"],
     conversations: ["t-ember", "t-juno", "t-room"],
-    files: [], runs: [], journal: [], learned: [], teams: [], settings: [],
+    files: [], settings: [],
   });
   const removed = new Set(["bot:juno", "t-room", "room:r1"]);
   const gaps = manifestGaps(here, there, { removed, skip: new Set(["mcp:docs", "skill:ember:notes"]) });
@@ -146,12 +144,12 @@ test("each conversation's check says the rows My Cloud lacks and whether its pat
 });
 
 test("a move's check passes only when nothing is missing, every path holds, and every line of the owner's carries them", () => {
-  const passing = { gaps: { items: [], parts: [], memory: [], rooms: [], connections: [], conversations: [] },
+  const passing = { gaps: { items: [], parts: [], rooms: [], connections: [], conversations: [], files: [], settings: [] },
     chats: [{ threadId: "t-a", missing: 0, unstamped: 0, path: "equal" }, { threadId: "t-b", missing: 0, unstamped: 0, path: "inside" }],
     attachments: [], secrets: { equal: ["1password"], differs: [], missing: [] } };
   assert.equal(checkPassed(passing), true);
   for (const [why, failing] of [
-    ["a gap", { ...passing, gaps: { ...passing.gaps, memory: [{ bot: "ember", path: "MEMORY.md" }] } }],
+    ["a gap", { ...passing, gaps: { ...passing.gaps, files: ["workspaces/ember/notes.md"] } }],
     ["a missing row", { ...passing, chats: [{ ...passing.chats[0], missing: 1 }] }],
     ["a line of the owner's that does not carry them", { ...passing, chats: [{ ...passing.chats[0], unstamped: 1 }] }],
     ["a path that does not hold", { ...passing, chats: [{ ...passing.chats[0], path: "broken" }] }],
@@ -178,38 +176,24 @@ test("the attachments and credentials My Cloud lacks or holds otherwise are name
   await assert.rejects(checkSecrets({ handoff: async () => ({}), session }), /could not be checked/u);
 });
 
-test("a move's check finds what only a move carries: memory pieces, journal rows, learned facts, teams, files kept beside, finished runs and conversations' settings", () => {
+test("a move's check finds what only a move carries: files kept beside and conversations' settings", () => {
   const here = manifest({
-    items: [...manifest().items, { key: "routine:r1", kind: "routine", label: "Morning", id: "r1", bot: "ember", parts: { def: "d" } }],
-    memory: [{ bot: "ember", path: "MEMORY.md", hash: "m1", lines: ["a", "b"] }],
-    journal: [{ bot: "ember", ids: ["j1", "j2"] }],
-    learned: ["Lives in Pune", "Hates spam"],
-    teams: [{ section: "Ops", context: ["c1"], memory: ["person:dana"] }],
+    items: [...manifest().items, { key: "imported-skill:notes", kind: "imported-skill", label: "notes", id: "notes", parts: { files: "f" } }],
     files: [{ path: "workspaces/ember/notes.md", size: 4, sha256: "f1" }, { path: "workspaces/juno/x.md", size: 1, sha256: "f2" }],
-    runs: [{ id: "run-1", routine: "r1" }, { id: "run-9", routine: "r-starter" }],
     conversations: manifest().conversations.map((head) => head.threadId === "t-ember" ? { ...head, settings: { snoozedUntil: 5, projectId: "p1" } } : head),
   });
   const there = {
     ...here,
-    memory: [{ bot: "ember", path: "MEMORY.md", hash: "other", lines: ["c", "b", "a"] }],
-    journal: [{ bot: "ember", ids: ["j9", "j2", "j1"] }],
-    learned: ["Lives in Pune"], forgotten: ["Hates spam"],
-    teams: [{ section: "Ops", context: ["c0", "c1"], memory: ["person:dana", "term:po"] }],
     files: [{ path: "workspaces/ember/notes.md", size: 5, sha256: "theirs" }, { path: "workspaces/ember/notes (Mac).md", size: 4, sha256: "f1" }],
-    runs: [{ id: "run-1", routine: "r1" }],
     conversations: here.conversations.map((head) => head.threadId === "t-ember" ? { ...head, settings: { snoozedUntil: 1, projectId: "p1", approvalMode: "ask" } } : head),
   };
   const removed = new Set(["bot:juno", "t-juno"]);
-  assert.equal(noGaps(manifestGaps(here, there, { removed })), true, "merged, kept beside, removed there, or of a routine a move never carried: nothing is missing");
-  const gaps = manifestGaps(here, { ...there, memory: [{ bot: "ember", path: "MEMORY.md", hash: "m1", lines: ["a"] }], journal: [{ bot: "ember", ids: ["j1"] }], learned: [], forgotten: [],
-    teams: [{ section: "Ops", context: [], memory: [] }], files: [{ path: "workspaces/ember/notes (Mac).md", size: 4, sha256: "other" }], runs: [],
+  assert.equal(noGaps(manifestGaps(here, there, { removed })), true, "kept beside, or removed there: nothing is missing");
+  const gaps = manifestGaps(here, { ...there, files: [{ path: "workspaces/ember/notes (Mac).md", size: 4, sha256: "other" }],
     conversations: here.conversations.map((head) => head.threadId === "t-ember" ? { ...head, settings: { projectId: "p1" } } : head) }, { removed });
-  assert.deepEqual({ memory: gaps.memory, journal: gaps.journal, learned: gaps.learned, teams: gaps.teams, files: gaps.files, runs: gaps.runs, settings: gaps.settings }, {
-    memory: [{ bot: "ember", path: "MEMORY.md" }], journal: ["ember"], learned: ["Lives in Pune", "Hates spam"], teams: ["Ops"], files: ["workspaces/ember/notes.md"],
-    runs: ["run-1"], settings: ["t-ember"],
+  assert.deepEqual({ files: gaps.files, settings: gaps.settings }, {
+    files: ["workspaces/ember/notes.md"], settings: ["t-ember"],
   });
-  const full = { bot: "ember", ids: Array.from({ length: 500 }, (_, i) => `mine-${i}`) };
-  assert.deepEqual(manifestGaps(here, { ...there, journal: [full] }, { removed }).journal, [], "a journal showing its latest 500 rows of My Cloud's own may no longer show older ones");
 });
 
 test("an answer about the attachments that names no list is never read as nothing missing", async () => {

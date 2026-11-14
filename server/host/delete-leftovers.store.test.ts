@@ -4,11 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DATA_DIR } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
-import { journalFile } from "../memory-journal.ts";
 import * as mdb from "../message-db.ts";
 import { Store } from "../store.ts";
 import { createDeleteLeftovers, engineSessionFolders, type DeleteLeftoversDeps } from "./delete-leftovers.ts";
-import { memoryLayerRecords } from "./team-member-left.ts";
 
 const selection = (): ModelSelection => ({ instanceId: "claude", model: "claude-sonnet-5" });
 const SESSION = "11111111-1111-4111-8111-111111111111";
@@ -31,7 +29,6 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
     keptAttachments: () => new Set(),
     deleteAttachment: (name) => rmSync(join(DATA_DIR, "attachments", name)),
     engineFolders: () => engineSessionFolders([{ HOME }]),
-    layers: memoryLayerRecords,
     defer: () => {},
     warn: (line) => { warnings.push(line); },
     ...over,
@@ -93,18 +90,16 @@ describe("deleting through the store", () => {
     ]);
   });
 
-  it("removes a deleted bot's uploads, sessions, checkpoints, memory layers and memory journal, and keeps the files it made", () => {
+  it("removes a deleted bot's uploads, sessions, checkpoints and memory layers, and keeps the files it made", () => {
     const { store, bot, files, leftovers } = fixture();
     const layer = `${bot.id}--member-p_bobbobbobbobbobbobbobb`;
     const mine = [
       ...Object.values(files),
       put(join(DATA_DIR, "checkpoints", bot.id, "0123456789abcdef", ".git", "HEAD")),
       put(join(DATA_DIR, "workspaces", layer, "memory", "notes.md")),
-      put(journalFile(layer)),
-      put(journalFile(bot.id)),
     ];
     const other = store.createBot({ name: "Ledger" });
-    const others = [put(join(DATA_DIR, "checkpoints", other.id, "0123456789abcdef", ".git", "HEAD")), put(journalFile(other.id)), put(join(DATA_DIR, "task-workspaces", bot.id, bot.threadId, "result.txt"))];
+    const others = [put(join(DATA_DIR, "checkpoints", other.id, "0123456789abcdef", ".git", "HEAD")), put(join(DATA_DIR, "task-workspaces", bot.id, bot.threadId, "result.txt"))];
     expect(store.deleteBot(bot.id)).toBe(true);
     leftovers.flush();
     expect(mine.filter(existsSync)).toEqual([]);

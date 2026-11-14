@@ -26,10 +26,8 @@ function ready(patch: Partial<AppState> = {}): AppState {
     ...store.initialState,
     connected: true,
     hydrated: true,
-    routinesLoadState: "ready",
     config: { box: { configured: false }, composio: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 } } as ConfigStatus,
     instances: [{ instanceId: "claude", driverKind: "customAcp", displayName: "Claude", snapshot: { state: "available", authenticated: true }, models: { default: "", options: [] } } as InstanceInfo],
-    webhookIngress: { available: true, baseUrl: "http://127.0.0.1:8800" },
     ...patch,
   };
 }
@@ -118,8 +116,8 @@ describe("useUsageSnapshot", () => {
     expect(fixture.connectedApps).not.toHaveBeenCalled();
   });
 
-  it("waits for the config, the routines, the webhooks and the engine list", async () => {
-    for (const early of [ready({ config: null }), ready({ instances: [] }), ready({ routinesLoadState: "loading" }), ready({ hydrated: undefined }), ready({ webhookIngress: null })]) {
+  it("waits for the config and the engine list", async () => {
+    for (const early of [ready({ config: null }), ready({ instances: [] }), ready({ hydrated: undefined })]) {
       await draw(early);
       expect(fixture.track).not.toHaveBeenCalled();
       expect(fixture.api).not.toHaveBeenCalled();
@@ -153,12 +151,11 @@ describe("what the snapshot asks this page's app", () => {
     expect(sent()[0]![1]).not.toHaveProperty("phones_paired");
   });
 
-  it("asks nothing of the desktop app as a remote client, and does not wait for webhooks it never loads", async () => {
+  it("asks nothing of the desktop app as a remote client", async () => {
     vi.stubGlobal("ogb", { remoteClient: { active: true }, ...bridges });
-    await draw(ready({ webhookIngress: null }));
+    await draw(ready());
     expect(asked).toEqual([]);
     expect(sent()[0]![1]).toMatchObject({ cloud_plan: "unknown", remote_client: true });
-    expect(sent()[0]![1]).not.toHaveProperty("webhooks");
   });
 
   it("asks nothing in a plain browser", async () => {

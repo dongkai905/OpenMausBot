@@ -1,6 +1,6 @@
 // The OpenMausBot package file ("openmaus.package"), v1 or v2; every reader
 // returns v2. The single validation gate for the server, the renderer and the
-// Admin upload, so it imports only zod, yaml, croner and pure shared modules
+// Admin upload, so it imports only zod, yaml and pure shared modules
 // (no Buffer, no node:*). The schema has no field for chat history, secrets,
 // model choices, computers, visibility or personal settings, and unknown
 // fields are stripped.
@@ -9,7 +9,6 @@ import { z } from "zod";
 
 import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "./bot-profile.ts";
 import { redactSecretsInText } from "./redact.ts";
-import { normalizeCronSchedule } from "./routine-schedule.ts";
 import { MAUS_COLOR_NAMES } from "./wire.ts";
 import { isSkillName, parseSkillMd, scanSkillText, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
 
@@ -71,7 +70,6 @@ const optionalLine = (max: number) =>
 const key = requiredText(64).regex(/^[a-z0-9][a-z0-9_-]*$/, {
   message: "may only contain lowercase letters, numbers, - and _",
 });
-const MAX_DATE_MS = 8_640_000_000_000_000;
 const skillName = requiredText(64).refine(isSkillName, { message: "must be a lowercase skill name" });
 const portableSource = optionalText(2_000).refine(
   (value) => value === undefined || !/^(?:[a-z]:[\\/]|[\\/]|\\\\|file:)/i.test(value),
@@ -93,60 +91,6 @@ const portableSkillSchema = z.object({
 });
 const soulSchema = z.string().refine((value) => utf8Bytes(value) <= BOT_PROFILE_LIMITS.soul, {
   error: "standing instructions must be at most 24000 bytes",
-});
-const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-const intervalWeekdays = z.array(z.number().int().min(0).max(6)).min(1).max(7).refine(
-  (weekdays) => new Set(weekdays).size === weekdays.length,
-  "must contain unique weekdays",
-);
-const intervalWindow = z.object({
-  start: z.string().regex(CLOCK_TIME, { message: "must use HH:MM" }),
-  end: z.string().regex(CLOCK_TIME, { message: "must use HH:MM" }),
-}).strict().refine(({ start, end }) => start < end, {
-  message: "must end later on the same day",
-});
-export const packageRoutineScheduleSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("cron"), expression: requiredText(256), timeZone: requiredText(100) }).strict(),
-  z.object({ type: z.literal("once"), at: z.number().int() }),
-  z.object({
-    type: z.literal("daily"),
-    time: requiredText(5).regex(CLOCK_TIME, { message: "must use HH:MM" }),
-    weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
-  }),
-  z.object({
-    type: z.literal("interval"),
-    everyMinutes: z.number().int().min(5).max(1_440),
-    anchorAt: z.number().int().nonnegative().max(MAX_DATE_MS),
-    weekdays: intervalWeekdays.optional(),
-    window: intervalWindow.optional(),
-    endsAt: z.number().int().nonnegative().max(MAX_DATE_MS).optional(),
-  }),
-]).superRefine((schedule, context) => {
-  if (schedule.type === "cron") {
-    try { normalizeCronSchedule(schedule); }
-    catch (error) { context.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid cron schedule" }); }
-    return;
-  }
-  if (schedule.type !== "interval") return;
-  if (schedule.window) {
-    const [startHour, startMinute] = schedule.window.start.split(":").map(Number);
-    const [endHour, endMinute] = schedule.window.end.split(":").map(Number);
-    const windowMinutes = endHour! * 60 + endMinute! - (startHour! * 60 + startMinute!);
-    if (windowMinutes < schedule.everyMinutes) {
-      context.addIssue({
-        code: "custom",
-        message: "must be at least as long as the interval cadence",
-        path: ["window"],
-      });
-    }
-  }
-  if (schedule.endsAt !== undefined && schedule.endsAt < schedule.anchorAt) {
-    context.addIssue({
-      code: "custom",
-      message: "must not be before the interval anchor",
-      path: ["endsAt"],
-    });
-  }
 });
 const playbookSchema = z.object({
   key,
@@ -231,18 +175,6 @@ const packageDocumentV1Schema = z.object({
     })).min(1).max(200),
     chiefOfStaff: key.optional(),
     rooms: z.array(roomSchema).max(30).optional(),
-    routines: z.array(z.object({
-      key,
-      name: requiredText(80),
-      agent: key,
-      prompt: requiredText(20_000),
-      runOn: z.enum(["maus", "cloud"]),
-      schedule: packageRoutineScheduleSchema,
-      durationMinutes: z.number().int().min(5).max(240),
-      timeoutMinutes: z.number().int().min(5).max(240).optional(),
-      overlap: z.enum(["skip", "queue"]).optional(),
-      enabledAfterInstall: z.literal(false),
-    })).max(50).optional(),
     playbooks: z.array(playbookSchema).max(80).optional(),
     skills: z.object({
       version: z.literal(1),
@@ -316,29 +248,6 @@ const appearanceSchema = z.object({
   avatar: avatarSchema.optional(),
 });
 
-/** Starter notes travel as MEMORY.md plus topic files. Daily logs never do. */
-export function isSeedPath(path: string): boolean {
-  return path === "MEMORY.md" || (path.startsWith("memory/") && /^[\w][\w .-]{0,199}\.md$/.test(path.slice(7)));
-}
-
-const seedSchema = z.object({
-  memory: z.record(z.string(), z.string({ error: "must be text" })),
-}).superRefine((seed, context) => {
-  const entries = Object.entries(seed.memory);
-  let total = 0;
-  for (const [path, text] of entries) {
-    if (!isSeedPath(path)) {
-      context.addIssue({ code: "custom", path: ["memory", path], message: "must be MEMORY.md or memory/<topic>.md; daily logs never travel" });
-      continue;
-    }
-    const bytes = utf8Bytes(text);
-    total += bytes;
-    if (bytes > SEED_FILE_MAX_BYTES) context.addIssue({ code: "custom", path: ["memory", path], message: "is larger than 256 KB" });
-  }
-  if (entries.length > SEED_MAX_FILES) context.addIssue({ code: "custom", path: ["memory"], message: `has more than ${SEED_MAX_FILES} files` });
-  if (total > SEED_MAX_BYTES) context.addIssue({ code: "custom", path: ["memory"], message: "is larger than 1 MB in total" });
-});
-
 const agentSchema = z.object({
   key,
   name: oneLine(100),
@@ -351,27 +260,6 @@ const agentSchema = z.object({
   playbooks: z.array(key).max(40).optional(),
   skills: z.array(skillName).max(AGENT_MAX_SKILLS).optional(),
   connections: z.array(connKey).max(PACKAGE_MAX_CONNECTIONS).optional(),
-  seed: seedSchema.optional(),
-});
-
-const routineSchema = z.object({
-  key,
-  name: requiredText(80),
-  /** The owner; for a room goal, the lead coordinator. */
-  agent: key,
-  /** Present = a room goal (runs on this computer, no continuity). */
-  room: key.optional(),
-  prompt: requiredText(20_000),
-  runOn: z.enum(["maus", "cloud"]),
-  schedule: packageRoutineScheduleSchema,
-  durationMinutes: z.number().int().min(5).max(240),
-  timeoutMinutes: z.number().int().min(1).max(1_440).optional(),
-  overlap: z.enum(["skip", "queue"]).optional(),
-  continuity: z.boolean().optional(),
-  /** Also run once each time OpenMausBot starts. Repeating routines only. */
-  runOnStartup: z.boolean().optional(),
-  /** The publisher's intent. File imports always arrive paused. */
-  enabledAfterInstall: z.boolean(),
 });
 
 /** Preset bots: an allowlist. No approval, computer, browser, MCP, apps or model. */
@@ -388,7 +276,6 @@ const presetSchema = z.object({
   }),
   playbooks: z.array(key).max(40).optional(),
   skills: z.array(skillName).max(AGENT_MAX_SKILLS).optional(),
-  seed: seedSchema.optional(),
 });
 
 function isLoopbackHost(hostname: string): boolean {
@@ -456,7 +343,6 @@ export const packageDocumentSchema = z.object({
     }).optional(),
     agents: z.array(agentSchema).max(200).default([]),
     rooms: z.array(roomSchema).max(30).optional(),
-    routines: z.array(routineSchema).max(50).optional(),
     playbooks: z.array(playbookSchema).max(80).optional(),
     skills: z.object({
       version: z.literal(1),
@@ -472,23 +358,20 @@ export type PackageDocument = z.output<typeof packageDocumentSchema>;
 export type PackageDefinition = PackageDocument["package"];
 export type PackageAgent = PackageDefinition["agents"][number];
 export type PackageRoom = NonNullable<PackageDefinition["rooms"]>[number];
-export type PackageRoutine = NonNullable<PackageDefinition["routines"]>[number];
 export type PackagePlaybook = NonNullable<PackageDefinition["playbooks"]>[number];
 export type PackageSkill = NonNullable<PackageDefinition["skills"]>["entries"][number];
 export type PackagePreset = NonNullable<PackageDefinition["presets"]>[number];
 export type PackageConnection = NonNullable<PackageDefinition["connections"]>[number];
 export type PackageAvatar = NonNullable<PackageAgent["appearance"]["avatar"]>;
-export type PackageRoutineSchedule = PackageRoutine["schedule"];
 
 
 /** Lists whose items are named by `key` in part paths: agents[scout].soul. */
-const KEYED_LISTS = new Set(["agents", "rooms", "routines", "playbooks", "presets", "connections"]);
+const KEYED_LISTS = new Set(["agents", "rooms", "playbooks", "presets", "connections"]);
 
 function segmentsAfter(head: string, rest: ReadonlyArray<PropertyKey>): string {
   let out = head;
   for (const segment of rest) {
     if (typeof segment === "number") out += `[${segment}]`;
-    else if (out.endsWith(".seed.memory")) out += `[${JSON.stringify(String(segment))}]`;
     else out += `.${String(segment)}`;
   }
   return out;
@@ -496,7 +379,7 @@ function segmentsAfter(head: string, rest: ReadonlyArray<PropertyKey>): string {
 
 /** Map a schema path onto the part-path grammar shared with Admin:
  * package.summary, team.brief, agents[scout].soul, skills[x].instructions,
- * agents[scout].seed.memory["MEMORY.md"]. Keys come from the raw input. */
+ * agents[scout].soul. Keys come from the raw input. */
 function describePath(input: unknown, path: ReadonlyArray<PropertyKey>): string {
   if (path[0] !== "package") return path.map(String).join(".") || "package";
   const pkg = input && typeof input === "object" ? (input as { package?: Record<string, unknown> }).package : undefined;
@@ -591,7 +474,6 @@ function checkV1References(pkg: PackageDocumentV1["package"]): void {
   const playbooks = uniqueKeys((pkg.playbooks ?? []).map((playbook) => playbook.key), "playbook");
   const skills = uniqueKeys((pkg.skills?.entries ?? []).map((skill) => skill.name), "skill");
   uniqueKeys((pkg.rooms ?? []).map((room) => room.key), "room");
-  uniqueKeys((pkg.routines ?? []).map((routine) => routine.key), "routine");
   if (pkg.chiefOfStaff && !agents.has(pkg.chiefOfStaff)) throw invalid(`Unknown Chief of Staff: ${pkg.chiefOfStaff}`);
   for (const agent of pkg.agents) {
     for (const playbook of agent.playbooks ?? []) {
@@ -616,25 +498,21 @@ function checkV1References(pkg: PackageDocumentV1["package"]): void {
       throw invalid(`Room ${room.key} has an unknown default responder`);
     }
   }
-  for (const routine of pkg.routines ?? []) {
-    if (!agents.has(routine.agent)) throw invalid(`Routine ${routine.key} references unknown agent: ${routine.agent}`);
-  }
 }
 
 function checkV2References(pkg: PackageDefinition): void {
   const isTeam = pkg.agents.length > 0;
   if (isTeam && !pkg.team) throw invalid("A package with bots needs a team");
   if (!isTeam) {
-    if (pkg.team || pkg.rooms?.length || pkg.routines?.length) {
-      throw invalid("A package without bots cannot have a team, group chats or routines");
+    if (pkg.team || pkg.rooms?.length) {
+      throw invalid("A package without bots cannot have a team or group chats");
     }
     if (!pkg.skills?.entries.length && !pkg.presets?.length) {
       throw invalid("A package without bots needs at least one skill or preset");
     }
   }
   const agents = uniqueKeys(pkg.agents.map((agent) => agent.key), "agent");
-  const rooms = uniqueKeys((pkg.rooms ?? []).map((room) => room.key), "room");
-  uniqueKeys((pkg.routines ?? []).map((routine) => routine.key), "routine");
+  uniqueKeys((pkg.rooms ?? []).map((room) => room.key), "room");
   const playbooks = uniqueKeys((pkg.playbooks ?? []).map((playbook) => playbook.key), "playbook");
   uniqueKeys((pkg.presets ?? []).map((preset) => preset.key), "preset");
   const connections = uniqueKeys((pkg.connections ?? []).map((connection) => connection.key), "connection");
@@ -657,7 +535,6 @@ function checkV2References(pkg: PackageDefinition): void {
   }
   for (const preset of pkg.presets ?? []) checkAssignments(`Preset ${preset.key}`, preset);
   checkSkillEntries(pkg.skills?.entries ?? []);
-  const roomMembers = new Map<string, Set<string>>();
   for (const room of pkg.rooms ?? []) {
     const members = uniqueKeys(room.members, `member in room ${room.key}`);
     for (const member of members) {
@@ -666,18 +543,6 @@ function checkV2References(pkg: PackageDefinition): void {
     if ((room.defaultResponder.kind === "agent" || room.defaultResponder.kind === "auto") && room.defaultResponder.agent !== undefined &&
       !members.has(room.defaultResponder.agent)) {
       throw invalid(`Room ${room.key} has a default responder who is not a member: ${room.defaultResponder.agent}`);
-    }
-    roomMembers.set(room.key, members);
-  }
-  for (const routine of pkg.routines ?? []) {
-    if (!agents.has(routine.agent)) throw invalid(`Routine ${routine.key} references unknown agent: ${routine.agent}`);
-    if (routine.room === undefined) continue;
-    if (!rooms.has(routine.room)) throw invalid(`Routine ${routine.key} references unknown group chat: ${routine.room}`);
-    if (routine.runOn !== "maus") throw invalid(`Routine ${routine.key} is a group chat goal, which only runs on this computer`);
-    if (routine.continuity) throw invalid(`Routine ${routine.key} is a group chat goal, which cannot carry continuity`);
-    // The goal scheduler refuses a lead who is not in the room.
-    if (!roomMembers.get(routine.room)!.has(routine.agent)) {
-      throw invalid(`Routine ${routine.key} is led by ${routine.agent}, who is not a member of group chat ${routine.room}`);
     }
   }
 }
@@ -735,7 +600,7 @@ function normalizedRelease(release: string): string {
 }
 
 /** v1 → v2: chiefOfStaff becomes team.leader, the team is named after the
- * package, routines stay paused. Everything else is copied as it is. */
+ * package. Everything else is copied as it is. */
 export function upgradeV1(document: PackageDocumentV1): PackageDocument {
   const { chiefOfStaff, ...pkg } = document.package;
   return validateV2({
@@ -745,7 +610,6 @@ export function upgradeV1(document: PackageDocumentV1): PackageDocument {
       ...pkg,
       release: normalizedRelease(pkg.release),
       team: { name: pkg.name.slice(0, 60).trim(), ...(chiefOfStaff ? { leader: chiefOfStaff } : {}) },
-      ...(pkg.routines ? { routines: pkg.routines.map((routine) => ({ ...routine, enabledAfterInstall: false })) } : {}),
     },
   });
 }
@@ -793,8 +657,6 @@ export function downgradeToV1(document: PackageDocument):
   }
   const crowded = pkg.agents.find((agent) => (agent.skills?.length ?? 0) > PACKAGE_V1_MAX_SKILLS);
   if (crowded) return { error: `Older versions of OpenMausBot accept at most ${PACKAGE_V1_MAX_SKILLS} skills per bot (${crowded.key} has more).` };
-  const outOfRange = (pkg.routines ?? []).find((routine) => routine.timeoutMinutes !== undefined && (routine.timeoutMinutes < 5 || routine.timeoutMinutes > 240));
-  if (outOfRange) return { error: `Older versions of OpenMausBot accept run limits from 5 to 240 minutes (${outOfRange.key} has ${outOfRange.timeoutMinutes}).` };
 
   const dropped: string[] = [];
   if (pkg.publisher) dropped.push("package.publisher");
@@ -805,27 +667,16 @@ export function downgradeToV1(document: PackageDocument):
   for (const preset of pkg.presets ?? []) dropped.push(`presets[${preset.key}]`);
   for (const connection of pkg.connections ?? []) dropped.push(`connections[${connection.key}]`);
   const agents = pkg.agents.map((agent) => {
-    const { approval, connections, seed, appearance, ...kept } = agent;
+    const { approval, connections, appearance, ...kept } = agent;
     const { avatar, ...look } = appearance;
     if (avatar) dropped.push(`agents[${agent.key}].appearance.avatar`);
     if (approval !== undefined) dropped.push(`agents[${agent.key}].approval`);
     if (connections?.length) dropped.push(`agents[${agent.key}].connections`);
-    if (seed) dropped.push(`agents[${agent.key}].seed`);
     return { ...kept, appearance: look };
-  });
-  const routines = (pkg.routines ?? []).flatMap((routine) => {
-    if (routine.room !== undefined) {
-      dropped.push(`routines[${routine.key}]`);
-      return [];
-    }
-    const { room: _room, continuity, runOnStartup, ...kept } = routine;
-    if (continuity !== undefined) dropped.push(`routines[${routine.key}].continuity`);
-    if (runOnStartup !== undefined) dropped.push(`routines[${routine.key}].runOnStartup`);
-    return [{ ...kept, enabledAfterInstall: false as const }];
   });
   const {
     team, publisher: _publisher, notes: _notes, presets: _presets, connections: _connections,
-    skills: _skills, agents: _agents, routines: _routines, ...rest
+    skills: _skills, agents: _agents, ...rest
   } = pkg;
   // Older apps know no Auto room: spell one as its lead, as exports do.
   const rooms = rest.rooms?.map((room) => room.defaultResponder.kind !== "auto" ? room
@@ -835,7 +686,6 @@ export function downgradeToV1(document: PackageDocument):
     ...(rooms ? { rooms } : {}),
     agents,
     ...(team.leader ? { chiefOfStaff: team.leader } : {}),
-    ...(routines.length ? { routines } : {}),
     ...(skills.length ? { skills: { version: 1, entries: skills } } : {}),
   };
   try {
@@ -866,7 +716,7 @@ function visitText(document: PackageDocument, visit: TextVisitor): void {
     const record = value as Record<string, unknown>;
     for (const name of Object.keys(record)) {
       if (part.endsWith(".appearance.avatar") && name === "data") continue;
-      walk(record, name, part.endsWith(".seed.memory") ? `${part}[${JSON.stringify(name)}]` : `${part}.${name}`);
+      walk(record, name, `${part}.${name}`);
     }
   };
   const pkg = document.package as unknown as Record<string, unknown>;
@@ -937,7 +787,6 @@ export function packageKeys(document: PackageDocument): string[] {
   return [
     ...pkg.agents.map((agent) => `agents:${agent.key}`),
     ...(pkg.rooms ?? []).map((room) => `rooms:${room.key}`),
-    ...(pkg.routines ?? []).map((routine) => `routines:${routine.key}`),
     ...(pkg.skills?.entries ?? []).map((skill) => `skills:${skill.name}`),
     ...(pkg.presets ?? []).map((preset) => `presets:${preset.key}`),
     ...(pkg.connections ?? []).map((connection) => `connections:${connection.key}`),
@@ -949,7 +798,7 @@ export interface PackageSummary {
   kind: "team" | "library";
   name: string;
   tagline: string;
-  counts: { bots: number; skills: number; presets: number; rooms: number; routines: number; connections: number; playbooks: number };
+  counts: { bots: number; skills: number; presets: number; rooms: number; connections: number; playbooks: number };
   botNames: string[];
   skillNames: string[];
   presetNames: string[];
@@ -968,7 +817,6 @@ export function packageSummary(document: PackageDocument): PackageSummary {
       skills: pkg.skills?.entries.length ?? 0,
       presets: pkg.presets?.length ?? 0,
       rooms: pkg.rooms?.length ?? 0,
-      routines: pkg.routines?.length ?? 0,
       connections: pkg.connections?.length ?? 0,
       playbooks: pkg.playbooks?.length ?? 0,
     },

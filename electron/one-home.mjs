@@ -3,29 +3,28 @@
 //
 //   copy    everything goes while this computer stays home and fully usable
 //   wait    until a quiet moment: no work under way here (server/move-waits.ts), and nobody typing for 30 s
-//   freeze  this computer's server stops (server/move-freeze.ts): no turns, schedules, webhooks or app events
+//   freeze  this computer's server stops (server/move-freeze.ts): no turns
 //   final   the same pass again, for what changed since, with the sign-ins that refresh themselves
 //   check   what arrived, against what is here; anything missing goes again, three passes at most
-//   switch  My Cloud switches on what was on here, and keeps which computer its bots came from
+//   switch  My Cloud keeps which computer its bots came from
 //   done    home is My Cloud: this computer lends itself and says once what arrived
 //
 // Before the switch a failure lifts the freeze and tries again later; from the switch on the move only goes forward, so
 // nothing ever runs in two places. If My Cloud ends, this computer is home again at once (`home-again`), then brings
-// back what was done on My Cloud while the Admin still holds it (one-home-again.mjs) and switches on what was on there
-// (`back`). Once done, the Admin is told once per sign-in that this computer moved, so it can be the one an ended Cloud's
-// things come home to. When the Admin names another computer as that one, this one only opens its own copy, with every
-// automation off, and says where the bots went (`back` with `elsewhere`). When the Cloud this computer moved to is gone and
-// is not My Cloud any more (deleted, or ended while another Cloud is My Cloud), by the Admin's word on that Cloud, this
-// computer opens its own copy as it was at the move, with every automation off, keeps its bots here, and says so once
-// (`back` with `gone`). That word is asked for the journal's Cloud, or for the Cloud the freeze names when this app kept no
-// journal.
+// back what was done on My Cloud while the Admin still holds it (one-home-again.mjs) (`back`). Once done, the Admin is told
+// once per sign-in that this computer moved, so it can be the one an ended Cloud's things come home to. When the Admin names
+// another computer as that one, this one only opens its own copy, with everything it runs off, and says where the bots went
+// (`back` with `elsewhere`). When the Cloud this computer moved to is gone and is not My Cloud any more (deleted, or ended
+// while another Cloud is My Cloud), by the Admin's word on that Cloud, this computer opens its own copy as it was at the
+// move, with everything it runs off, keeps its bots here, and says so once (`back` with `gone`). That word is asked for the
+// journal's Cloud, or for the Cloud the freeze names when this app kept no journal.
 //
 // A person may keep this computer's bots on this computer (`keep`, its own choice, kept on this computer). Then no move
 // starts, and one under way stops before the switch as the Admin's kill switch stops it. Once this computer has moved,
-// its bots come home to it while My Cloud goes on (`keeping`): My Cloud's backup is staged here, the automations this
-// computer brought stop there, this computer opens with every automation off and restores the backup, and once the app
-// opens again what was on of them at My Cloud is switched on here (`back` with `kept`). The Admin is then told this
-// computer no longer counts as moved. Choosing otherwise again moves it again, as anyone's first move.
+// its bots come home to it while My Cloud goes on (`keeping`): My Cloud's backup is staged here, this computer opens with
+// everything it runs off and restores the backup, and once the app opens again the record of where the bots came from goes
+// (`back` with `kept`). The Admin is then told this computer no longer counts as moved. Choosing otherwise again moves it
+// again, as anyone's first move.
 import nativeText from "./native-text.cjs";
 
 import { failureOf, rateLimited } from "./move-failure.mjs";
@@ -67,7 +66,6 @@ const AWAY = new Set(["switch", "done", "keeping"]);
 const MOVING = new Set(["copy", "wait", "freeze", "final", "check", "switch"]);
 /** The phases a restart of this app would cut into: from the wait for the quiet moment to the switch. */
 const CUT_SHORT = new Set(["wait", ...FROZEN, "switch"]);
-const AUTOMATION = /^(routine|call|webhook|app-event):([\w-]{1,128})$/u;
 
 /** At most this many ids of a kind in the log line. */
 const LOGGED_IDS = 10;
@@ -79,7 +77,7 @@ const named = (ids) => {
   return kept.length ? ` (${kept.slice(0, LOGGED_IDS).join(", ")}${kept.length > LOGGED_IDS ? `, ${kept.length - LOGGED_IDS} more` : ""})` : "";
 };
 
-/** What a check found missing, by kind and count, and the rooms and conversations by id: "3 rooms (r1, r2, r3), 1 memory". */
+/** What a check found missing, by kind and count, and the rooms and conversations by id: "3 rooms (r1, r2, r3), 1 file". */
 export function missingOf(report) {
   const counts = Object.entries(record(report?.gaps) ? report.gaps : {}).flatMap(([kind, list]) => (Array.isArray(list) && list.length
     ? [`${list.length} ${kind}${IDS_OF[kind] ? named(list.map(IDS_OF[kind])) : ""}`] : []));
@@ -116,37 +114,12 @@ export function parseJournal(value) {
 /** Home is My Cloud by this journal: its switch happened, and its bots are not on their way back here. */
 export const awayIn = (journal) => AWAY.has(journal?.phase ?? "");
 
-/** This computer's bots are on their way home and past turning back: their automations stopped on My Cloud, or this
- * computer opened again. */
-export const underWay = (journal) => journal?.phase === "keeping" && Boolean(journal.offThere || journal.thawed);
+/** This computer's bots are on their way home and past turning back: this computer opened again. */
+export const underWay = (journal) => journal?.phase === "keeping" && Boolean(journal.thawed);
 
 /** This computer's own choice to keep its bots here, read back. */
 export function parseKeep(value) {
   return { on: record(value) && value.v === 1 && value.on === true };
-}
-
-/** How one automation is switched on, over the routes its own page uses. */
-export function switchOn(key) {
-  const match = AUTOMATION.exec(key);
-  if (!match) return null;
-  const [, kind, id] = match;
-  if (kind === "routine") return { method: "PATCH", route: `/api/routines/${id}`, body: { enabled: true } };
-  // A call is on when it has a next time: saving it again works that out from its schedule.
-  if (kind === "call") return { method: "PATCH", route: `/api/calendar-calls/${id}`, body: {} };
-  if (kind === "webhook") return { method: "PATCH", route: `/api/webhooks/${id}`, body: { enabled: true } };
-  return { method: "PATCH", route: `/api/app-triggers/${id}`, body: { enabled: true } };
-}
-
-/** Each automation a manifest lists, by key, and whether it is on. */
-export function automationsOn(manifest) {
-  return Object.fromEntries((Array.isArray(manifest?.automations) ? manifest.automations : [])
-    .filter((entry) => record(entry) && typeof entry.key === "string" && AUTOMATION.test(entry.key) && typeof entry.on === "boolean").map((entry) => [entry.key, entry.on]));
-}
-
-/** The automations this computer brought, on or off as My Cloud has them (`there`, from its manifest): those on are
- * switched off there before this computer's bots come home, and on here once they are. */
-export function keptSwitches(brought, there) {
-  return Object.fromEntries(Object.entries(there ?? {}).filter(([key, on]) => Object.hasOwn(brought, key) && typeof on === "boolean" && AUTOMATION.test(key)));
 }
 
 /** What arrived, in counts a person recognises: only what both sides hold, this computer's manifest against My Cloud's. */
@@ -155,11 +128,9 @@ export function arrivedCounts(here, there) {
   const items = (here?.items ?? []).filter((item) => keys.has(item.key));
   const count = (...kinds) => items.filter((item) => kinds.includes(item.kind)).length;
   const threads = new Set((there?.conversations ?? []).map((head) => head.threadId));
-  const automations = new Set((there?.automations ?? []).map((entry) => entry.key));
   return {
     bots: count("bot"), skills: count("skill", "imported-skill", "library-skill"), logins: count("login"), onePassword: count("1password") > 0,
     chats: (here?.conversations ?? []).filter((head) => threads.has(head.threadId)).length,
-    routines: (here?.automations ?? []).filter((entry) => entry.key.startsWith("routine:") && automations.has(entry.key)).length,
   };
 }
 
@@ -168,7 +139,7 @@ export function arrivedCounts(here, there) {
  *   journal: { read(): unknown, write(value: unknown): void },
  *   cloud(): null | { origin: string | null, account: string, machine: string | null, ready: boolean, moves: boolean, ended: boolean, paid: boolean,
  *     homecoming?: { installationId: string, name: string }, signIn?: string, verified?: boolean, id?: string, formerOrigins?: string[] },
- *   send: { move(options?: { final?: boolean }): Promise<unknown>, check(): Promise<{ ok: boolean }>, switches(): Record<string, boolean>, snapshot(): any },
+ *   send: { move(options?: { final?: boolean }): Promise<unknown>, check(): Promise<{ ok: boolean }>, snapshot(): any },
  *   local: { freeze(origin: string): Promise<{ frozen: true } | { busy: string, what?: string }>, unfreeze(options?: { automations?: "off" }): Promise<void>, frozen(): Promise<boolean>, json(route: string): Promise<any>,
  *     call(method: string, route: string, body?: unknown): Promise<{ ok: boolean, status: number, body: any }>, forget?(): Promise<void>,
  *     marker?(): Promise<{ frozen: boolean, cloud?: string, place?: string }> },
@@ -182,10 +153,10 @@ export function arrivedCounts(here, there) {
  *   openHome?(): void,
  *   openLocal?(): void,
  *   lastInput?(): number,
- *   again?: { bring(): Promise<{ restored: string, switches: Record<string, boolean> } | { deleted: true } | { later: number }> },
+ *   again?: { bring(): Promise<{ restored: string } | { deleted: true } | { later: number }> },
  *   keep?: { read(): unknown, write(value: unknown): void },
- *   keepHome?: { stage(): Promise<{ staged: true, switches: Record<string, boolean> } | { later: number } | { deleted: true }>,
- *     bring(): Promise<{ restored: string, switches: Record<string, boolean> } | { deleted: true } | { later: number }> },
+ *   keepHome?: { stage(): Promise<{ staged: true } | { later: number } | { deleted: true }>,
+ *     bring(): Promise<{ restored: string } | { later: number } | { deleted: true }> },
  *   installation?(): Promise<string | null>,
  *   reportMove?(): Promise<boolean>,
  *   reportKept?(): Promise<boolean>,
@@ -413,31 +384,17 @@ export function createOneHome(deps) {
     return write({ ...journal, phase: "switch", passes, checkedAt: now(), ...(counts ? { counts } : {}), ...(stuck?.length ? { stuck } : {}) });
   }
 
-  /** The point of no return: My Cloud switches on what was on here, and keeps which computer its bots came from. What was
-   * on here is read here, frozen since the freeze, over what each pass recorded as it carried it: a switch turned since,
-   * or once this computer's bots came home and move again, is not on record. */
+  /** The point of no return: My Cloud keeps which computer its bots came from. */
   async function switchOver(journal) {
-    const switches = { ...deps.send.switches(), ...automationsOn(await deps.local.json("/api/cloud-send/manifest").catch(() => null)) };
-    const switched = { ...journal.switched };
     let session;
     try {
       session = await deps.session();
-      for (const [key, on] of Object.entries(switches)) {
-        const change = on && !switched[key] ? switchOn(key) : null;
-        if (!change) continue;
-        const answer = await session.call(change.method, change.route, change.body);
-        // One deleted on My Cloud meanwhile stays deleted; any other refusal is tried again.
-        if (!answer.ok && answer.status !== 404) throw tagged(sentence(answer.body?.error) ?? "My Cloud did not switch on an automation.", "switch_refused", { status: answer.status });
-        switched[key] = true;
-        write({ ...journal, switched });
-      }
       const computer = sentence((await deps.local.json("/api/cloud-connections").catch(() => null))?.computer?.label) ?? "this computer";
-      const webhooks = Object.keys(switches).flatMap((key) => (key.startsWith("webhook:") ? [key.slice("webhook:".length)] : []));
-      const arrived = await session.call("POST", "/api/cloud-send/arrived", { v: 1, computer, webhooks, ...(journal.cloud.name ? { place: journal.cloud.name } : {}) });
+      const arrived = await session.call("POST", "/api/cloud-send/arrived", { v: 1, computer, ...(journal.cloud.name ? { place: journal.cloud.name } : {}) });
       if (!arrived.ok) throw tagged(sentence(arrived.body?.error) ?? "My Cloud did not finish the move.", "switch_refused", { status: arrived.status });
     } catch (error) {
       log(`one home: switching over goes on later (${error?.message ?? error})`);
-      const next = write({ ...journal, switched, error: sentence(error?.message) ?? undefined, ...errorText(error), retryAt: now() + 2 * MINUTE, failure: failureOf(error, "switch", journal.failure, now()) });
+      const next = write({ ...journal, error: sentence(error?.message) ?? undefined, ...errorText(error), retryAt: now() + 2 * MINUTE, failure: failureOf(error, "switch", journal.failure, now()) });
       later(next.retryAt - now());
       return null;
     } finally { await session?.close().catch(() => {}); await letGo(); }
@@ -446,7 +403,7 @@ export function createOneHome(deps) {
     const left = [...notCarried(sent, true), ...(Array.isArray(journal.stuck) ? journal.stuck : [])];
     const stayed = (sent?.whole?.result?.notes ?? []).filter((note) => note?.kind === "stayed" && typeof note.connection === "string").slice(0, NAMED_MAX)
       .map((note) => ({ name: note.connection, ...(typeof note.needs === "string" ? { needs: note.needs } : {}) }));
-    const done = write({ ...journal, phase: "done", switched, doneAt: now(), version: deps.version ?? null, phone: deps.phone?.paired() === true, held, ...(left.length ? { left } : {}), ...(stayed.length ? { stayed } : {}),
+    const done = write({ ...journal, phase: "done", doneAt: now(), version: deps.version ?? null, phone: deps.phone?.paired() === true, held, ...(left.length ? { left } : {}), ...(stayed.length ? { stayed } : {}),
       error: undefined, errorKey: undefined, errorParams: undefined, failingSince: undefined, retryAt: undefined, tries: undefined, failure: undefined, frozenTries: undefined, gapKey: undefined, gaps: undefined, stuck: undefined });
     await settle(done);
     deps.openHome?.();
@@ -503,7 +460,7 @@ export function createOneHome(deps) {
     return home.installationId === mine ? homeAgain(journal) : cameHomeElsewhere(journal, home.name);
   }
 
-  /** Another computer is home now: this one opens its own copy as it was at the move, with every automation off, takes
+  /** Another computer is home now: this one opens its own copy as it was at the move, with everything it runs off, takes
    * nothing from My Cloud and starts nothing. */
   async function cameHomeElsewhere(journal, name) {
     try { await deps.local.unfreeze({ automations: "off" }); }
@@ -516,8 +473,8 @@ export function createOneHome(deps) {
   }
 
   /** The Cloud this computer is frozen for (`from`: the journal, or what the freeze names) is gone and My Cloud is another
-   * Cloud or none, by the Admin's word on that Cloud: this computer opens its own copy as it was at the move, with every
-   * automation off (the person may have set things up again elsewhere), keeps its bots here so no move starts by itself,
+   * Cloud or none, by the Admin's word on that Cloud: this computer opens its own copy as it was at the move, with
+   * everything it runs off (the person may have set things up again elsewhere), keeps its bots here so no move starts by itself,
    * and says so once. Nothing is asked of a Cloud that no longer exists. One already home, bringing that Cloud's things
    * back, only stops waiting for them. */
   async function cameHomeGone(from, gone) {
@@ -526,8 +483,8 @@ export function createOneHome(deps) {
     catch (error) { log(`one home: could not open this computer's copy yet (${error?.message ?? error})`); later(MINUTE); return; }
     try { deps.keep?.write({ v: 1, on: true, at: now() }); } catch {}
     // A way home already under way ends here: what it would have switched on here stays off.
-    const { retryAt: _retry, switchBack: _back, webhooks: _hooks, keptFrom: _from, keptAt: _at, offThere: _off, thawed: _thawed, updating: _updating, ...rest } = from;
-    log(`one home: the Cloud this computer moved to is ${gone}; its own copy is open again, with every automation off`);
+    const { retryAt: _retry, homed: _homed, keptFrom: _from, keptAt: _at, thawed: _thawed, updating: _updating, ...rest } = from;
+    log(`one home: the Cloud this computer moved to is ${gone}; its own copy is open again, with everything it runs off`);
     // A copy already deleted has nothing to say "as they were" about.
     write({ ...rest, v: 1, phase: "back", gone, endedAt: from.endedAt ?? now(), told: from.forgot ? true : undefined });
     deps.openLocal?.();
@@ -592,25 +549,15 @@ export function createOneHome(deps) {
     catch (error) { log(`one home: bringing My Cloud's things back waits (${error?.message ?? error})`); return retry(5 * MINUTE); }
     if ("later" in brought) return retry(brought.later);
     if ("deleted" in brought) return write({ ...next, phase: "back", lost: true });
-    write({ ...next, phase: "back", restoreId: brought.restored, switchBack: brought.switches, retryAt: undefined });
+    write({ ...next, phase: "back", restoreId: brought.restored, homed: true, retryAt: undefined });
     deps.restart?.();
     return null;
   }
 
-  /** After coming home with My Cloud's backup: what was on at My Cloud is switched on here, which a restore leaves off, and
-   * each bot that said on My Cloud that its webhook had a new address says it has one here again. */
-  async function switchBack(journal) {
-    const pending = { ...journal.switchBack };
-    for (const [key, on] of Object.entries(pending)) {
-      const change = on ? switchOn(key) : null;
-      if (change) {
-        const answer = await deps.local.call(change.method, change.route, change.body).catch(() => null);
-        if (!answer || (!answer.ok && answer.status !== 404)) { later(MINUTE); write({ ...journal, switchBack: pending }); return null; }
-      }
-      delete pending[key];
-    }
-    await deps.local.call("POST", "/api/cloud-send/home", { v: 1, ...(journal.kept ? { webhooks: journal.webhooks ?? [] } : {}) }).catch(() => null);
-    const { switchBack: _, webhooks: _webhooks, ...rest } = journal;
+  /** After coming home with My Cloud's backup: the record of where the bots came from came home with them and goes now. */
+  async function cameHome(journal) {
+    await deps.local.call("POST", "/api/cloud-send/home", { v: 1 }).catch(() => null);
+    const { homed: _homed, ...rest } = journal;
     write(rest);
     return null;
   }
@@ -623,13 +570,13 @@ export function createOneHome(deps) {
   }
 
   /** This computer keeps its bots here: nothing moves, a move under way stops before its switch as the Admin's kill switch
-   * stops it (nothing runs on My Cloud yet), and bots that moved come home. Turned off again before their automations
-   * stopped on My Cloud, home is My Cloud as it was. */
+   * stops it (nothing runs on My Cloud yet), and bots that moved come home. Turned off again before their bots came home,
+   * home is My Cloud as it was. */
   async function keepHere(journal, cloud) {
     if (!journal) return null;
     if (journal.phase === "back") return tellKept(journal);
     if (journal.phase === "keeping" && !kept() && !underWay(journal)) {
-      const { keptFrom, keptAt: _at, switchBack: _back, webhooks: _hooks, updating: _updating, retryAt: _retry, ...rest } = journal;
+      const { keptFrom, keptAt: _at, updating: _updating, retryAt: _retry, ...rest } = journal;
       write({ ...rest, phase: keptFrom === "switch" ? "switch" : "done" });
       again = true;
       return null;
@@ -642,9 +589,8 @@ export function createOneHome(deps) {
   }
 
   /** This computer's bots come home while My Cloud goes on. My Cloud's backup is staged here first, so nothing has changed
-   * anywhere while it is taken; then the automations this computer brought stop there (one request, which a Cloud too
-   * old to take answers 404 until it updates), this computer opens with every automation off and restores the backup, and
-   * the app opens again, where switchBack switches on here what was on of them at My Cloud. */
+   * anywhere while it is taken; then this computer opens with everything it runs off and restores the backup, and the app
+   * opens again, where the record of where the bots came from goes. */
   async function comeHome(journal, cloud) {
     let next = journal.phase === "keeping" ? journal
       : write({ ...journal, phase: "keeping", keptFrom: journal.phase, keptAt: now(), retryAt: undefined, error: undefined, failingSince: undefined, tries: undefined, failure: undefined });
@@ -660,22 +606,6 @@ export function createOneHome(deps) {
     try { staged = await deps.keepHome.stage(); } catch (error) { return retry(5 * MINUTE, error); }
     if (!("staged" in staged)) return retry("later" in staged ? staged.later : HOUR);
     if (!kept() && !underWay(next)) return null;
-    if (!next.switchBack) {
-      const switchBack = keptSwitches(deps.send.switches(), staged.switches);
-      next = write({ ...next, switchBack, webhooks: Object.keys(switchBack).flatMap((key) => (key.startsWith("webhook:") ? [key.slice("webhook:".length)] : [])) });
-    }
-    const on = Object.keys(next.switchBack).filter((key) => next.switchBack[key]);
-    if (on.length && !next.offThere) {
-      let session;
-      try {
-        session = await deps.session();
-        const answer = await session.call("POST", "/api/cloud-send/automations-off", { v: 1, keys: on });
-        if (answer.status === 404) return retry(COPY_RETRY_MS.at(-1), null, { updating: true });
-        if (!answer.ok) throw Object.assign(new Error(sentence(answer.body?.error) ?? "My Cloud did not stop this computer's automations."), { status: answer.status });
-      } catch (error) { return retry(5 * MINUTE, error); }
-      finally { await session?.close().catch(() => {}); }
-      next = write({ ...next, offThere: true, updating: undefined });
-    }
     if (!next.thawed) {
       try { await deps.local.unfreeze({ automations: "off" }); } catch (error) { return retry(MINUTE, error); }
       next = write({ ...next, thawed: true });
@@ -683,8 +613,8 @@ export function createOneHome(deps) {
     let brought;
     try { brought = await deps.keepHome.bring(); } catch (error) { return retry(5 * MINUTE, error); }
     if (!("restored" in brought)) return retry("later" in brought ? brought.later : HOUR);
-    const { keptFrom: _from, keptAt: _at, offThere: _off, thawed: _thawed, updating: _updating, retryAt: _retry, ...rest } = next;
-    write({ ...rest, phase: "back", kept: true, told: undefined, restoreId: brought.restored });
+    const { keptFrom: _from, keptAt: _at, thawed: _thawed, updating: _updating, retryAt: _retry, ...rest } = next;
+    write({ ...rest, phase: "back", kept: true, told: undefined, restoreId: brought.restored, homed: true });
     deps.restart?.();
     return null;
   }
@@ -717,10 +647,10 @@ export function createOneHome(deps) {
       return;
     }
     if (await goneHome(journal, said)) return;
-    if (journal?.phase === "back" && journal.switchBack) {
-      await switchBack(journal);
+    if (journal?.phase === "back" && journal.homed) {
+      await cameHome(journal);
       journal = read();
-      if (journal?.switchBack || !journal?.kept) return;
+      if (journal?.homed || !journal?.kept) return;
     }
     if (keepsHere(journal, cloud)) return void await keepHere(journal, cloud);
     if (!journal || journal.phase === "back") {

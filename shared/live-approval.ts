@@ -6,14 +6,14 @@ import type { OptionCardData } from "./wire.ts";
 export type LiveCardKind = "approval" | "review" | "question";
 
 /** "approval": a provider or peer ask the voice may decide with a strict yes/no.
- * "review": a harness-native proposal (skill, routine, profile, default
+ * "review": a harness-native proposal (skill, profile, default
  * model, team setup, an MCP server change, a quota-switch offer) that must be
  * reviewed on screen.
  * "question": a provider question. An expired proposal is settled: nothing
  * can answer it any more. */
 export function liveCardKind(card: OptionCardData | undefined): LiveCardKind | null {
   if (!card?.requestId || card.answered || card.dismissed || card.expired) return null;
-  if (card.skillRequest || card.routineRequest || card.profileRequest || card.modelRequest || card.teamSetupRequest || card.mcpRequest || card.quotaSwitch || card.lendingLift) {
+  if (card.skillRequest || card.profileRequest || card.modelRequest || card.teamSetupRequest || card.mcpRequest || card.quotaSwitch || card.lendingLift) {
     return "review";
   }
   return card.tool ? "approval" : "question";
@@ -38,8 +38,6 @@ const TOOL_PHRASES: Record<string, string> = {
   Edit: "edit a file",
   WebFetch: "fetch a web page",
   WebSearch: "search the web",
-  schedule_routine: "schedule a routine",
-  manage_routine: "change a routine",
   stage_skill: "enable a learned skill",
   update_skill: "update a learned skill",
   update_profile: "update its profile",

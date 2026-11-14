@@ -128,7 +128,7 @@ it("a bot shared with other people: Support is told that Ada looks after Sales, 
     ], reply },
     { reply: "Hello again." },
     { reply: "Still here." },
-    { writeFiles: { "secret-notes.md": `Mira's ${SECRET}` }, steps: [{ tool: "memory_update", arguments: { action: "prefer", text: `Mira's ${SECRET} preference` } }], reply: `Noted ${SECRET}.` },
+    { writeFiles: { "secret-notes.md": `Mira's ${SECRET}` }, reply: `Noted ${SECRET}.` },
   ] } });
   await miraAsks("Get me the Q3 numbers from Sales.", reply);
   const asked = turns().find((turn) => turn.botId === support.id && turn.turnIndex === 0)!;

@@ -1,12 +1,10 @@
 import type { ProviderRegistry } from "../harness/registry.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotLifecycleRouteDeps {
   store: Pick<Store, "bots">;
-  routines(): RoutineManager | null;
   interruptAllDirectThreads(botId: string): Promise<void>;
   cancelDirectTurnDispatch(botId: string, expectedThreadId?: string): unknown;
   revokeInternalCapabilitiesForThread(threadId: string): void;
@@ -22,12 +20,11 @@ export interface BotLifecycleRouteDeps {
 
 export function createBotLifecycleRoutes(deps: BotLifecycleRouteDeps): RouteHandler {
   const {
-    store, interruptAllDirectThreads, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread, activeGroupTurnForBot,
+    store, interruptAllDirectThreads, revokeInternalCapabilitiesForThread, activeGroupTurnForBot,
     cancelGroupTurnOperations, runningTurnInstance, closeOpenApprovals, deleteBotWithLifecycle,
   } = deps;
   return async ({ req, res, path, method, auth, json }) => {
     let m: RegExpMatchArray | null = null;
-    const routines = deps.routines();
     if (method === "POST" && path === "/api/local-computer/interrupt") {
       if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         return json(res, 415, { error: "content-type must be application/json" });
@@ -37,14 +34,6 @@ export function createBotLifecycleRoutes(deps: BotLifecycleRouteDeps): RouteHand
           .filter((bot) => bot.computer === "local")
           .map(async (bot) => {
             await interruptAllDirectThreads(bot.id);
-            const routineRun = routines!.activeBotRunForBot(bot.id);
-            if (routineRun) {
-              cancelDirectTurnDispatch(bot.id, routineRun.threadId);
-              if (routineRun.threadId) {
-                revokeInternalCapabilitiesForThread(routineRun.threadId);
-              }
-              await routines!.cancelRun(routineRun.id);
-            }
             const groupTurn = activeGroupTurnForBot(bot.id);
             if (groupTurn) {
               cancelGroupTurnOperations(groupTurn.group.id, groupTurn.threadId);

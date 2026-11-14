@@ -33,8 +33,6 @@ import { StoreRefContext } from "./store-ref-context";
 import type { QuestionRequestCardData } from "../../shared/ask-question";
 import type { ProfileRequestCardData } from "../../shared/profile-request";
 import type { ModelRequestCardData } from "../../shared/model-request";
-import type { RoutineRequestCardData } from "../../shared/routine-request";
-import type { RoutineRunCardData } from "../../shared/routine-run";
 import type { GroupGoalRunCardData } from "../../shared/group-goal-run"; import type { BurstCardData } from "../../shared/burst";
 import type { PlaceRow } from "../../shared/place-view";
 import {
@@ -42,8 +40,6 @@ import {
   skillRequestBehavior,
   type SkillRequestCardData,
 } from "../../shared/skill-request";
-import type { Routine, RoutineInput, RoutineRun, RoutineRunStatusFilter } from "@/lib/routines";
-import type { WebhookAttempt, WebhookIngressStatus, WebhookTrigger } from "@/lib/webhooks";
 import { duplicateBotProfile, restrictedCopyRequest } from "@/lib/bot-duplicate";
 import { botShowsUnread } from "@/lib/bot-unread";
 import { placeUnreadDivider, threadOpensUnread, threadReadCursor, unreadDividerFor, type UnreadDivider } from "@/lib/unread-divider";
@@ -64,13 +60,11 @@ import { liveCallFromFrame, nextLiveCallLookup } from "./live-call";
 import { isNoAiRefusal, useChatErrorClear } from "./chat-error";
 import { openLiveEvents, publishLiveFrame, publishMissedFrames, withoutScreenPixels } from "@/lib/live-events";
 import { unlessRefused } from "@/lib/admin-scope";
-import { olderRunsSince, ROUTINE_RUNS_WINDOW_MS, trimRoutineRuns, withOlderRoutineRuns } from "./routine-runs";
 import { reconcileSnapshotQueues, rememberConsumedQueueId, replaceBotQueues } from "./queue-receipts";
 
 export type { MausColor } from "@/lib/mascot";
-export type { RoutineRunCardData } from "../../shared/routine-run";
 
-export interface OptionCardData extends Pick<WireOptionCard, "fixedOptions" | "lendingLift" | "webhookRequest" | "appTriggerRequest" | "yourComputer" | "computerAsk" | "waitRequest" | "stopped" | "accessRequest" | "mcpRequest" | "summaryCode" | "summaryParams"> {
+export interface OptionCardData extends Pick<WireOptionCard, "fixedOptions" | "lendingLift" | "appTriggerRequest" | "yourComputer" | "computerAsk" | "waitRequest" | "stopped" | "accessRequest" | "mcpRequest" | "summaryCode" | "summaryParams"> {
   title: string;
   subtitle: string;
   options: string[];
@@ -93,10 +87,8 @@ export interface OptionCardData extends Pick<WireOptionCard, "fixedOptions" | "l
   approvalScope?: "local-computer";
   autoApplied?: boolean;
   undone?: boolean;
-  routineRequest?: RoutineRequestCardData;
   skillRequest?: SkillRequestCardData;
   outboundRequest?: { tool: string; app: string | null; calls?: Array<{ app: string | null; label: string }> };
-  teamMemoryRequest?: { section: string; entryId: string; kind: string; revision?: string };
   profileRequest?: ProfileRequestCardData;
   modelRequest?: ModelRequestCardData;
   teamSetupRequest?: import("../../shared/team-setup").TeamSetupRequest;
@@ -109,10 +101,10 @@ export type SecretRequestCardData = Omit<import("../../shared/wire").SecretReque
 
 export type ComputerControlState = { held: boolean; helpReason: string | null; help?: import("../../shared/wire").ComputerHelpRef | null };
 
-export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "sender" | "setupSuggestion" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "engineCompaction" | "stoppedBy"> {
+export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "publishedPage" | "sender" | "setupSuggestion" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "engineCompaction" | "stoppedBy"> {
   id: string;
   role: "bot" | "user";
-  kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
+  kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
   text?: string;
   digest?: TurnDigest;
   compaction?: import("../../shared/wire").WireMessage["compaction"];
@@ -121,7 +113,6 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   connector?: ConnectorCardData;
   secret?: SecretRequestCardData;
   signIn?: import("../../shared/wire").SignInRequestCardData;
-  routineRun?: RoutineRunCardData;
   goalRun?: GroupGoalRunCardData; burst?: BurstCardData;
   call?: import("../../shared/wire").LiveCallRecord;
   channelMode?: "chat" | "goal";
@@ -505,9 +496,7 @@ export type BotSettingsSection =
   | "slack"
   | "soul"
   | "skills"
-  | "memory"
   | "library"
-  | "routines"
   | "access"
   | "model"
   | "permissions"
@@ -536,16 +525,10 @@ export interface AppState {
   liveCallVersion: number;
   liveCallLookupSeq: number;
   selectedId: string;
-  activeView: "chat" | "team-map" | "routines" | "files" | "web-panel" | "published-apps";
+  activeView: "chat" | "team-map" | "automations" | "files" | "web-panel" | "published-apps";
   /** Folders a finished move left on this computer, for Files to offer sharing. */
   filesSuggest: string[] | null; webPanelId?: string;
-  routines: Routine[];
-  routineRuns: RoutineRun[];
-  routinesLoadState: "loading" | "ready" | "error"; routineRunsSince: number | null;
-  routinesFocus: { section?: "schedule" | "logs"; view?: "calendar" | "list"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter; nonce: number };
-  webhooks: WebhookTrigger[];
-  webhookAttempts: WebhookAttempt[];
-  webhookIngress: WebhookIngressStatus | null;
+  automationsFocus: { botId?: string; id?: string; nonce: number };
   settingsOpen: boolean;
   pluginsOpen: boolean;
   pluginsSurface: "apps" | "mcp";
@@ -617,29 +600,13 @@ export type Action =
   | { type: "sections"; sections: string[] }
   | { type: "botsOrdered"; botIds: string[] }
   | { type: "sectionDeleted"; section: string; sections: string[] }
-  | { type: "showRoutines"; section?: "schedule" | "logs"; view?: "calendar" | "list"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter }
+  | { type: "showAutomations"; botId?: string; id?: string }
   | { type: "showTeamMap" } | { type: "showPublishedApps" } | { type: "showWebPanel"; id: string }
   | { type: "showFiles"; suggest?: string[] }
   | { type: "showChat" }
-  | { type: "routinesHydrated"; routines: Routine[]; runs: RoutineRun[]; since?: number }
-  | { type: "routinesLoadFailed" } | { type: "routineRunsLoaded"; runs: RoutineRun[]; from?: number; to?: number }
-  | { type: "routinePatched"; routine: Routine }
-  | { type: "routineDeleted"; routineId: string }
-  | { type: "routineRunPatched"; run: RoutineRun }
   | NotificationFeedAction
   | { type: "toggleNotifications"; open?: boolean }
   | { type: "toggleNotificationsPinned"; pinned?: boolean }
-  | { type: "webhooksHydrated"; webhooks: WebhookTrigger[]; attempts: WebhookAttempt[]; ingress: WebhookIngressStatus }
-  | { type: "webhookPatched"; webhook: WebhookTrigger }
-  | { type: "webhookAttempted"; attempt: WebhookAttempt }
-  | { type: "webhookDeleted"; webhookId: string }
-  | { type: "createRoutine"; input: RoutineInput }
-  | { type: "updateRoutine"; routineId: string; patch: Partial<RoutineInput> }
-  | { type: "deleteRoutine"; routineId: string }
-  | { type: "runRoutine"; routineId: string; onStarted?: (run: RoutineRun) => void; onError?: (error: unknown) => void; onSettled?: () => void }
-  | { type: "cancelRoutineRun"; runId: string }
-  | { type: "markRoutineRunSeen"; runId: string }
-  | { type: "markAllRoutineRunsSeen" }
   | { type: "groupPatched"; group: Partial<Group> & { id: string } }
   | {
       type: "groupSnapshot";
@@ -948,11 +915,11 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "botQueues":
       return reconcileSnapshotQueues(replaceBotQueues(state, action.queues), [...state.bots, ...state.groups]);
-    case "showRoutines":
+    case "showAutomations":
       return {
         ...state,
-        activeView: "routines",
-        routinesFocus: { section: action.section, view: action.view, botId: action.botId, routineId: action.routineId, runStatus: action.runStatus, nonce: state.routinesFocus.nonce + 1 },
+        activeView: "automations",
+        automationsFocus: { botId: action.botId, id: action.id, nonce: state.automationsFocus.nonce + 1 },
         settingsOpen: false,
         computerOpen: false,
         inspectorOpen: false,
@@ -971,55 +938,6 @@ export function reducer(state: AppState, action: Action): AppState {
         filesSuggest: action.type === "showFiles" && action.suggest?.length ? action.suggest : null, webPanelId: action.type === "showWebPanel" ? action.id : state.webPanelId,
         settingsOpen: false, computerOpen: false, inspectorOpen: false, activityOpen: false, appSettingsOpen: false, pluginsOpen: false,
       };
-    case "routinesHydrated":
-      return { ...state, routines: action.routines, routineRuns: trimRoutineRuns(action.runs), routineRunsSince: action.since ?? null, routinesLoadState: "ready" };
-    case "routinesLoadFailed":
-      return { ...state, routinesLoadState: "error" };
-    case "routinePatched": {
-      const existing = state.routines.find((routine) => routine.id === action.routine.id);
-      // A PATCH's answer and the server's broadcast of it can arrive in either order: never step back to an older edit.
-      if (existing && existing.updatedAt > action.routine.updatedAt) return state;
-      return {
-        ...state,
-        routines: existing
-          ? state.routines.map((routine) => (routine.id === action.routine.id ? action.routine : routine))
-          : [action.routine, ...state.routines],
-      };
-    }
-    case "routineDeleted":
-      return { ...state, routines: state.routines.filter((routine) => routine.id !== action.routineId) };
-    case "routineRunPatched": {
-      const exists = state.routineRuns.some((run) => run.id === action.run.id);
-      const runs = exists
-        ? state.routineRuns.map((run) => (run.id === action.run.id ? action.run : run))
-        : [action.run, ...state.routineRuns];
-      return { ...state, routineRuns: trimRoutineRuns(runs) };
-    }
-    case "routineRunsLoaded":
-      return { ...state, routineRuns: withOlderRoutineRuns(state.routineRuns, action.runs), routineRunsSince: olderRunsSince(state.routineRunsSince, action) };
-    case "webhooksHydrated":
-      return { ...state, webhooks: action.webhooks, webhookAttempts: action.attempts, webhookIngress: action.ingress };
-    case "webhookPatched": {
-      const exists = state.webhooks.some((webhook) => webhook.id === action.webhook.id);
-      return {
-        ...state,
-        webhooks: exists
-          ? state.webhooks.map((webhook) => (webhook.id === action.webhook.id ? action.webhook : webhook))
-          : [action.webhook, ...state.webhooks],
-      };
-    }
-    case "webhookDeleted":
-      return {
-        ...state,
-        webhooks: state.webhooks.filter((webhook) => webhook.id !== action.webhookId),
-        webhookAttempts: state.webhookAttempts.filter((attempt) => attempt.webhookId !== action.webhookId),
-      };
-    case "webhookAttempted": {
-      const attempts = state.webhookAttempts.some((attempt) => attempt.id === action.attempt.id)
-        ? state.webhookAttempts.map((attempt) => attempt.id === action.attempt.id ? action.attempt : attempt)
-        : [...state.webhookAttempts, action.attempt];
-      return { ...state, webhookAttempts: attempts.slice(-2_000) };
-    }
     case "groupPatched": {
       const fenced = action.group.messages ? bumpTranscriptGeneration(state, action.group.threadId) : state;
       const groups = patchedGroups(state.groups, action.group), held = action.group.messages && groups.find((g) => g.id === action.group.id && g.threadId === state.unreadDivider?.threadId);
@@ -1764,13 +1682,6 @@ export function reducer(state: AppState, action: Action): AppState {
     case "interruptGroup":
     case "setGroupHold":
     case "steerGroupQueued":
-    case "createRoutine":
-    case "updateRoutine":
-    case "deleteRoutine":
-    case "runRoutine":
-    case "cancelRoutineRun":
-    case "markRoutineRunSeen":
-    case "markAllRoutineRunsSeen":
     case "refreshTaskPermissions":
     case "followBotModel":
     case "loadDataSheet":
@@ -1838,14 +1749,8 @@ export const initialState: AppState = {
   liveCallLookupSeq: 0,
   selectedId: "",
   activeView: "chat",
-  routines: [],
-  routineRuns: [], routineRunsSince: null,
-  routinesLoadState: "loading",
-  routinesFocus: { nonce: 0 },
+  automationsFocus: { nonce: 0 },
   filesSuggest: null,
-  webhooks: [],
-  webhookAttempts: [],
-  webhookIngress: null,
   settingsOpen: false,
   pluginsOpen: false,
   pluginsSurface: "apps",
@@ -2218,7 +2123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const wrapped: React.Dispatch<Action> = (action) => {
-      store.flushFrames(); if (["select", "newTask", "switchTask", "newGroupTask", "switchGroupTask", "showChat", "showRoutines", "showTeamMap", "showFiles", "showWebPanel", "showPublishedApps"].includes(action.type)) selectionRevision.current++;
+      store.flushFrames(); if (["select", "newTask", "switchTask", "newGroupTask", "switchGroupTask", "showChat", "showAutomations", "showTeamMap", "showFiles", "showWebPanel", "showPublishedApps"].includes(action.type)) selectionRevision.current++;
       // Pin before any await or optimistic state change.
       action = pinBotThreadAction(action, stateRef.current.bots);
       if (action.type === "taskSwitched") action = { ...action, bot: withTaskWrites(action.bot) as Bot };
@@ -2252,16 +2157,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (action.type === "sendGroup") {
           const memberIds = stateRef.current.groups.find((group) => group.id === action.groupId)?.memberIds ?? [];
           return stateRef.current.bots.filter((candidate) => memberIds.includes(candidate.id));
-        }
-        if (action.type === "runRoutine") {
-          const routine = stateRef.current.routines.find((candidate) => candidate.id === action.routineId);
-          if (!routine) return [];
-          const ids = new Set([routine.botId]);
-          if (routine.target === "room-goal" && routine.groupId) {
-            const group = stateRef.current.groups.find((candidate) => candidate.id === routine.groupId);
-            for (const memberId of group?.memberIds ?? []) ids.add(memberId);
-          }
-          return stateRef.current.bots.filter((candidate) => ids.has(candidate.id));
         }
         return [];
       })();
@@ -2308,39 +2203,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         case "notice":
           if (action.notice) setTimeout(() => rawDispatch({ type: "notice", notice: null }), action.notice.kind === "note" ? 20_000 : 6000);
           break;
-        case "createRoutine":
-          api("/api/routines", { method: "POST", body: JSON.stringify(action.input) }).catch(showError);
-          break;
-        case "updateRoutine":
-          api(`/api/routines/${action.routineId}`, { method: "PATCH", body: JSON.stringify(action.patch) })
-            .then(({ routine }) => rawDispatch({ type: "routinePatched", routine }), showError);
-          break;
-        case "deleteRoutine":
-          api(`/api/routines/${action.routineId}`, { method: "DELETE" }).catch(showError);
-          break;
-        case "runRoutine":
-          void waitForExecutionSettings(executionBotsBeforeAction)
-            .then(() => api(`/api/routines/${action.routineId}/run`, { method: "POST" }))
-            .then(({ run }) => action.onStarted?.(run))
-            .catch((error) => {
-              if (action.onError) action.onError(error);
-              else showError(error);
-            })
-            .finally(() => action.onSettled?.());
-          break;
-        case "cancelRoutineRun":
-          api(`/api/routine-runs/${action.runId}/cancel`, { method: "POST" }).catch(showError);
-          break;
         case "loadDataSheet":
           api(DATA_ROUTES.sheet(action.botId))
             .then((body) => rawDispatch({ type: "dataSheet", sheet: dataSheetFromResponse(body, action.botId), tables: dataTablesFromResponse(body) }))
             .catch((error) => (action.onError ?? showError)(error instanceof Error ? error.message : String(error)));
-          break;
-        case "markRoutineRunSeen":
-          api(`/api/routine-runs/${action.runId}/seen`, { method: "POST" }).catch(showError);
-          break;
-        case "markAllRoutineRunsSeen":
-          api("/api/routine-runs/seen-all", { method: "POST" }).catch(showError);
           break;
         case "cancelQueued":
           void api(`/api/bots/${action.botId}/queue/${action.queueId}`, { method: "DELETE", body: JSON.stringify({ threadId: action.threadId }) })
@@ -2896,7 +2762,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    type PeripheralKey = "instances" | "config" | "routines" | "webhooks" | "notifications";
+    type PeripheralKey = "instances" | "config" | "notifications";
     type PeripheralPart = {
       key: PeripheralKey;
       request: () => Promise<() => void>;
@@ -2932,27 +2798,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         },
       },
       {
-        key: "routines",
-        request: async () => {
-          const since = Date.now() - ROUTINE_RUNS_WINDOW_MS, { routines, runs } = snapshotArrays(await api(`/api/routines?since=${since}`), "routines", "runs");
-          return () => rawDispatch({ type: "routinesHydrated", routines, runs, since });
-        },
-      },
-      {
         key: "notifications",
         request: async () => {
           const { notifications } = await api("/api/notifications");
           return () => rawDispatch({ type: "notificationsHydrated", notifications: Array.isArray(notifications) ? notifications : [] });
         },
       },
-      ...(window.ogb?.remoteClient?.active ? [] : [{
-        key: "webhooks",
-        request: async () => {
-          const { webhooks, attempts, ingress } = snapshotArrays(await api("/api/webhooks"), "webhooks");
-          return () =>
-            rawDispatch({ type: "webhooksHydrated", webhooks, attempts: attempts ?? [], ingress });
-        },
-      } satisfies PeripheralPart]),
     ];
     const partByKey = new Map(peripheralParts.map((part) => [part.key, part]));
     const schedulePeripheralRetry = (part: PeripheralPart, error?: Error) => {
@@ -2960,7 +2811,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const refresh = refreshState(part.key);
       if (refresh.timer) return;
       if (error !== undefined) {
-        if (part.key === "routines") rawDispatch({ type: "routinesLoadFailed" });
         console.warn(`snapshot: ${part.key} refresh failed; retrying`, error);
       }
       const delay = Math.min(30_000, 1_000 * 2 ** Math.min(refresh.attempt, 5));
@@ -3082,15 +2932,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const stopFrames = store.handleFrames((frame) => { handleFrame(frame); stateRef.current = store.getState(); });
     handleFrame = (frame) => {
       if (frame.kind === "config") bumpPeripheralVersion("config", "instances");
-      else if (frame.kind === "routine" || frame.kind === "routine.deleted" || frame.kind === "routine.run") {
-        bumpPeripheralVersion("routines");
-      } else if (
-        frame.kind === "webhook" ||
-        frame.kind === "webhook.attempt" ||
-        frame.kind === "webhook.deleted"
-      ) {
-        bumpPeripheralVersion("webhooks");
-      }
       switch (frame.kind) {
         case "sections":
           rawDispatch({ type: "sections", sections: frame.sections });
@@ -3166,24 +3007,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break;
         case "group.deleted":
           rawDispatch({ type: "groupDeleted", groupId: frame.groupId });
-          break;
-        case "routine":
-          rawDispatch({ type: "routinePatched", routine: frame.routine });
-          break;
-        case "routine.deleted":
-          rawDispatch({ type: "routineDeleted", routineId: frame.routineId });
-          break;
-        case "routine.run":
-          rawDispatch({ type: "routineRunPatched", run: frame.run });
-          break;
-        case "webhook":
-          rawDispatch({ type: "webhookPatched", webhook: frame.webhook });
-          break;
-        case "webhook.attempt":
-          rawDispatch({ type: "webhookAttempted", attempt: frame.attempt });
-          break;
-        case "webhook.deleted":
-          rawDispatch({ type: "webhookDeleted", webhookId: frame.webhookId });
           break;
         case "runtime": {
           spokenReplyStream.onRuntimeEvent(frame.event, speechOwner(stateRef.current, frame.event.threadId));

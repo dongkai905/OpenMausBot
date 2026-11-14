@@ -17,7 +17,7 @@ function computer({ journal = null, marker = { frozen: true, cloud: GONE }, admi
   const timers = [];
   const w = {
     journal, keep: null, admin, asked: [], passes: [], opened: [], unfreezeFails: 0,
-    server: { marker: structuredClone(marker), on: { "routine:r1": true, "webhook:w1": true }, thaws: [] },
+    server: { marker: structuredClone(marker), on: { "wait:w1": true }, thaws: [] },
     cloud: { origin: MINE, account: "acct-1", machine: MINE, ready: true, moves: true, ended: false, paid: true, verified: true, ...cloud },
     advance(ms) { clock += ms; },
     async tick() { const due = timers.splice(0); for (const timer of due) timer.work(); await w.home.kick(); },
@@ -28,7 +28,7 @@ function computer({ journal = null, marker = { frozen: true, cloud: GONE }, admi
     keep: { read: () => w.keep, write: (value) => { w.keep = value; } },
     cloud: () => (w.cloud ? { ...w.cloud } : null),
     gone: async (origin) => { w.asked.push(origin); const said = w.admin?.[origin]; return said === "deleted" || said === "ended" ? said : null; },
-    send: { move: async (options) => { w.passes.push(options?.final ? "final" : "copy"); }, check: async () => ({ ok: true }), switches: () => ({ ...w.server.on }), snapshot: () => ({ running: null }) },
+    send: { move: async (options) => { w.passes.push(options?.final ? "final" : "copy"); }, check: async () => ({ ok: true }), snapshot: () => ({ running: null }) },
     local: {
       async freeze(origin) { w.server.marker = { frozen: true, cloud: origin }; return { frozen: true }; },
       async unfreeze(options) {
@@ -61,7 +61,7 @@ test("a computer stuck today (no journal, the freeze names a deleted Cloud of th
   assert.deepEqual(w.asked, [GONE], "the Admin is asked about the Cloud the freeze names, not My Cloud");
   assert.deepEqual(w.server.thaws, [{ automations: "off" }]);
   assert.equal(w.server.marker.frozen, false);
-  assert.deepEqual(w.server.on, { "routine:r1": false, "webhook:w1": false }, "nothing runs twice");
+  assert.deepEqual(w.server.on, { "wait:w1": false }, "nothing runs twice");
   assert.equal(w.journal.phase, "back");
   assert.equal(w.journal.gone, "deleted");
   assert.deepEqual(w.journal.cloud, { origin: GONE, account: "acct-1", machine: GONE });
@@ -207,14 +207,14 @@ test("one home's view of the session says when it is the Admin's verified word",
 });
 
 test("on their way home by the person's choice when the Cloud goes: what that way home would have switched on stays off", async () => {
-  const w = computer({ journal: { ...doneTo(GONE), phase: "keeping", keptFrom: "done", keptAt: 1_700, switchBack: { "routine:r1": true }, webhooks: ["w1"], offThere: true } });
+  const w = computer({ journal: { ...doneTo(GONE), phase: "keeping", keptFrom: "done", keptAt: 1_700, thawed: true } });
   w.keep = { v: 1, on: true };
   await w.home.kick();
   assert.deepEqual(w.server.thaws, [{ automations: "off" }]);
   assert.equal(w.journal.phase, "back");
-  for (const field of ["switchBack", "webhooks", "keptFrom", "offThere"]) assert.equal(w.journal[field], undefined, field);
+  for (const field of ["keptFrom", "keptAt"]) assert.equal(w.journal[field], undefined, field);
   await w.home.kick();
-  assert.deepEqual(w.server.on, { "routine:r1": false, "webhook:w1": false });
+  assert.deepEqual(w.server.on, { "wait:w1": false });
 });
 
 test("a copy this computer already deleted still opens, and is not said to be back as it was", async () => {

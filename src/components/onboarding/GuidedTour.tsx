@@ -83,7 +83,7 @@ export function GuidedTour() {
           dispatch({ type: "togglePlugins", open: false });
           return;
         case "openAutomations":
-          if (!press("nav-automations") && readAdvancedMode()) dispatch({ type: "showRoutines" });
+          if (!press("nav-automations") && readAdvancedMode()) dispatch({ type: "showAutomations" });
           return;
         case "backToChat":
           dispatch({ type: "showChat" });

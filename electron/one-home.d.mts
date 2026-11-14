@@ -29,15 +29,16 @@ type OneHomePhase =
   /** What arrived, checked on both sides; `at`: when the move was done; `phone`: a phone was paired with this computer; `held`: keys a trial's Cloud keeps unused while its Claude credit lasts; `left`: what My Cloud refused for good, which stayed where it was; `stayed`: connectors that work only on this computer (`needs`: a program My Cloud lacks). */
   | { phase: "done"; at?: number; counts?: OneHomeCounts; phone: boolean; held: string[]; left?: OneHomeNotCarried[]; stayed?: OneHomeStayed[] }
   /** This computer's bots are on their way home from a My Cloud that goes on, because the person keeps them here;
-   * `updating`: My Cloud is too old to stop their automations and updates first. */
+   * `updating`: My Cloud is too old to take the bots back and updates first. */
   | { phase: "keeping"; updating?: true }
   /** My Cloud ended: this computer is home again; `back`: My Cloud's own changes came back too, unless `lost`; or, with
-   * `elsewhere`, they came back to that other computer and this one keeps its own copy from `since`, with automations off.
+   * `elsewhere`, they came back to that other computer and this one keeps its own copy from `since`, with everything it
+   * runs off.
    * `kept`: My Cloud goes on, and this computer's bots came home because the person keeps them here. `gone`: the Cloud this
    * computer moved to was deleted, or ended while another Cloud is My Cloud; its own copy is open as it was at the move, with
-   * every automation off. */
+   * everything it runs off. */
   | { phase: "home-again" | "back"; lost?: true; elsewhere?: { name: string; since?: number }; kept?: true; gone?: true };
-export interface OneHomeCounts { bots: number; skills: number; logins: number; onePassword: boolean; chats: number; routines: number }
+export interface OneHomeCounts { bots: number; skills: number; logins: number; onePassword: boolean; chats: number; routines?: number }
 
 export interface OneHomeCloud {
   origin: string | null; account: string; machine: string | null; ready: boolean; moves: boolean; ended: boolean; paid: boolean;
@@ -73,16 +74,13 @@ export function sameCloud(cloud: { origin: string | null; id?: string | null; fo
 export function parseKeep(value: unknown): { on: boolean };
 /** This computer's bots are on their way home and past turning back. */
 export function underWay(journal: Record<string, any> | null | undefined): boolean;
-export function automationsOn(manifest: unknown): Record<string, boolean>;
-export function keptSwitches(brought: Record<string, boolean>, there: Record<string, boolean> | null | undefined): Record<string, boolean>;
-export function switchOn(key: string): { method: string; route: string; body: unknown } | null;
 export function arrivedCounts(here: unknown, there: unknown): OneHomeCounts;
 export function missingOf(report: unknown): string;
 
 export function createOneHome(deps: {
   journal: { read(): unknown; write(value: unknown): void };
   cloud(): OneHomeCloud | null;
-  send: { move(options?: { final?: boolean }): Promise<unknown>; check(options?: { stopped?(): boolean }): Promise<{ ok: boolean }>; switches(): Record<string, boolean>; snapshot(): any };
+  send: { move(options?: { final?: boolean }): Promise<unknown>; check(options?: { stopped?(): boolean }): Promise<{ ok: boolean }>; snapshot(): any };
   local: {
     freeze(origin: string): Promise<{ frozen: true } | { busy: string; what?: string }>;
     unfreeze(options?: { automations?: "off" }): Promise<void>;
@@ -111,13 +109,13 @@ export function createOneHome(deps: {
   /** Whether this computer's own copy, the server on its own data folder, is the one answering now: while it isn't, no first
    * move starts and no top-up goes. */
   ownCopy?(): boolean;
-  again?: { bring(): Promise<{ restored: string; switches: Record<string, boolean> } | { deleted: true } | { later: number }> };
+  again?: { bring(): Promise<{ restored: string } | { deleted: true } | { later: number }> };
   /** The person's choice to keep this computer's bots here. */
   keep?: { read(): unknown; write(value: unknown): void };
   /** My Cloud's backup while it goes on, staged here first, then restored. */
   keepHome?: {
-    stage(): Promise<{ staged: true; switches: Record<string, boolean> } | { deleted: true } | { later: number }>;
-    bring(): Promise<{ restored: string; switches: Record<string, boolean> } | { deleted: true } | { later: number }>;
+    stage(): Promise<{ staged: true } | { deleted: true } | { later: number }>;
+    bring(): Promise<{ restored: string } | { deleted: true } | { later: number }>;
   };
   /** This computer's installation id; null while it can't be known. */
   installation?(): Promise<string | null>;

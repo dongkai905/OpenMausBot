@@ -282,10 +282,6 @@ const bridge = {
     renewPairing: () => ipcRenderer.invoke("companion:pairing-renew"),
     routes: (deviceId, routes) => ipcRenderer.invoke("companion:routes", deviceId, routes),
   },
-  routines: {
-    wakeState: () => ipcRenderer.invoke("routines:wake-state"),
-    keepAwake: (enabled) => ipcRenderer.invoke("routines:keep-awake", enabled),
-  },
   /** Secrets stay in the main process; the renderer sees only status and narrow actions. */
   companionAccount: {
     state: () => ipcRenderer.invoke("companion-account:state"),

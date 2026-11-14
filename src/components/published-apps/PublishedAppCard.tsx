@@ -5,7 +5,7 @@ import type { PublishedApp } from "../../../shared/published-apps";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
-import { relativeTime } from "@/lib/memory";
+import { relativeTime } from "@/lib/clock-time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { SiteThumb } from "./SiteThumb";
 

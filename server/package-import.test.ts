@@ -15,29 +15,18 @@ async function installation(options: { refuse?: (name: string) => string | undef
   vi.stubEnv("HOME", home);
   vi.stubEnv("USERPROFILE", home);
   const { Store } = await import("./store.ts");
-  const { RoutineManager } = await import("./routines.ts");
   const skills = await import("./skills.ts");
-  const workspace = await import("./workspace.ts");
   const sections = await import("./section-context.ts");
   const { saveImage } = await import("./attachments.ts");
   const { botAvatarUrlFromStoredPath } = await import("../shared/bot-avatar.ts");
   const importer = await import("./package-import.ts");
   const { parsePackageDocument } = await import("../shared/package-format.ts");
   const store = new Store(() => ({ instanceId: "claude", model: "default-model" }));
-  const routines = new RoutineManager({
-    file: join(home, "routines.json"),
-    botState: (id) => (store.bot(id) && !store.bot(id)!.hidden ? "ready" : "missing"),
-    goalState: (groupId, botId) => (store.group(groupId ?? "")?.memberIds.includes(botId) ? "ready" : "missing"),
-    createTask: () => null,
-    startTurn: async () => {},
-  });
   const mcp = { servers: { ...options.servers } as Record<string, unknown> };
   const events: string[] = [];
   const deps = {
     store,
-    routines,
     skills: { install: skills.installSkill, setEnabled: skills.setSkillEnabled, installOrg: skills.installOrgSkill },
-    memory: { writeIndex: workspace.writeMemoryFile, writeTopic: workspace.writeMemoryTopic },
     mcp: {
       servers: () => mcp.servers,
       refusal: (name: string) => options.refuse?.(name),
@@ -49,8 +38,8 @@ async function installation(options: { refuse?: (name: string) => string | undef
     defaultSelection: () => ({ instanceId: "claude", model: "default-model" }),
   };
   const snapshot = () => JSON.stringify({ bots: store.bots.map((bot) => bot.id), groups: store.groups.map((group) => group.id),
-    routines: routines.listRoutines().map((routine) => routine.id), sections: store.sections, servers: mcp.servers });
-  return { store, routines, skills, workspace, sections, importer, parsePackageDocument, deps, mcp, events, snapshot };
+    sections: store.sections, servers: mcp.servers });
+  return { store, skills, sections, importer, parsePackageDocument, deps, mcp, events, snapshot };
 }
 
 afterEach(async () => {
@@ -61,7 +50,7 @@ afterEach(async () => {
 });
 
 describe("importing a whole team", () => {
-  it("adds every part from a file: persona, picture, brief, Chief, rooms, paused routines, skills off, valueless connections, notes", async () => {
+  it("adds every part from a file: persona, picture, brief, Chief, rooms, skills off, valueless connections, notes", async () => {
     const app = await installation({ servers: { crm: { type: "http", url: "https://existing.example.com", headers: { Authorization: "Bearer mine" }, enabled: true } } });
     const document: PackageDocument = app.parsePackageDocument(fixture("full-team.v2.json"));
     const result = app.importer.importPackageDocument(document, { trust: "file", mode: "add" }, app.deps);
@@ -89,10 +78,6 @@ describe("importing a whole team", () => {
       defaultResponder: { kind: "member", botId: lead.id }, setupCompletedAt: expect.any(Number),
     })]);
     expect(result.groups[0]!.memberIds.sort()).toEqual(result.bots.map((bot) => bot.id).sort());
-    expect(result.routines).toEqual([
-      expect.objectContaining({ name: "Daily digest", botId: scout.id, enabled: false, nextRunAt: null, continuity: true, timeoutMinutes: 20 }),
-      expect.objectContaining({ name: "Weekly pipeline review", target: "room-goal", groupId: result.groups[0]!.id, botId: lead.id, enabled: false }),
-    ]);
     expect(app.skills.listSkills(scout.id)).toEqual([
       expect.objectContaining({ name: "pricing-policy", enabled: false, source: "package:sales-desk" }),
       expect.objectContaining({ name: "research-brief", enabled: false }),
@@ -103,9 +88,7 @@ describe("importing a whole team", () => {
     expect(app.mcp.servers.crm).toMatchObject({ headers: { Authorization: "Bearer mine" } });
     expect(lead.mcpServers).toEqual(["crm-2"]);
     expect(byKey.get("writer")!.mcpServers).toBeUndefined();
-    expect(app.workspace.readMemoryFile(lead.id).text).toContain("short summaries");
-    expect(app.workspace.readMemoryTopic(lead.id, "pricing.md")).toContain("49 per seat");
-    expect(result.notes).toBe(2);
+    expect(result.notes).toBe(0);
     expect(result.brief).toBe(true);
     expect(result.skipped).toEqual([{ part: "presets[support]", reason: "presets_not_supported_yet" }]);
     expect(app.events.filter((kind) => kind === "bot")).toHaveLength(3);
@@ -115,24 +98,12 @@ describe("importing a whole team", () => {
     const app = await installation();
     app.store.seedIfEmpty();
     const { createBotPackageExport } = await import("./package-export.ts");
-    const exported = createBotPackageExport({ name: "Mine", groups: [], routines: [], bots: app.store.bots });
+    const exported = createBotPackageExport({ name: "Mine", groups: [], bots: app.store.bots });
     const document: PackageDocument = app.parsePackageDocument(JSON.parse(JSON.stringify(exported)));
     expect(document.package.agents.map((agent) => [agent.name, agent.appearance?.color])).toEqual([["MausBot", "chrome"]]);
     const result = app.importer.importPackageDocument(document, { trust: "file", mode: "add" }, app.deps);
     if (result.alreadyAdded) throw new Error("unexpected");
     expect(result.bots.map((bot) => app.store.bot(bot.id)?.color)).toEqual(["chrome"]);
-  });
-
-  it("keeps a routine's run on startup, still arriving paused", async () => {
-    const app = await installation();
-    const document: PackageDocument = app.parsePackageDocument(fixture("full-team.v2.json"));
-    document.package.routines!.find((routine) => routine.key === "daily-digest")!.runOnStartup = true;
-    const result = app.importer.importPackageDocument(document, { trust: "file", mode: "add" }, app.deps);
-    if (result.alreadyAdded) throw new Error("unexpected");
-    expect(result.routines).toEqual([
-      expect.objectContaining({ name: "Daily digest", enabled: false, runOnStartup: true }),
-      expect.not.objectContaining({ runOnStartup: true }),
-    ]);
   });
 
   it("turns on Record browser steps for the bots the file asks it for, with no card", async () => {
@@ -189,16 +160,6 @@ describe("importing a whole team", () => {
     expect(app.snapshot()).toBe(before);
   });
 
-  it("brings a run limit the routine store cannot hold into range and says so", async () => {
-    const app = await installation();
-    const input = fixture("full-team.v2.json");
-    input.package.routines[0].timeoutMinutes = 600;
-    const result = app.importer.importPackageDocument(app.parsePackageDocument(input), { trust: "file", mode: "add" }, app.deps);
-    if (result.alreadyAdded) throw new Error("unexpected");
-    expect(result.routines[0]!.timeoutMinutes).toBe(240);
-    expect(result.skipped).toContainEqual({ part: "routines[daily-digest].timeoutMinutes", reason: "run_limit_adjusted" });
-  });
-
   it("switches skills on and stamps provenance only for the organization channel, once", async () => {
     const app = await installation();
     const document = app.parsePackageDocument({ ...fixture("full-team.v2.json") }, { trust: "org" });
@@ -216,7 +177,6 @@ describe("importing a whole team", () => {
       expect.objectContaining({ name: "research-brief", enabled: true }),
     ]);
     expect(scout.installedPackage).toMatchObject({ source: "org", installId: org.installId, ref: "acme/sales-desk", sha256: org.sha256, publisher: org.publisher });
-    expect(result.routines.every((routine) => !routine.enabled)).toBe(true);
     const bots = app.store.bots.length;
     expect(app.importer.importPackageDocument(document, { trust: "org", mode: "add", org }, app.deps)).toEqual({ alreadyAdded: true, installId: org.installId });
     expect(app.store.bots).toHaveLength(bots);

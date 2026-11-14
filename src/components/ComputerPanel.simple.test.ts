@@ -84,7 +84,6 @@ vi.mock("./LinuxLocalControl", () => ({ LinuxLocalControl: () => null }));
 vi.mock("./MacLocalControl", () => ({ MacLocalControl: () => null }));
 vi.mock("./CloudBackendPicker", () => ({ CloudBackendPicker: () => null }));
 vi.mock("./LocalComputerAutoWarning", () => ({ LocalComputerAutoWarning: () => null }));
-vi.mock("./bot-settings/RoutinesSection", () => ({ RoutinesSection: () => null }));
 vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: (...args: unknown[]) => fixture.api(...args),
@@ -230,14 +229,14 @@ describe("Computer panel tabs", () => {
   it("keeps the Advanced tabs unchanged", () => {
     fixture.advanced = true;
     fixture.android = true;
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Routines", "Android", "Browser", "Data"]);
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Android", "Browser", "Data"]);
     fixture.config = {};
     fixture.android = false;
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Routines", "Browser", "Data"]);
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Browser", "Data"]);
   });
 
-  it("reads a Routines view stored by Advanced as the Computer tab in Simple", () => {
-    fixture.view.current = "routines";
+  it("reads a Browser view stored by Advanced as the Computer tab in Simple", () => {
+    fixture.view.current = "browser";
     const rendered = render(makeBot());
     expect(rendered.nodes.find((node) => node.props["data-testid"] === "where-works")).toBeDefined();
   });

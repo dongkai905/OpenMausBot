@@ -3,14 +3,12 @@
   "about": "Expected results of parsePackageDocument(fixture, { trust: \"file\" }). sha256 is over canonicalJson of the parsed document. Regenerate only with a deliberate format change; Admin tests read this file from the pinned runtime.",
   "fixtures": {
     "full-team.v2.json": {
-      "sha256": "d80e4e49382b88ae41b09ef7c49a699c6b07cf198f76ab1cf10c5b15e5f4981a",
+      "sha256": "8434e23273b3598432e6a853baa5ff6079d1d8d4edc2f5b25d6c9f7701bf42ae",
       "keys": [
         "agents:lead",
         "agents:scout",
         "agents:writer",
         "rooms:desk",
-        "routines:daily-digest",
-        "routines:weekly-review",
         "skills:pricing-policy",
         "skills:research-brief",
         "skills:objection-handling",
@@ -27,7 +25,6 @@
           "skills": 3,
           "presets": 1,
           "rooms": 1,
-          "routines": 2,
           "connections": 1,
           "playbooks": 1
         },
@@ -64,9 +61,7 @@
           "agents[lead].connections",
           "agents[lead].seed",
           "agents[scout].connections",
-          "agents[writer].approval",
-          "routines[daily-digest].continuity",
-          "routines[weekly-review]"
+          "agents[writer].approval"
         ]
       }
     },
@@ -86,7 +81,6 @@
           "skills": 2,
           "presets": 1,
           "rooms": 0,
-          "routines": 0,
           "connections": 0,
           "playbooks": 0
         },
@@ -107,12 +101,11 @@
       }
     },
     "legacy-team.v1.json": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "7f88aa8f416ecadfdcce432d107d704c47cad9b2d6b4757d7e8a5236464b4d44",
       "keys": [
         "agents:scout",
         "agents:editor",
         "rooms:signals",
-        "routines:morning-signals",
         "skills:source-check",
         "playbooks:signal-check"
       ],
@@ -125,7 +118,6 @@
           "skills": 1,
           "presets": 0,
           "rooms": 1,
-          "routines": 1,
           "connections": 0,
           "playbooks": 1
         },
@@ -148,12 +140,11 @@
       }
     },
     "legacy-botmrr.v1.md": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "7f88aa8f416ecadfdcce432d107d704c47cad9b2d6b4757d7e8a5236464b4d44",
       "keys": [
         "agents:scout",
         "agents:editor",
         "rooms:signals",
-        "routines:morning-signals",
         "skills:source-check",
         "playbooks:signal-check"
       ],
@@ -166,7 +157,6 @@
           "skills": 1,
           "presets": 0,
           "rooms": 1,
-          "routines": 1,
           "connections": 0,
           "playbooks": 1
         },
@@ -202,7 +192,6 @@
           "skills": 0,
           "presets": 0,
           "rooms": 0,
-          "routines": 0,
           "connections": 0,
           "playbooks": 0
         },

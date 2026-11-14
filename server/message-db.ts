@@ -8,7 +8,6 @@ import { peerProvenanceAuthor, type WorkOrigin } from "./peer-provenance.ts";
 import type { ResolvedSender, SteerQueueReason } from "../shared/wire.ts";
 import type { Message } from "./store.ts";
 import type { UsageTrigger } from "./usage-ledger.ts";
-import { ensureMemoryIndex } from "./message-db-memory-index.ts";
 import { cjkSearchText, cjkTokenParts, ensureSearchIndex, ftsPhrase, hasCjk, withoutSearchMarks } from "./cjk-search.ts";
 import { attentionSelect } from "./message-db-attention.ts";
 import { MessageSearchWorker } from "./message-search-worker.ts";
@@ -102,7 +101,6 @@ function open(): DatabaseSync {
   const notificationColumns = db.prepare("PRAGMA table_info(notification_log)").all() as Array<{ name: string }>;
   for (const added of ["for_person", "read_by"]) if (!notificationColumns.some((column) => column.name === added)) db.exec(`ALTER TABLE notification_log ADD COLUMN ${added} TEXT`);
   ensureRecallIndex(db);
-  ensureMemoryIndex(db);
   return db;
 }
 
@@ -914,61 +912,6 @@ export function latestSaidByBot(threadIds: readonly string[], botId: string, sin
     at: row.at,
     head: row.head.replace(/\s+/g, " ").trim(),
   }));
-}
-
-export interface MemoryFileStat {
-  path: string;
-  mtimeMs: number;
-  bytes: number;
-}
-
-export function indexMemoryFile(botId: string, path: string, text: string, stat: { mtimeMs: number; bytes: number }): void {
-  db()
-    .prepare(
-      "INSERT INTO memory_files (bot_id, path, text, mtime_ms, bytes, search_text) VALUES (?, ?, ?, ?, ?, ?) " +
-        "ON CONFLICT(bot_id, path) DO UPDATE SET text = excluded.text, mtime_ms = excluded.mtime_ms, bytes = excluded.bytes, " +
-        "search_text = excluded.search_text",
-    )
-    .run(botId, path, text, Math.trunc(stat.mtimeMs), stat.bytes, cjkSearchText(text));
-}
-
-export function removeMemoryFile(botId: string, path: string): void {
-  db().prepare("DELETE FROM memory_files WHERE bot_id = ? AND path = ?").run(botId, path);
-}
-
-export function deleteBotMemoryFiles(botId: string): void {
-  db().prepare("DELETE FROM memory_files WHERE bot_id = ?").run(botId);
-}
-
-export function indexedMemoryFiles(botId: string): MemoryFileStat[] {
-  const rows = db()
-    .prepare("SELECT path, mtime_ms, bytes FROM memory_files WHERE bot_id = ?")
-    // SAFETY: the SELECT names exactly these three NOT NULL columns
-    .all(botId) as Array<{ path: string; mtime_ms: number; bytes: number }>;
-  return rows.map((row) => ({ path: row.path, mtimeMs: row.mtime_ms, bytes: row.bytes }));
-}
-
-export interface MemoryHit {
-  file: string;
-  snippet: string;
-  at: number;
-}
-
-export function recallMemory(query: string, botId: string, limit = 12, mode: SearchMode = "all"): MemoryHit[] {
-  const match = ftsQuery(query, mode);
-  if (!match) return [];
-  const rows = db()
-    .prepare(
-      "SELECT f.path, f.mtime_ms, " +
-        `snippet(memory_fts, 0, '[', ']', '…', ${SNIPPET_TOKENS}) AS snippet ` +
-        "FROM memory_fts JOIN memory_files f ON f.rowid = memory_fts.rowid " +
-        "WHERE memory_fts MATCH ? AND f.bot_id = ? " +
-        (mode === "any" ? "AND f.path NOT IN ('MEMORY.md', 'memory/archive.md') AND f.path NOT LIKE 'memory/log/%' " : "") +
-        "ORDER BY bm25(memory_fts), f.mtime_ms DESC LIMIT ?",
-    )
-    // SAFETY: the SELECT names exactly these three columns; snippet() is never null
-    .all(match, botId, limit) as Array<{ path: string; mtime_ms: number; snippet: string }>;
-  return rows.map((row) => ({ file: row.path, at: row.mtime_ms, snippet: withoutSearchMarks(row.snippet).replace(/\s+/g, " ").trim() }));
 }
 
 /** Await before maintenance replaces the database or shutdown releases its lease. */

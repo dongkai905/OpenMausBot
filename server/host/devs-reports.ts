@@ -23,7 +23,7 @@ import type { ResolvedSender } from "../../shared/wire.ts";
 import { splitTranscriptCitations } from "../../src/lib/citations.ts";
 import { PASTED_TEXT_CLOSE, PASTED_TEXT_OPEN } from "../../src/lib/composer-attachments.ts";
 import { writeFileAtomic } from "../atomic.ts";
-import { startDueTimer } from "../due-timer.ts";
+import { startDueTimer } from "../work-timer.ts";
 import type { ProviderSnapshot } from "../contracts.ts";
 import { buildDevsReport, contactAddress, environmentSecrets, redactReportText, type BotSummary, type DevsReportPayload, type ReportedBot } from "../devs-report.ts";
 import { BUG_REPORT_STATUS_MAX_IDS, type ReportStatusAnswer, type ReportStatusQuestion, type SendOutcome } from "../devs-report-send.ts";

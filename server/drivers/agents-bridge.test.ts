@@ -25,7 +25,7 @@ import {
 } from "./agents-bridge.ts";
 
 const flag = (on: boolean) => (on ? "1" : "0");
-const profile = (options: { chief?: boolean; skills?: boolean; shared?: boolean; voice?: boolean; cloudHome?: boolean; memory?: boolean; images?: boolean; botId?: string } = {}): CatalogProfile =>
+const profile = (options: { chief?: boolean; skills?: boolean; shared?: boolean; voice?: boolean; cloudHome?: boolean; images?: boolean; botId?: string } = {}): CatalogProfile =>
   catalogProfileFromEnv({
     OMB_BOT_ID: options.botId ?? "bot-bridge",
     OMB_CHIEF_OF_STAFF: flag(options.chief ?? false),
@@ -33,20 +33,19 @@ const profile = (options: { chief?: boolean; skills?: boolean; shared?: boolean;
     OMB_SHARED_COMPUTERS_ENABLED: flag(options.shared ?? false),
     OMB_VOICE_NOTES: flag(options.voice ?? false),
     OMB_CLOUD_HOME: flag(options.cloudHome ?? false),
-    OMB_MEMORY_ENABLED: flag(options.memory ?? true),
+    OMB_MEMORY_ENABLED: "1",
     // A person's own request, which may pick its computer.
     OMB_COMPUTER_SELECTION: "1",
     OMB_IMAGE_GENERATION: flag(options.images ?? false),
   });
 
 /** Every switch combination the harness can ask for, as the wire test's
- * matrix does, plus the two the matrix leaves out: memory off and Watcher. */
+ * matrix does, plus the two the matrix leaves out: images and Watcher. */
 function everyProfile(): Array<{ name: string; profile: CatalogProfile }> {
   const all: Array<{ name: string; profile: CatalogProfile }> = [];
   for (const chief of [true, false]) for (const skills of [false, true]) for (const shared of [false, true]) for (const voice of [false, true]) for (const cloudHome of [false, true]) {
     all.push({ name: JSON.stringify({ chief, skills, shared, voice, cloudHome }), profile: profile({ chief, skills, shared, voice, cloudHome }) });
   }
-  all.push({ name: "memory off", profile: profile({ memory: false }) });
   all.push({ name: "images", profile: profile({ ...FULL_CHIEF, images: true }) });
   all.push({ name: "watcher", profile: profile({ botId: WATCHER_OPTIONS_CARD_BOT_ID }) });
   return all;
@@ -85,7 +84,6 @@ describe("what a bridged turn is listed", () => {
       "request_sign_in",
       "fill_login",
       "message_person",
-      "memory_update",
       FIND_TOOL,
       USE_TOOL,
     ]);
@@ -106,7 +104,6 @@ describe("what a bridged turn is listed", () => {
       "fill_login",
       "send_voice_note",
       "message_person",
-      "memory_update",
       FIND_TOOL,
       USE_TOOL,
     ]);
@@ -125,12 +122,11 @@ describe("what a bridged turn is listed", () => {
     }
   });
 
-  it("adds a hot tool only where the profile has it: a voice, the Watcher's card, memory", () => {
+  it("adds a hot tool only where the profile has it: a voice, the Watcher's card", () => {
     expect(names(bridgeFor({ voice: true }).listed)).toContain("send_voice_note");
     expect(names(bridgeFor().listed)).not.toContain("send_voice_note");
     expect(names(bridgeFor({ botId: WATCHER_OPTIONS_CARD_BOT_ID }).listed)[0]).toBe("create_options_card");
     expect(names(bridgeFor().listed)).not.toContain("create_options_card");
-    expect(names(bridgeFor({ memory: false }).listed)).not.toContain("memory_update");
     // A role and the other features change only what sits behind use_tool.
     for (const options of [{ chief: true }, { skills: true }, { shared: true }, { cloudHome: true }]) {
       expect(names(bridgeFor(options).listed), JSON.stringify(options)).toEqual(names(bridgeFor().listed));
@@ -257,8 +253,6 @@ describe("find_tool", () => {
     ["run a shell command in the VM", "vm_exec"],
     ["add an MCP server", "mcp_server"],
     ["see how the threads I opened are going", "list_threads"],
-    ["write a line to today's log", "memory_log"],
-    ["remember a decision for the whole team", "propose_team_memory"],
     ["save this procedure as a reusable skill", "skill_manage"],
     ["create a new specialist bot", "create_bot"],
     ["rename a room or change its members", "manage_room"],
@@ -395,7 +389,6 @@ describe("use_tool", () => {
       { name: "create_trigger", arguments: { name: "Brief", instructions: "Summarize.", schedule: { type: "weekly", time: "09:00", weekdays: ["mon"] } } },
       { name: "session_read", arguments: { thread_id: 42, extra: true } },
       { name: "propose_profile", arguments: { title: "Lead", reason: "asked", for_bot_id: "bot-other" } },
-      { name: "memory_update", arguments: { action: "forget" } },
     ]) {
       expect(bridgeFor().use(args), JSON.stringify(args)).toEqual(args);
     }
@@ -410,8 +403,6 @@ describe("use_tool", () => {
   });
 
   it("runs a listed tool too", () => {
-    const remember = { name: "memory_update", arguments: { action: "append", text: "The deploy script lives in scripts/." } };
-    expect(bridgeFor().use(remember)).toEqual(remember);
     const hand = { name: "coordinate_bots", arguments: { bot_ids: ["bot-helper"], message: "please review the patch" } };
     expect(bridgeFor().use(hand)).toEqual(hand);
   });

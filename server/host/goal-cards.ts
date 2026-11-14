@@ -1,11 +1,9 @@
 import type { ServerText } from "../../shared/server-text.ts";
-import { fittedLine } from "../routine-lines.ts";
 // The goal run card: one receipt per run in the conversation it runs in, a room's or a one-on-one chat's.
 import type { GroupGoalRunCardData, GroupGoalRunStatus } from "../../shared/group-goal-run.ts";
 import { redactSecretsInText } from "../../shared/redact.ts";
 import { GROUP_GOAL_MAX_TURNS } from "../group-goal-run.ts";
-import { buildNotification, type Notification } from "../notify.ts";
-import type { RoutineManager, RoutineRun } from "../routines.ts";
+import type { Notification } from "../notify.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 import { conversationLanguage, serverLine, type ServerLineKey } from "../server-lines.ts";
 
@@ -23,15 +21,12 @@ export interface LiveGoalRun {
 
 export interface GoalCardDeps {
   store: Pick<Store, "appendMessage" | "bot" | "messagesFor" | "patchMessage">;
-  routines(): Pick<RoutineManager, "finishGoalRun"> | null;
   notify(notification: Notification | null): void;
-  routineSourceOwner(run: RoutineRun): { bot: BotRecord } | null;
-  routineSourceThread(run: RoutineRun): string | null;
 }
 
-function detailFields(detail: string, text?: ServerText) {
-  const { text: safe, codes } = fittedLine("attention", detail, text);
-  return { detail: safe, detailCode: codes.attentionCode, detailParams: codes.attentionParams };
+/** The detail as the card shows it: redacted, and cut to the card's line. */
+function detailFields(detail: string, _text?: ServerText) {
+  return { detail: redactSecretsInText(detail).slice(0, 500), detailCode: undefined, detailParams: undefined };
 }
 
 /** A goal card's text for clients that show no cards, by how the goal stands. */
@@ -107,34 +102,6 @@ export function createGoalCards(deps: GoalCardDeps) {
       startedAt: run.startedAt,
       finishedAt,
     };
-    const routineRun = deps.routines()?.finishGoalRun(run.runId, status, safeDetail);
-    // A scheduled team goal that stops to ask must never be filed as a quiet completion.
-    if (routineRun?.status === "waiting") {
-      const coordinator = store.bot(routineRun.botId);
-      if (coordinator) {
-        const notificationBot = deps.routineSourceOwner(routineRun)?.bot ?? coordinator;
-        deps.notify(buildNotification(
-          "question",
-          notificationBot,
-          deps.routineSourceThread(routineRun) ?? routineRun.threadId ?? threadId,
-          safeDetail || `${routineRun.routineName} needs your input`,
-          { avatarUrl: notificationBot.avatarUrl },
-        ));
-      }
-    }
-    if (routineRun?.status === "completed") {
-      const coordinator = store.bot(routineRun.botId);
-      if (coordinator) {
-        const notificationBot = deps.routineSourceOwner(routineRun)?.bot ?? coordinator;
-        deps.notify(buildNotification(
-          "done",
-          notificationBot,
-          deps.routineSourceThread(routineRun) ?? routineRun.threadId ?? threadId,
-          safeDetail || routineRun.routineName,
-          { avatarUrl: notificationBot.avatarUrl },
-        ));
-      }
-    }
     if (!stillHere()) return;
     store.patchMessage(threadId, run.cardMessageId, {
       text: serverLine(conversationLanguage(threadId), GOAL_STATE[status] ?? "server.teammates.goal.failed", { detail: card.detail || card.goal }),

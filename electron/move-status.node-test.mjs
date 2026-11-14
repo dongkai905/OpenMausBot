@@ -40,7 +40,6 @@ function world({ state = signedIn(), moves = [], checks = [], busy = [] } = {}) 
     send: {
       async move() { const failure = moves.shift(); if (failure) throw failure; },
       async check() { const next = checks.shift(); return next && typeof next === "object" ? next : { ok: next ?? true }; },
-      switches: () => ({ "routine:r1": true }),
       snapshot: () => ({}),
     },
     local: {
@@ -157,7 +156,7 @@ test("every phase's failure has its own code", async () => {
     { name: "something unforeseen", moves: [new Error("Cannot read properties of undefined (reading 'items')")], expect: { phase: "copy", code: "error" } },
     { name: "the check still missing things after three passes", checks: [false, false, false], expect: { phase: "check", code: "incomplete", message: "Missing: something. " + INCOMPLETE } },
     { name: "this computer's server refusing to pause", freezeError: Object.assign(new Error("OpenMausBot on this computer could not pause."), { status: 500 }), expect: { phase: "freeze", code: "freeze" } },
-    { name: "My Cloud refusing to switch an automation on", cloudAnswer: (method) => (method === "PATCH" ? reply(500, { error: "Routines are busy." }) : null), expect: { phase: "switch", code: "switch_refused", message: "Routines are busy." } },
+    { name: "My Cloud refusing to finish the move", cloudAnswer: (_method, route) => (route === "/api/cloud-send/arrived" ? reply(500, { error: "My Cloud is busy." }) : null), expect: { phase: "switch", code: "switch_refused", message: "My Cloud is busy." } },
   ];
   for (const { name, moves = [], checks = [], freezeError = null, cloudAnswer = null, expect } of cases) {
     const w = world({ moves: [...moves], checks: [...checks] });
@@ -176,12 +175,12 @@ test("every phase's failure has its own code", async () => {
 
 test("a check's failure tells the Admin what it found missing first, by kind and count, so it is never cut off", async () => {
   // Seen on a customer's PC: 94 failures in a week, and all the Admin knew was that "some things" did not arrive.
-  const missing = { ok: false, gaps: { memory: [{ bot: "b1", path: "memory/notes.md" }] }, chats: [{ threadId: "t-1", missing: 0, unstamped: 0, path: "broken" }],
+  const missing = { ok: false, gaps: { files: ["workspaces/b1/notes.md"] }, chats: [{ threadId: "t-1", missing: 0, unstamped: 0, path: "broken" }],
     attachments: ["a1.mp3", "a2.png"], secrets: { equal: [], differs: [], missing: [] }, names: { b1: "Scout" }, owners: { "t-1": "b1" } };
   const w = world({ checks: [missing, missing, missing] });
   await w.home.kick();
   const { message } = w.report().failure;
-  assert.ok(message.startsWith("Missing: 1 memory, 1 chats (1 broken paths), 2 attachments. "), message);
+  assert.ok(message.startsWith("Missing: 1 files, 1 chats (1 broken paths), 2 attachments. "), message);
   assert.ok(message.length <= 200);
   assert.doesNotMatch(message, /Scout|notes\.md|a1\.mp3|t-1/u);
 });

@@ -63,7 +63,6 @@ function computer({ clock, checks = [], lease = null, name = "Mac", id = "comput
         if (answer instanceof Error) throw answer;
         return { ok: answer ?? true };
       },
-      switches: () => ({}),
       snapshot: () => ({ running: null, checking: c.checking, whole: { result: { notes: [], failed: [] } } }),
     },
     local,

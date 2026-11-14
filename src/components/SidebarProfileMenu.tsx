@@ -318,7 +318,7 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   archived?: ArchivedBots;
 }): SidebarMenuItem[] {
   return [
-    { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
+    { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "automations", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
     ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
     ...(onPublishedApps ? [{ key: "published-apps", label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
@@ -588,7 +588,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
       tools: toolMenuItems({
         activeView: state.activeView,
         automationsNeedYou: account?.automationsNeedYou ?? automationsNeedYou,
-        onAutomations: () => dispatch({ type: "showRoutines", view: "list" }),
+        onAutomations: () => dispatch({ type: "showAutomations" }),
         onTeamMap: () => dispatch({ type: "showTeamMap" }),
         onFiles: filesReady ? () => dispatch({ type: "showFiles" }) : undefined,
         onPublishedApps: () => dispatch({ type: "showPublishedApps" }),

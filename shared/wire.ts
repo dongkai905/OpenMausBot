@@ -13,8 +13,8 @@ import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
 import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts";
 import type { SetupCardFields } from "./setup-card.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
-import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
-import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
+import type { SavedStepsMark } from "./saved-steps.ts";
+import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
 import type { AppEventAttempt, AppTrigger, AppTriggerRequestCardData, AppTriggerService } from "./app-triggers.ts";
 import type { ProfileRequestCardData } from "./profile-request.ts";
 import type { ServerTextLine, ServerTextParams } from "./server-text.ts";
@@ -23,14 +23,11 @@ import type { ModelRequestCardData } from "./model-request.ts";
 import type { ConnectorCardData } from "./connector-card.ts"; import type { McpChangeRequest } from "./mcp-request.ts";
 import type { SkillRequestCardData } from "./skill-request.ts"; import type { OutsideWriteCardField } from "./outside-write.ts";
 import type { QuestionRequestCardData } from "./ask-question.ts";
-import type { AutomationLine, RoutineRunCardData } from "./routine-run.ts";
 import type { WidgetPayload } from "./widget.ts";
 import type { AppFromRef, AppPayload, AppPointedRef } from "./app.ts";
 import type { GroupGoalRunCardData } from "./group-goal-run.ts"; import type { BurstCardData } from "./burst.ts";
 import type { RuntimeEvent } from "./runtime-events.ts";
 import type { NotificationLogEntry } from "./notification.ts";
-import type { Routine, RoutineRun } from "./routines.ts";
-import type { WebhookAttempt, WebhookTrigger } from "./webhooks.ts";
 import type { PublishedPageCard } from "./published-page.ts";
 import type { InboxItem, InboxTask } from "./inbox.ts";
 import type { LiveCallRecord, LiveCallState } from "./live-call-wire.ts";
@@ -149,8 +146,7 @@ export interface WireTask extends InboxTask {
   sharedChat?: true;
   /** Organizational grouping only; never a directory or provider context. */
   projectId?: string;
-  /** Detached routine execution, reachable through its visible results card. */ routineRunId?: string;
-  /** Work from outside (a webhook, an app's event) reached this conversation: what it starts or runs stays confined, for good. */ outside?: true;
+  /** Work from outside (an app's event) reached this conversation: what it starts or runs stays confined, for good. */ outside?: true;
   /** An outside caller opened this thread through the bot's API, so only it may continue it; such a thread is outside too. */ botApi?: true;
   /** Set when a bot, not a person, opened this thread. */ openedBy?: TaskOpenedBy;
   /** On a team's server: one person's conversation, seen by them alone (never by another member or an admin). */
@@ -284,8 +280,8 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   id: string;
   /** The task selected in the UI; running turns keep their own thread id. */
   threadId: string;
-  /** Where a routine without a thread of its own reports. Absent only for a
-   * bot without threads. */
+  /** The conversation the bot opens when it has none of its own. Absent only
+   * for a bot without threads. */
   mainThreadId?: string;
   /** newest first */
   tasks?: WireTask[];
@@ -359,7 +355,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   rewound?: boolean;
   pinned?: boolean;
   hidden?: boolean;
-  /** On My Cloud, a bot its person moved into one of their teams: `moving` while it goes (no turns, its routines off),
+  /** On My Cloud, a bot its person moved into one of their teams: `moving` while it goes (no turns while it moves),
    * `moved` once it lives there (archived here, shown as a line that opens the team). */
   movedTo?: BotMovedTo;
   /** Optional labeled divider used to organize this bot in the sidebar. */
@@ -372,8 +368,8 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   managedSections?: string[];
   /** Team Cloud only: the lowercased email of the member who created the bot (or moved it in). */
   createdBy?: string;
-  /** Team Cloud only: the lowercased email of the member the bot reports to, whose inbox its questions, approvals,
-   * failures and routine results reach. Absent: it reports to `createdBy`. */
+  /** Team Cloud only: the lowercased email of the member the bot reports to, whose inbox its questions and approvals
+   * reach. Absent: it reports to `createdBy`. */
   reportsTo?: string;
   /** Whether this bot may use the workspace's connected apps. */
   composio?: boolean;
@@ -456,7 +452,7 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";
-  kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
+  kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
   text?: string;
   digest?: TurnDigest;
   /** kind "compaction" with no `compaction` record: the engine condensed its own session. A marker for people, never context. */
@@ -495,9 +491,7 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   secret?: SecretRequestCardData;
   /** signin rows: the bot asked the person to sign in to a site themselves. */
   signIn?: SignInRequestCardData;
-  /** One idempotently updated status card for a routine run. */
-  routineRun?: RoutineRunCardData; /** The card a burst shows in its parent chat: first a preview, then its progress. */ burst?: BurstCardData;
-  automation?: AutomationLine;
+  /** The card a burst shows in its parent chat: first a preview, then its progress. */ burst?: BurstCardData;
   /** Terminal receipt for a bounded multi-bot channel goal. */
   goalRun?: GroupGoalRunCardData;
   /** call rows (kind "call"): the finished Live call this row records. */
@@ -510,10 +504,6 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
     /** error rows: the reply came back; only a step the turn ran failed or wasn't allowed. */
     partial?: boolean;
   };
-  /** A bot line a "post" webhook wrote: whoever called the webhook chose
-   * its words. On a room line this also carries `from`, so the room renders
-   * the webhook's bot as the speaker. */
-  webhookPost?: boolean;
   /** user messages sent INTO a running turn (capabilities.queueing). */
   steered?: boolean;
   /** user messages a peer bot handed to this thread's RUNNING turn: peer
@@ -632,14 +622,13 @@ export function orderedThreadList<T extends { pinned?: boolean; lastThreadOrderA
 export const isSnoozed = (task: Pick<WireTask, "snoozedUntil">, now = Date.now()): boolean =>
   task.snoozedUntil !== undefined && (task.snoozedUntil === 0 || task.snoozedUntil > now);
 
-type OpenThreadCandidate = Pick<WireTask, "routineRunId" | "archivedAt" | "closedBy" | "openedBy" | "snoozedUntil" | "pinned" | "lastThreadOrderAt" | "createdAt">;
+type OpenThreadCandidate = Pick<WireTask, "archivedAt" | "closedBy" | "openedBy" | "snoozedUntil" | "pinned" | "lastThreadOrderAt" | "createdAt">;
 
 /** The top row of the bot's thread list, so deleting the open thread never pulls a hidden one into view. */
 export function nextOpenThread<T extends OpenThreadCandidate>(tasks: readonly T[], now = Date.now()): T | undefined {
-  const own = tasks.filter((task) => !task.routineRunId);
-  const open = own.filter((task) => task.archivedAt === undefined);
+  const open = tasks.filter((task) => task.archivedAt === undefined);
   const listed = open.filter((task) => task.pinned === true || !(task.closedBy || task.openedBy || isSnoozed(task, now)));
-  return [listed, open, own].map((candidates) => orderedThreadList(candidates)[0]).find((task) => task !== undefined);
+  return [listed, open].map((candidates) => orderedThreadList(candidates)[0]).find((task) => task !== undefined);
 }
 
 export interface OptionCardData extends WaitCardField, ComputerAskField, AccessRequestCardField, OutsideWriteCardField {
@@ -690,10 +679,6 @@ export interface OptionCardData extends WaitCardField, ComputerAskField, AccessR
   autoApplied?: boolean;
   /** A person undid that change. */
   undone?: boolean;
-  /** A durable chat-created routine proposal. */
-  routineRequest?: RoutineRequestCardData;
-  /** A webhook trigger a bot made or changed from chat. */
-  webhookRequest?: WebhookRequestCardData;
   /** An app-event automation a bot made or changed from chat. */
   appTriggerRequest?: AppTriggerRequestCardData;
   /** A durable profile-change proposal (propose_profile). */
@@ -966,12 +951,6 @@ export type ServerFrame =
   | { kind: "notify"; notification: NotificationLogEntry }
   | { kind: "notifications.read"; threadId: string; ids: string[] }
   | { kind: "group.deleted"; groupId: string }
-  | { kind: "routine"; routine: Routine }
-  | { kind: "routine.deleted"; routineId: string }
-  | { kind: "routine.run"; run: RoutineRun }
-  | { kind: "webhook"; webhook: WebhookTrigger }
-  | { kind: "webhook.attempt"; attempt: WebhookAttempt }
-  | { kind: "webhook.deleted"; webhookId: string }
   | { kind: "app-trigger"; botId: string; trigger: AppTrigger }
   | { kind: "app-trigger.attempt"; botId: string; attempt: AppEventAttempt }
   | { kind: "app-trigger.deleted"; triggerId: string }

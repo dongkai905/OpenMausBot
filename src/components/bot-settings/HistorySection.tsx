@@ -1,4 +1,4 @@
-import { whenLabel } from "@/lib/schedule-label";
+import { whenLabel } from "@/lib/clock-time";
 import { t } from "@/lib/i18n";
 
 export interface HistoryRow {

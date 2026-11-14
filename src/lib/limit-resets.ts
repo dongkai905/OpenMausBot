@@ -2,13 +2,12 @@
 // and the automations due before a reset. One shared poll of /api/limit-resets feeds every place that shows them.
 import { useEffect, useState } from "react";
 
-import { AFTER_RESET_MS, NEAR_LIMIT_PERCENT, nearLimit, type EngineLimit, type EngineLimitsReport, type LimitResetSchedule, type LimitWindowName } from "../../shared/limit-reset";
+import { NEAR_LIMIT_PERCENT, nearLimit, type EngineLimit, type EngineLimitsReport, type LimitResetSchedule, type LimitWindowName } from "../../shared/limit-reset";
 import { intlLocale, t } from "@/lib/i18n";
-import type { Routine } from "@/lib/routines";
 import { unlessRefused } from "@/lib/admin-scope";
 import { api } from "@/state/store";
 
-export { AFTER_RESET_MS, nearLimit, NEAR_LIMIT_PERCENT, isLimitResetSchedule, type EngineLimit, type LimitResetSchedule } from "../../shared/limit-reset";
+export { nearLimit, NEAR_LIMIT_PERCENT, isLimitResetSchedule, type EngineLimit, type LimitResetSchedule } from "../../shared/limit-reset";
 
 const POLL_MS = 60_000;
 const names = new Map<string, string>();
@@ -135,13 +134,6 @@ export interface ResetMarker { engine: string; name: string; at: number }
 export function resetMarkers(engines: readonly EngineLimit[], from: number, to: number, now = Date.now()): ResetMarker[] {
   return engines.flatMap((limit) => limit.resetsAt !== null && limit.resetsAt >= Math.max(from, now) && limit.resetsAt < to
     ? [{ engine: limit.engine, name: limit.name, at: limit.resetsAt }] : []);
-}
-
-/** Schedules whose next run comes before `engine`'s reset, on a bot that works on that engine: "Move to after reset". */
-export function dueBeforeReset(routines: readonly Routine[], botEngine: (botId: string) => string | undefined, limit: EngineLimit, now = Date.now()): Routine[] {
-  if (limit.resetsAt === null || limit.resetsAt <= now) return [];
-  return routines.filter((routine) => routine.enabled && routine.schedule.type !== "limit_reset" && routine.nextRunAt !== null &&
-    routine.nextRunAt < limit.resetsAt! + AFTER_RESET_MS && botEngine(routine.botId) === limit.engine);
 }
 
 /** "When your Claude limit resets", or "Each time your Claude limit resets". */

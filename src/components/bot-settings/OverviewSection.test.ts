@@ -44,7 +44,6 @@ describe("OverviewSection", () => {
       overview: { ...sentences, setup: [
         { id: "identity", label: "Identity", done: true, section: "identity" },
         { id: "folder", label: "Choose a working folder", done: false, section: "access" },
-        { id: "schedule", label: "Add a routine", done: false, section: "routines" },
       ] }, prompt: null, onOpen: vi.fn(),
     }));
     expect(markup).toContain("Setup ideas");
@@ -139,12 +138,11 @@ describe("the overview's reach and limits in the person's language", () => {
     }
   });
 
-  it("words an older server's overview, with no doesRoutines or managedSections, as it words a newer one's", async () => {
+  it("words an older server's overview, with no managedSections, as it words a newer one's", async () => {
     const { setLocale } = await import("@/lib/i18n");
     const older: BotOverview = { ...sentences, does: ["Paused: Nightly Backup."],
       reaches: ["Can talk to 1 other bot in its section.", "Can talk to 2 other bots in its allowed teams.", "Coordinates its section as Chief of Staff.", "May also coordinate these teams: General, Research."] };
     const newer: BotOverview = { ...sentences, does: ["Paused: Nightly Backup."], managedSections: ["", "Research"],
-      doesRoutines: [{ name: "Nightly Backup", paused: true, schedule: { type: "daily", time: "09:00", weekdays: [1] } }],
       reaches: ["Can talk to 1 other bot in its department.", "Can talk to 2 other bots in its allowed departments.", "Coordinates its department as Chief of Staff.", "May also coordinate these departments: General, Research."] };
     const html = (overview: BotOverview) => render(createElement(OverviewSection, { overview, prompt: null, onOpen: vi.fn() }));
     for (const overview of [older, newer]) {
@@ -161,7 +159,7 @@ describe("the overview's reach and limits in the person's language", () => {
       expect(html(older)).toContain("Também pode coordenar estas equipes: General, Research.");
       expect(html(older)).toContain("Paused: Nightly Backup.");
       expect(html(newer)).toContain("Também pode coordenar estas equipes: Geral, Research.");
-      expect(html(newer)).toContain("Pausada: Nightly Backup.");
+      expect(html(newer)).toContain("Paused: Nightly Backup.");
     } finally {
       setLocale("en");
     }

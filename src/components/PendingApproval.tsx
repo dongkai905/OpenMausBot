@@ -31,11 +31,6 @@ export interface Pending {
   heldCode?: string;
 }
 
-/** Security: the persisted payload is the marker; provider-authored tool names can collide with ours. */
-export function isRoutineApproval(pending: Pending): boolean {
-  return Boolean(pending.message.card?.routineRequest);
-}
-
 export function isSkillApproval(pending: Pending): boolean {
   return Boolean(pending.message.card?.skillRequest);
 }
@@ -46,8 +41,7 @@ export function isProfileApproval(pending: Pending): boolean {
 
 export function pendingApprovals(messages: Message[]): Pending[] {
   return messages
-    // A routine card left open from before Triggers v2 can't be confirmed: trigger changes apply on their own.
-    .filter((m) => m.kind === "options" && m.card?.requestId && m.card.tool && !m.card.answered && !m.card.dismissed && !m.card.expired && !m.card.routineRequest)
+    .filter((m) => m.kind === "options" && m.card?.requestId && m.card.tool && !m.card.answered && !m.card.dismissed && !m.card.expired)
     .map((m) => ({
       message: m,
       requestId: m.card!.requestId!,
@@ -180,11 +174,9 @@ export const PendingApprovalPanel = memo(function PendingApprovalPanel({
       aria-label={
         isSkillApproval(pending)
           ? t("approval.aria.pendingSkill")
-          : isRoutineApproval(pending)
-            ? t("approval.aria.pendingRoutine")
-            : isProfileApproval(pending)
-              ? t("approval.aria.pendingProfile")
-              : t("approval.aria.pending")
+          : isProfileApproval(pending)
+            ? t("approval.aria.pendingProfile")
+            : t("approval.aria.pending")
       }
       data-ask-card="approval"
       className="px-4 pb-3.5 pt-3"
@@ -263,11 +255,10 @@ export function PendingApprovalActions({
 }) {
   const { dispatch } = useStore();
   const ownerOrAdmin = useOwnerOrAdmin();
-  const isRoutineRequest = isRoutineApproval(pending);
   const isSkillRequest = isSkillApproval(pending);
   const isProfileRequest = isProfileApproval(pending);
   const titled = titledCard(pending.message.card);
-  const durableRequest = isRoutineRequest || isSkillRequest || isProfileRequest || titled;
+  const durableRequest = isSkillRequest || isProfileRequest || titled;
   const canRememberCommand = ownerOrAdmin === true && !durableRequest && !pending.allowKey && Boolean(pending.commandAllowlist);
   const reviewedSha256 = pending.message.card?.skillRequest
     ? reviewedSkillSha256(pending.message.card.skillRequest)
@@ -340,7 +331,7 @@ export function PendingApprovalActions({
       autoFocus={titled}
       className={ASK_SECONDARY_BUTTON}
     >
-      {pending.message.card?.lendingLift ? pending.message.card.options[1] : isRoutineRequest || isProfileRequest || titled ? t("approval.action.cancel") : t("approval.action.deny")}
+      {pending.message.card?.lendingLift ? pending.message.card.options[1] : isProfileRequest || titled ? t("approval.action.cancel") : t("approval.action.deny")}
     </button>,
     <button
       key="allow"
@@ -355,7 +346,7 @@ export function PendingApprovalActions({
         ? pending.message.card?.skillRequest?.action === "update"
           ? t("approval.action.update")
           : t("approval.action.enable")
-        : isRoutineRequest || isProfileRequest
+        : isProfileRequest
           ? t("approval.action.confirm")
           : t("approval.action.allowOnce")}
     </button>,

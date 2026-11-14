@@ -1,8 +1,7 @@
 import { AppWindow, FolderOpen, Globe, Puzzle, Rocket, UsersRound, Zap } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
-import { automationsFrom, hasUnseenProblemRun } from "@/lib/automations";
 import { cn } from "@/lib/cn";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { t } from "@/lib/i18n";
@@ -55,7 +54,7 @@ function NavRow({
       {!iconsOnly && <span className="flex-1 truncate text-[14px] font-medium leading-5">{label}</span>}
       {attention && (
         <span
-          data-testid="routines-attention"
+          data-testid="automations-attention"
           className={cn("size-2 shrink-0 rounded-full bg-danger", iconsOnly && (rail ? "absolute right-1 top-1" : "absolute right-2 top-2"))}
         />
       )}
@@ -85,15 +84,10 @@ export function SidebarAppsButton() {
   );
 }
 
-/** An unseen failed run of an automation the Automations page lists (the same list, so opening it clears the dot), or an app trigger in trouble. */
+/** An app trigger in trouble: the app must be fixed before it can run again. */
 export function useAutomationsNeedYou(): boolean {
-  const { state } = useStore();
   const appTriggers = useAppTriggers();
-  const routinesOnly = typeof window !== "undefined" && window.ogb?.remoteClient?.active === true;
-  const unseenProblem = useMemo(() => hasUnseenProblemRun(automationsFrom({
-    routines: state.routines, webhooks: routinesOnly ? [] : state.webhooks, appTriggers: appTriggers.triggers, runs: state.routineRuns, bots: state.bots,
-  })), [state.routines, state.webhooks, appTriggers.triggers, state.routineRuns, state.bots, routinesOnly]);
-  return unseenProblem || appTriggers.triggers.some((trigger) => trigger.enabled && trigger.problem);
+  return appTriggers.triggers.some((trigger) => trigger.enabled && trigger.problem);
 }
 
 export function SidebarBottomButtons() {
@@ -130,10 +124,10 @@ export function SidebarFooterNav({
     label={t("sidebar.nav.automations")}
     tourId="nav-automations"
     iconsOnly={iconsOnly || toolbar}
-    active={state.activeView === "routines"}
+    active={state.activeView === "automations"}
     attention={automationsNeedYou}
     icon={(active) => <Zap size={iconSize} className={tone(active)} />}
-    onClick={() => dispatch({ type: "showRoutines", view: "list" })}
+    onClick={() => dispatch({ type: "showAutomations" })}
   />;
   const filesRow = useCloudFilesReady() && <NavRow
     id="files"

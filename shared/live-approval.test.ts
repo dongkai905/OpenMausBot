@@ -9,7 +9,6 @@ describe("liveCardKind", () => {
   it("classifies open provider approvals, harness reviews and questions", () => {
     expect(liveCardKind(card({ requestId: "r1", tool: "Bash" }))).toBe("approval");
     expect(liveCardKind(card({ requestId: "r1", tool: "stage_skill", skillRequest: { action: "create" } as OptionCardData["skillRequest"] }))).toBe("review");
-    expect(liveCardKind(card({ requestId: "r1", tool: "schedule_routine", routineRequest: {} as OptionCardData["routineRequest"] }))).toBe("review");
     expect(liveCardKind(card({ requestId: "r1" }))).toBe("question");
   });
   it("sends a default-model proposal to the screen, though it names a tool", () => {

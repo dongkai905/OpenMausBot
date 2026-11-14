@@ -12,8 +12,6 @@ import { SlackSection } from "./bot-settings/SlackSection";
 import { useSlackManagementUrl } from "./bot-settings/useSlackManagement";
 import { SoulSection } from "./bot-settings/SoulSection";
 import { SkillsSection } from "./bot-settings/SkillsSection";
-import { MemorySection } from "./bot-settings/MemorySection";
-import { RoutinesSection } from "./bot-settings/RoutinesSection";
 import { AccessSection } from "./bot-settings/AccessSection";
 import { ModelSection } from "./bot-settings/ModelSection";
 import { PermissionsSection } from "./bot-settings/PermissionsSection";
@@ -31,8 +29,8 @@ import { HistoryRollbackDialog, useBotHistory, useBotOverview } from "./bot-sett
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { ShareBotButton, useTeamName } from "./bot-access/ShareBotButton";
 
-/** Where the Library's memory, skills and folder rows lead in Advanced settings. */
-const LIBRARY_LINKS: Partial<Record<SimplePageId, BotSettingsSection>> = { memory: "memory", skills: "skills", folder: "access" };
+/** Where the Library's skills and folder rows lead in Advanced settings. */
+const LIBRARY_LINKS: Partial<Record<SimplePageId, BotSettingsSection>> = { skills: "skills", folder: "access" };
 
 const sectionLabel = (entry: (typeof BOT_SECTIONS)[number]) => (entry.labelKey ? t(entry.labelKey) : entry.label);
 
@@ -134,12 +132,8 @@ export function BotSettingsDialog({ bot, overlay = false }: {
         return slackUrl ? <SlackSection managementUrl={slackUrl} /> : null;
       case "skills":
         return <SkillsSection bot={bot} />;
-      case "memory":
-        return <MemorySection bot={bot} active={!collapsed && section === "memory"} onToggle={(enabled) => derived.patch({ memoryEnabled: enabled })} />;
       case "library":
         return <LibraryTab bot={bot} onOpen={(page) => dispatch({ type: "toggleSettings", open: true, section: LIBRARY_LINKS[page] ?? "overview" })} />;
-      case "routines":
-        return <RoutinesSection bot={bot} routines={derived.botRoutines} runs={state.routineRuns} />;
       case "access":
         return <AccessSection bot={bot} derived={derived} />;
       case "model":
@@ -234,7 +228,7 @@ export function BotSettingsDialog({ bot, overlay = false }: {
             const { id, icon: Icon } = entry;
             const label = sectionLabel(entry);
             const matched = sectionMatches(entry, q);
-            if (!matched && id !== "memory") return null;
+            if (!matched) return null;
             const open = !collapsed && section === id;
             return (
               <div
@@ -268,14 +262,7 @@ export function BotSettingsDialog({ bot, overlay = false }: {
                     )}
                   />
                 </button>
-                {/* Memory stays mounted (hidden when collapsed) so its unsaved draft survives. */}
-                {id === "memory" ? (
-                  <div hidden={!open} className="px-4 pb-4 pt-1">
-                    {renderSectionBody("memory")}
-                  </div>
-                ) : (
-                  open && <div className="px-4 pb-4 pt-1">{renderSectionBody(id)}</div>
-                )}
+                {open && <div className="px-4 pb-4 pt-1">{renderSectionBody(id)}</div>}
               </div>
             );
           })}

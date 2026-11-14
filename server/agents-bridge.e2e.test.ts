@@ -148,7 +148,7 @@ it("keeps a turn on the whole catalog until the switch is on, then mounts the br
       // exactly what the bridge makes of this turn's own unbridged list
       expect(JSON.stringify(list.result!.tools)).toBe(JSON.stringify(createToolBridge(whole).listed));
       expect(namesOf(list).slice(-2)).toEqual(["find_tool", "use_tool"]);
-      expect(namesOf(list)).toEqual(expect.arrayContaining(["coordinate_bots", "post_to_room", "memory_update", "request_sign_in"]));
+      expect(namesOf(list)).toEqual(expect.arrayContaining(["coordinate_bots", "post_to_room", "request_sign_in"]));
       expect(namesOf(list)).not.toEqual(expect.arrayContaining(["trigger"]));
       expect(JSON.stringify(list.result!.tools).length).toBeLessThan(JSON.stringify(whole).length / 2);
 

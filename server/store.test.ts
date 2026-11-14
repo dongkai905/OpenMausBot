@@ -8,14 +8,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { soulFile, soulHash } from "./bot-folder.ts";
 import { flushProfileHistory, readHistory, recordProfileChange } from "./profile-versions.ts";
 import { DATA_DIR } from "./config.ts";
-import {
-  beginMemoryTurn,
-  endMemoryTurn,
-  flushMemoryJournal,
-  journalFile,
-  journalMemoryWrite,
-  resetMemoryJournalState,
-} from "./memory-journal.ts";
 import type { ModelSelection } from "./contracts.ts";
 import * as mdb from "./message-db.ts";
 import { hasTeamAuthority } from "./peer-roster.ts";
@@ -2141,38 +2133,6 @@ describe("Store redacts bot-authored secrets on write", () => {
     });
     expect((card.card as { summary?: string }).summary).not.toContain(key);
     expect(card.card?.held).not.toContain(key);
-    const routineCard = store.appendMessage(bot.threadId, {
-      role: "bot",
-      kind: "options",
-      card: {
-        title: "Confirm routine",
-        subtitle: "Every morning",
-        options: ["Confirm", "Cancel"],
-        requestId: "routine-request",
-        tool: "schedule_routine",
-        routineRequest: {
-          version: 1,
-          requestId: "routine-request",
-          botId: bot.id,
-          threadId: bot.threadId,
-          createdAt: 1,
-          operation: {
-            action: "create",
-            routine: {
-              name: `Use ${key}`,
-              instructions: `Send a request with ${key}`,
-              schedule: { type: "daily", time: "09:00", weekdays: [1] },
-              runOn: "maus",
-              durationMinutes: 30,
-            },
-          },
-        },
-      },
-    });
-    expect(routineCard.card?.routineRequest?.operation.action).toBe("create");
-    if (routineCard.card?.routineRequest?.operation.action !== "create") throw new Error("missing routine payload");
-    expect(routineCard.card.routineRequest.operation.routine.name).not.toContain(key);
-    expect(routineCard.card.routineRequest.operation.routine.instructions).not.toContain(key);
     const profileCard = store.appendMessage(bot.threadId, {
       role: "bot",
       kind: "options",
@@ -2262,23 +2222,6 @@ describe("Store redacts bot-authored secrets on write", () => {
     });
     expect(reviewedSkillCard.card?.skillRequest?.preview).toBe(reviewedPreview);
     expect(reviewedSkillCard.card?.skillRequest?.sha256).toBe(reviewedSha256);
-    const runCard = store.appendMessage(bot.threadId, {
-      role: "bot",
-      kind: "routine.run",
-      text: `Routine ${key} completed`,
-      routineRun: {
-        runId: "run-1",
-        routineId: "routine-1",
-        routineName: `Report ${key}`,
-        status: "completed",
-        executionThreadId: "execution-1",
-        summary: `Finished with ${key}`,
-        error: `Ignored ${key}`,
-      },
-    });
-    expect(runCard.routineRun?.routineName).not.toContain(key);
-    expect(runCard.routineRun?.summary).not.toContain(key);
-    expect(runCard.routineRun?.error).not.toContain(key);
     const secretCard = store.appendMessage(bot.threadId, {
       role: "bot",
       kind: "secret",
@@ -2354,7 +2297,6 @@ describe("Store askedAt from before builds kept it", () => {
     const first = bot.threadId;
     const later = store.createTask(bot.id, "Later")!.threadId;
     const run = store.createTask(bot.id, "Run")!.threadId;
-    store.patchTask(bot.id, run, { routineRunId: "run-1" });
     const asked = store.appendMessage(first, { role: "user", kind: "text", text: "Good morning.", sendId: "send-1" });
     store.appendMessage(first, { role: "bot", kind: "text", text: "Morning!" });
     store.appendMessage(later, { role: "user", kind: "text", text: "Report this run's state." });
@@ -2657,47 +2599,6 @@ describe("soul", () => {
     expect(existsSync(soulFile(bot.id))).toBe(true);
     store.deleteBot(bot.id);
     expect(existsSync(join(DATA_DIR, "bots", bot.id))).toBe(false);
-  });
-
-  it("deleteBot removes the memory journal, the memory index, and the in-memory baseline", async () => {
-    resetMemoryJournalState();
-    const store = new Store(selection);
-    const bot = store.createBot();
-    const other = store.createBot();
-    journalMemoryWrite(bot.id, "memory/notes.md", "vendor list\n", { actor: "person", via: "ui" });
-    journalMemoryWrite(other.id, "memory/notes.md", "other notes\n", { actor: "person", via: "ui" });
-    await flushMemoryJournal(bot.id);
-    await flushMemoryJournal(other.id);
-    mdb.indexMemoryFile(bot.id, "memory/notes.md", "vendor list\n", { mtimeMs: 1, bytes: 12 });
-    mdb.indexMemoryFile(other.id, "memory/notes.md", "other notes\n", { mtimeMs: 2, bytes: 12 });
-    beginMemoryTurn(bot.id, bot.threadId);
-    expect(endMemoryTurn(bot.threadId)).toEqual([]);
-    expect(existsSync(journalFile(bot.id))).toBe(true);
-    expect(mdb.indexedMemoryFiles(bot.id).map((file) => file.path)).toContain("memory/notes.md");
-
-    expect(store.deleteBot(bot.id)).toBe(true);
-
-    expect(existsSync(journalFile(bot.id))).toBe(false);
-    expect(mdb.indexedMemoryFiles(bot.id)).toEqual([]);
-    expect(mdb.recallMemory("vendor", bot.id)).toEqual([]);
-    expect(existsSync(journalFile(other.id))).toBe(true);
-    expect(mdb.indexedMemoryFiles(other.id).map((file) => file.path)).toEqual(["memory/notes.md"]);
-    expect(mdb.recallMemory("notes", other.id).map((hit) => hit.file)).toEqual(["memory/notes.md"]);
-    beginMemoryTurn(bot.id, "after-delete");
-    expect(endMemoryTurn("after-delete")).toEqual([]);
-    expect(existsSync(journalFile(bot.id))).toBe(false);
-
-    mdb.closeMessageDb();
-    const raw = new DatabaseSync(join(DATA_DIR, "messages.db"));
-    try {
-      expect(() => raw.exec("INSERT INTO memory_fts(memory_fts) VALUES('integrity-check')")).not.toThrow();
-      const gone = raw.prepare("SELECT COUNT(*) AS n FROM memory_files WHERE bot_id = ?").get(bot.id) as { n: number };
-      const kept = raw.prepare("SELECT COUNT(*) AS n FROM memory_files WHERE bot_id = ?").get(other.id) as { n: number };
-      expect(gone.n).toBe(0);
-      expect(kept.n).toBe(1);
-    } finally {
-      raw.close();
-    }
   });
 
   it("reviewed setup freezes legacy thread settings and persists valid team grants and its receipt on reload", () => {

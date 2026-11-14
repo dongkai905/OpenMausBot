@@ -12,7 +12,6 @@ const previousDataDir = process.env.OMB_DATA_DIR;
 process.env.OMB_DATA_DIR = directory;
 const db = await import("../server/message-db.ts");
 const { Store } = await import("../server/store.ts");
-const memory = await import("../server/workspace.ts");
 const backups = await import("../server/workspace-backup.ts");
 const inline = process.argv.includes("--in-process");
 console.log(JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch, inline,
@@ -48,13 +47,6 @@ try {
     await measure(`full-1000-rows-${size}-threads`, () => {
       for (let t = 0; t < size; t++) assert.equal(store.messagesFor(`thread-${t}`).length, 1000);
     });
-  }
-  for (const size of [100, 1000]) {
-    const id = `memory-${size}`, workspace = memory.ensureWorkspace(id);
-    for (let i = 0; i < size; i++) writeFileSync(join(workspace, "memory", `topic-${i}.md`), text.repeat(4));
-    await delay(1000);
-    await measure(`memory-cold-${size}-files`, () => { memory.syncMemoryIndex(id); assert.equal(db.indexedMemoryFiles(id).length, size + 1); });
-    await measure(`memory-warm-${size}-files`, () => { memory.syncMemoryIndex(id); assert.equal(db.indexedMemoryFiles(id).length, size + 1); });
   }
   mkdirSync(join(directory, "attachments"));
   writeFileSync(join(directory, "attachments", "synthetic.bin"), Buffer.alloc(1024 * 1024, 0x31));

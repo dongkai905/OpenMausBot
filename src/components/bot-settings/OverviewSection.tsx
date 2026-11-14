@@ -3,8 +3,8 @@ import { ChevronRight, Circle, Sparkles } from "lucide-react";
 
 import type { BotOverview } from "@/lib/bot-overview-types";
 import { t } from "@/lib/i18n";
-import { whenLabel } from "@/lib/schedule-label";
-import { overviewLineText, overviewRoutineText, recentChangeText } from "@/lib/bot-overview-text";
+import { whenLabel } from "@/lib/clock-time";
+import { overviewLineText, recentChangeText } from "@/lib/bot-overview-text";
 import type { BotSettingsSection } from "@/state/store";
 import { PromptPreview, type PromptPreviewData } from "./PromptPreview";
 
@@ -107,7 +107,7 @@ export function OverviewSection({
         ) : (
           <ul className="mt-2 flex flex-col gap-1.5 text-[13px] leading-relaxed text-ink">
             {overview.does.map((line, i) => (
-              <li key={i}>{overviewRoutineText(overview.doesRoutines?.[i]) ?? overviewLineText(line)}</li>
+              <li key={i}>{overviewLineText(line)}</li>
             ))}
           </ul>
         )}

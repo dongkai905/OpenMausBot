@@ -18,16 +18,15 @@ export interface CloudSendResult {
   /** The chats My Cloud lacked, added by row or by Bring newer chats; null when this send did not bring chats. `left`:
    * conversations that did not all go this time (a bot answering in one, or My Cloud not taking a page yet). */
   chats: { conversations: number; messages: number; left?: number } | null;
-  failed: Array<{ key: string; kind: SendKind | "chats" | "connection" | "memory" | "files"; label: string; error: string; final?: true }>;
-  /** A move's own: automations and skill extras it carried, memory files and learned facts merged, bot files sent (`kept`:
-   * beside a different file of My Cloud's), and conversations whose own settings it set. */
+  failed: Array<{ key: string; kind: SendKind | "chats" | "connection" | "files"; label: string; error: string; final?: true }>;
+  /** A move's own: the skill extras it carried, the bot files it sent (`kept`: beside a different file of My Cloud's), and
+   * the conversations whose own settings it set. */
   moved?: number;
-  memory?: number;
   files?: { sent: number; kept: number };
   conversationSettings?: number;
-  /** model: kept My Cloud's engine; settings: a setting My Cloud refused; narrowed: a login kept to bots My Cloud lacks; memory: notes not copied;
+  /** model: kept My Cloud's engine; settings: a setting My Cloud refused; narrowed: a login kept to bots My Cloud lacks;
    * held: a key a trial's Cloud keeps unused while its Claude credit lasts. */
-  notes: Array<{ kind: "model" | "settings" | "narrowed" | "memory" | "held"; bot?: string; login?: string; connection?: string }>;
+  notes: Array<{ kind: "model" | "settings" | "narrowed" | "held"; bot?: string; login?: string; connection?: string }>;
 }
 /** `error`: the send failed as a whole (nothing after that point went), in words for the person. */
 export interface CloudSendOutcome { at: number; reason: string; result: CloudSendResult; error?: string }
@@ -175,17 +174,11 @@ export interface CloudMoveCheck {
   gaps: {
     items: Array<{ key: string; kind: SendKind; label: string }>;
     parts: Array<{ key: string; label: string; parts: string[] }>;
-    memory: Array<{ bot: string; path: string }>;
     rooms: Array<{ id: string; name: string }>;
     connections: string[];
     conversations: string[];
-    /** Bot files by path, finished routine runs by id, bots whose journal rows, learned facts and teams whose pieces, and
-     * conversations whose own settings My Cloud lacks. */
+    /** Bot files by path, and conversations whose own settings My Cloud lacks. */
     files: string[];
-    runs: string[];
-    journal: string[];
-    learned: string[];
-    teams: string[];
     settings: string[];
   };
   /** Per conversation: rows My Cloud lacks, lines of its owner's it holds that do not carry the owner yet, and whether
@@ -232,9 +225,6 @@ export function createCloudSend(deps: {
   send(options?: { keys?: string[] | null; force?: string[]; reason?: string; final?: boolean }): Promise<CloudSendOutcome>;
   /** `scope`: only the bots a move of some of them carries. `stopped`: the person stopped the move, so a check waiting for My Cloud ends now. */
   check(options?: { scope?: string; stopped?(): boolean }): Promise<CloudMoveCheck>;
-  /** Each automation a move carried ("routine:<id>", "call:<id>", "webhook:<id>", "app-event:<id>") and whether it was
-   * on here when it went. */
-  switches(): Record<string, boolean>;
   setItem(key: string, on: boolean): CloudSendSnapshot;
   dismiss(signature: string): CloudSendSnapshot;
   waiting(): { bots: number; total: number } | null;

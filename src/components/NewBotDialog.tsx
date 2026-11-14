@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { api, BotEditorStore, useStore, type Bot } from "@/state/store";
 import { BotCreationDraft, EMPTY_BOT_DEFAULTS } from "@/lib/bot-creation-draft";
 import { createConfiguredBot, preparedBotTemplate } from "@/lib/create-configured-bot";
@@ -15,7 +15,6 @@ import { announceNewBot, reportsToFor, startingTemplate, type BotDefaultsAnswer 
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useTeamPeople } from "@/state/team-people";
 import { visibilityFromForm, type VisibilityMode } from "./bot-settings/VisibilitySection";
-import type { Routine } from "@/lib/routines";
 import { IdentitySection } from "./bot-settings/IdentitySection";
 import { SoulSection } from "./bot-settings/SoulSection";
 import { SkillsSection } from "./bot-settings/SkillsSection";
@@ -25,19 +24,17 @@ import { PermissionsSection } from "./bot-settings/PermissionsSection";
 import { VoiceSection } from "./bot-settings/VoiceSection";
 import { useBotSettingsDerived } from "./bot-settings/useBotSettingsDerived";
 import { BotEditorContext } from "./bot-settings/BotEditorContext";
-import { inputCls } from "./bot-settings/field";
-import { RoutineEditor } from "./RoutinesPage";
 import { Layer, useIsTopLayer } from "./Layer";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { SharePresetDialog } from "./SharePresetDialog";
 import { SettingRow, SettingsLinkRow } from "./SettingsPrimitives";
 import { Select } from "./Select";
 
-const SECTIONS = ["Identity", "Soul", "Skills", "Memory", "Routines", "Access", "Model", "Permissions", "Voice & alerts"] as const;
+const SECTIONS = ["Identity", "Soul", "Skills", "Access", "Model", "Permissions", "Voice & alerts"] as const;
 type Section = typeof SECTIONS[number];
 const SECTION_KEYS: Record<Section, LocaleKey> = {
   Identity: "botSettings.sections.identity", Soul: "botSettings.sections.soul", Skills: "botSettings.sections.skills",
-  Memory: "botSettings.sections.memory", Routines: "botSettings.sections.routines", Access: "botSettings.sections.access",
+  Access: "botSettings.sections.access",
   Model: "botSettings.sections.model", Permissions: "botSettings.sections.permissions", "Voice & alerts": "botSettings.sections.voice",
 };
 
@@ -145,15 +142,14 @@ function NewBotEditor({ defaultsMode = false, onClose, onCreated, readyBotId }: 
   const bot = draft.bot;
   const scopedStore: ReturnType<typeof useStore> = {
     ...parent,
-    state: { ...parent.state, bots: [bot, ...parent.state.bots], routines: draft.routines, routineRuns: [], routinesLoadState: "ready" },
+    state: { ...parent.state, bots: [bot, ...parent.state.bots] },
     flushBotPatches: async () => bot,
     dispatch: action => {
       if (action.type === "updateBot" && action.botId === draft.id) draft.patch(action.patch);
       else if (action.type === "setModel" && action.botId === draft.id) {
         draft.setModel(action.selection);
         if (action.resetApprovalToAsk) draft.patch({ approvalMode: "ask" });
-      } else if (action.type === "routinePatched") {}
-      else if (action.type === "toggleSettings") {}
+      } else if (action.type === "toggleSettings") {}
       else parent.dispatch(action);
     },
   };
@@ -256,8 +252,6 @@ function DraftSection({ active, draft, defaultsMode, owner }: { active: Section;
   </div>;
   if (active === "Soul") return <SoulSection bot={bot} patch={derived.patch} />;
   if (active === "Skills") return <SkillsSection bot={bot} />;
-  if (active === "Memory") return <DraftMemory draft={draft} />;
-  if (active === "Routines") return <DraftRoutines draft={draft} />;
   if (active === "Access") return <AccessSection bot={bot} derived={derived} />;
   if (active === "Model") return <ModelSection bot={bot} />;
   if (active === "Permissions") return <PermissionsSection bot={bot} derived={derived} />;
@@ -331,34 +325,6 @@ function StartingRole({ draft, defaultsMode }: { draft: BotCreationDraft; defaul
         className="mt-1 rounded-md px-2 py-1 text-[12px] text-ink-secondary hover:bg-control hover:text-ink">{t("newBot.presetRemove")}</button>}
     </div>}
     {error && <p role="alert" className="mt-2 text-[13px] text-danger">{error}</p>}
-  </div>;
-}
-
-function DraftMemory({ draft }: { draft: BotCreationDraft }) {
-  const [path, setPath] = useState("MEMORY.md");
-  const [name, setName] = useState("");
-  return <div className="space-y-3">
-    <Select size="lg" className="w-full" aria-label={t("memory.fileLabel", { path })} value={path} onChange={event => setPath(event.target.value)}>
-      {[...new Set(["MEMORY.md", ...Object.keys(draft.template.memory)])].map(file => <option key={file}>{file}</option>)}
-    </Select>
-    <textarea className={cn(inputCls, "min-h-72 font-mono")} aria-label={t("memory.contents")} value={draft.template.memory[path] ?? ""} onChange={event => draft.setMemory(path, event.target.value)} />
-    <div className="flex gap-2"><input className={inputCls} aria-label={t("memory.newTopicLabel")} placeholder={t("memory.newTopicLabel")} value={name} onChange={event => setName(event.target.value)} />
-      <button type="button" aria-label={t("memory.addTopic")} disabled={!/^[a-zA-Z0-9_-]+$/.test(name)} className="rounded-lg bg-control px-3 disabled:opacity-40" onClick={() => { const next = `memory/${name}.md`; if (!(next in draft.template.memory)) draft.setMemory(next, ""); setPath(next); setName(""); }}><Plus size={16} /></button>
-      {path !== "MEMORY.md" && <button type="button" aria-label={t("memory.removeTopic")} className="rounded-lg bg-control px-3" onClick={() => { draft.setMemory(path, null); setPath("MEMORY.md"); }}><Trash2 size={16} /></button>}
-    </div>
-  </div>;
-}
-
-function DraftRoutines({ draft }: { draft: BotCreationDraft }) {
-  const [editing, setEditing] = useState<Routine | "new" | null>(null);
-  return <div className="space-y-3">
-    <button type="button" className="rounded-lg bg-accent px-3 py-2 text-[13px] text-white" onClick={() => setEditing("new")}>{t("computer.routines.create")}</button>
-    {draft.routines.map(routine => <div key={routine.id} className="flex items-center gap-2 rounded-lg bg-card p-3">
-      <button type="button" className="min-w-0 flex-1 text-left text-[13px]" onClick={() => setEditing(routine)}>{routine.name}</button>
-      <label className="flex items-center gap-1.5 text-[12px] text-ink-secondary"><input type="checkbox" checked={routine.enabled} onChange={event => draft.setRoutineEnabled(routine.id, event.target.checked)} />{t("newBot.enabled")}</label>
-      <button type="button" aria-label={t("newBot.removeRoutine", { name: routine.name })} onClick={() => draft.removeRoutine(routine.id)} className="rounded p-1.5 hover:bg-control"><Trash2 size={15} /></button>
-    </div>)}
-    {editing && <RoutineEditor routine={editing === "new" ? undefined : editing} bots={[draft.bot]} lockedBotId={draft.id} onClose={() => setEditing(null)} />}
   </div>;
 }
 

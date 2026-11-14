@@ -1,17 +1,13 @@
-import { boatCapableEngine } from "@/lib/remote-desktop";
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CalendarDays, Globe, ImageOff, Loader2, Monitor, Plus, X } from "lucide-react";
+import { Globe, ImageOff, Loader2, Monitor, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { usePageVisible } from "@/lib/page-visible";
 import { isRemoteScreenshotContention, remoteScreenshotSource } from "@/lib/remote-desktop";
-import type { Routine } from "@/lib/routines";
-import { dayName, scheduleLabel } from "@/lib/schedule-label";
-import { intlLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import { api, ApiError, useStore, type Bot } from "@/state/store";
 import { releaseComputerPanelFocus, takeComputerPanelBrowserView, useComputerPanelEntry } from "@/lib/computer-panel-focus";
-import { RoutineEditor } from "./RoutinesPage";
 import { BrowserPanel, type BrowserSignIn } from "./BrowserPanel";
 import { SignInBanner } from "./SignInRequestCard";
 import { productName } from "@/lib/brand";
@@ -20,46 +16,6 @@ function viewerAddress(raw: unknown): string {
   if (typeof raw !== "string" || !raw) throw new Error(t("remoteDesktop.noLink"));
   if (raw.startsWith("/vps-viewer/")) return new URL(raw, window.location.origin).toString();
   return raw;
-}
-
-function routineScheduleLabel(routine: Routine) {
-  if (routine.schedule.type === "cron" || routine.schedule.type === "limit_reset") return scheduleLabel(routine.schedule);
-  if (routine.schedule.type === "once") {
-    return new Date(routine.schedule.at).toLocaleString(intlLocale(), {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-  if (routine.schedule.type === "interval") {
-    const cadence = routine.schedule.everyMinutes % 60 === 0
-      ? t("routines.interval.hours", { hours: routine.schedule.everyMinutes / 60 })
-      : t("routines.interval.minutes", { minutes: routine.schedule.everyMinutes });
-    return t("remoteDesktop.startingAt", { cadence, date: new Date(routine.schedule.anchorAt).toLocaleString(intlLocale(), {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }) });
-  }
-  const days = routine.schedule.weekdays;
-  const cadence =
-    days.length === 7
-      ? t("routines.repeat.daily")
-      : days.join(",") === "1,2,3,4,5"
-        ? t("routines.repeat.weekdays")
-        : days.map(dayName).join(", ");
-  const [hour, minute] = routine.schedule.time.split(":").map(Number);
-  return `${cadence} · ${new Date(2000, 0, 1, hour, minute).toLocaleTimeString(intlLocale(), { hour: "numeric", minute: "2-digit" })}`;
-}
-
-function nextRunLabel(at: number | null) {
-  if (at == null) return t("routines.pausedSchedule");
-  const date = new Date(at);
-  const today = new Date();
-  const sameDay = date.toDateString() === today.toDateString();
-  return `${sameDay ? t("routines.today") : date.toLocaleDateString(intlLocale(), { month: "short", day: "numeric" })}, ${date.toLocaleTimeString(intlLocale(), { hour: "numeric", minute: "2-digit" })}`;
 }
 
 export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
@@ -75,7 +31,6 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   const pageVisible = usePageVisible();
   const previewBusy = useRef(bot.busy);
   useEffect(() => { previewBusy.current = bot.busy; }, [bot.busy]);
-  const [creatingRoutine, setCreatingRoutine] = useState(false);
   const [view, setView] = useState<"desktop" | "browser">(() => takeComputerPanelBrowserView(bot.id) ? "browser" : "desktop");
   const [signIn, setSignIn] = useState<BrowserSignIn>();
   const help = state.computerControl[bot.id]?.help ?? null;
@@ -87,17 +42,6 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
     if (requestedSignIn.place === "browser") setSignIn({ url: requestedSignIn.url, site: requestedSignIn.site, nonce: requestedSignIn.requestId });
     dispatch({ type: "signInFocusConsumed", requestId: requestedSignIn.requestId });
   }, [dispatch, requestedSignIn]);
-  const botRoutines = state.routines
-    .filter((routine) => routine.botId === bot.id)
-    .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
-  const activeRoutineRun = state.routineRuns.find(
-    (run) => run.botId === bot.id && ["queued", "running", "waiting"].includes(run.status),
-  );
-  const cloudRoutineReady = Boolean(
-    state.config?.box.configured &&
-      boatCapableEngine(state.instances, bot.modelSelection.instanceId)?.snapshot.state === "available",
-  );
-
   useEffect(() => {
     setFrame(null);
     setPreviewPending(true);
@@ -308,80 +252,7 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
           {t("remoteDesktop.accessHint")}
         </p>
 
-        <div className="w-full rounded-xl bg-card p-4 text-left">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[15px] font-medium text-ink">
-              <CalendarClock size={16} className="text-accent" />
-              {t("computer.routines.title")}
-            </div>
-            {botRoutines.length > 0 && (
-              <span className="rounded-full bg-control px-2 py-0.5 text-[10px] font-medium text-ink-secondary">
-                {botRoutines.length}
-              </span>
-            )}
-          </div>
-          {activeRoutineRun && (
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "showRoutines" })}
-              className="mt-3 flex w-full items-center gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-left text-[12px] text-accent hover:bg-accent/15"
-            >
-              <Loader2 size={13} className={activeRoutineRun.status === "queued" ? "" : "animate-spin"} />
-              <span className="min-w-0 flex-1 truncate">
-                {activeRoutineRun.routineName} · {t(activeRoutineRun.status === "waiting" ? "computer.routines.needsYou" : activeRoutineRun.status === "queued" ? "computer.runStatus.queued" : "computer.runStatus.running")}
-              </span>
-            </button>
-          )}
-          {botRoutines.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {botRoutines.slice(0, 3).map((routine) => (
-                <button
-                  type="button"
-                  key={routine.id}
-                  onClick={() => dispatch({ type: "showRoutines" })}
-                  className="flex w-full items-center gap-2 rounded-lg bg-inset px-3 py-2 text-left hover:bg-control/60"
-                >
-                  <span className={cn("size-1.5 shrink-0 rounded-full", routine.enabled ? "bg-success" : "bg-ink-secondary/40")} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-ink">{routine.name}</span>
-                    <span className="block truncate text-[11px] text-ink-secondary">
-                      {routineScheduleLabel(routine)}{routine.runOn === "cloud" ? ` · ${t("remoteDesktop.runsOnVm")}` : ""}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[10px] text-ink-secondary">{nextRunLabel(routine.nextRunAt)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setCreatingRoutine(true)}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent py-2 text-[13px] font-medium text-white hover:brightness-110"
-            >
-              <Plus size={14} />
-              {t("computer.routines.create")}
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "showRoutines" })}
-              className="flex items-center justify-center gap-1.5 rounded-lg bg-control px-3 py-2 text-[13px] text-ink hover:bg-raised-hover"
-              title={t("computer.routines.openTitle")}
-            >
-              <CalendarDays size={14} />
-              {t("computer.routines.schedules")}
-            </button>
-          </div>
-        </div>
       </div>
-      )}
-      {creatingRoutine && (
-        <RoutineEditor
-          bots={[bot]}
-          lockedBotId={bot.id}
-          defaultRunOn={cloudRoutineReady ? "cloud" : "maus"}
-          onClose={() => setCreatingRoutine(false)}
-        />
       )}
     </aside>
   );

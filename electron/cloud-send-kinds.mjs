@@ -1,8 +1,7 @@
-// What only the one-time move carries, as main sends it over the move's owner session (cloud-send.mjs): automations,
-// imported and library skills and the bot fields My Cloud sets by its own move route (server/cloud-send-kinds.ts), the
-// bots' memory and the person's learned facts and teams (server/cloud-send-memory.ts), each conversation's own settings,
-// and the bots' files (server/cloud-send-files.ts) once My Cloud has room for them.
-import { AUTOMATION_KINDS, MOVE_BOT_PARTS } from "./cloud-send-parts.mjs";
+// What only the one-time move carries, as main sends it over the move's owner session (cloud-send.mjs): imported and
+// library skills and the bot fields My Cloud sets by its own move route (server/cloud-send-kinds.ts), each conversation's
+// own settings, and the bots' files (server/cloud-send-files.ts) once My Cloud has room for them.
+import { MOVE_BOT_PARTS } from "./cloud-send-parts.mjs";
 import { moveFit, growToFit } from "./cloud-space.mjs";
 
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -19,21 +18,7 @@ const LISTING_MAX_MS = 30 * 60_000;
 /** How long this computer's own server may take to list what it holds. */
 const LOCAL_LISTING_MS = 10 * 60_000;
 const ownerOf = (path) => /^(?:workspaces|task-workspaces)\/([\w-]{1,128})\//u.exec(path)?.[1];
-const AUTOMATIONS = new Set(AUTOMATION_KINDS);
 const ATTACHMENT_NAMES = 2000;
-
-/** A routine changed both here and on My Cloud since it last went is still one routine: its runs are history My Cloud
- * adds by id, so this computer's always go, and its definition is the one changed last (`newer`), which sendKind settles
- * from both sides' records. */
-export function mergeRoutines(rows) {
-  for (const row of rows) {
-    if (row.kind !== "routine" || !row.differs?.length) continue;
-    if (row.differs.includes("def")) row.newer = true;
-    row.parts = [...(row.parts ?? []), ...row.differs];
-    row.state = "to-update";
-    delete row.differs;
-  }
-}
 
 /** The name a file arriving beside My Cloud's own different one takes: "notes (MacBook Air).md". */
 export function keptBoth(path, label) {
@@ -77,8 +62,7 @@ const parseFiles = (value) => list(value?.files).filter((file) => record(file) &
  * @param {{
  *   localJson(route: string): Promise<any>,
  *   localBytes(route: string): Promise<Uint8Array | null>,
- *   localSend(method: string, route: string): Promise<{ ok: boolean, status: number }>,
- *   entry(origin: string): { files: Record<string, string>, on: Record<string, boolean> },
+ *   entry(origin: string): { files: Record<string, string> },
  *   persist(): void,
  *   progress(value: { done: number, total: number } | null): void,
  *   space?: { disk(): unknown, grow(sizeGb: number): Promise<unknown> },
@@ -86,38 +70,15 @@ const parseFiles = (value) => list(value?.files).filter((file) => record(file) &
  *   scoped?(route: string): string,
  * }} deps `scoped`: a route as a move of one bot asks it of either side.
  */
-export function createMoveKinds({ localJson, localBytes, localSend, entry, persist, progress, space, refusal, scoped = (route) => route }) {
+export function createMoveKinds({ localJson, localBytes, entry, persist, progress, space, refusal, scoped = (route) => route }) {
   const failed = (ctx, key, kind, label, error, final = false) => ctx.result.failed.push({ key, kind, label, error: sentence(error) ?? "It did not move.", ...(final ? { final: true } : {}) });
 
-  /** The definition a routine goes with in the person's own move: this computer's when only it changed it or it changed it
-   * last, or else My Cloud's own, sent back with this computer's runs so they arrive without undoing what changed there.
-   * Which side changed last comes from each side's record (`changedAt`); one that can't say keeps My Cloud's. */
-  async function routineDefinition(ctx, row, held) {
-    const here = ctx.localItems.get(row.key)?.parts.def, there = ctx.cloudItems.get(row.key)?.parts.def;
-    if (!there || there === here || (row.parts?.includes("def") && !row.newer)) return held.record;
-    const theirs = await ctx.session.call("GET", `/api/cloud-send/kind?key=${encodeURIComponent(row.key)}`);
-    if (!theirs.ok || !record(theirs.body?.record)) throw new Error(refusal(theirs, "My Cloud's copy of this routine could not be read, so it was left as it is."));
-    const changed = (side) => (Number.isSafeInteger(side?.changedAt) ? side.changedAt : null);
-    const mine = changed(held), cloud = changed(theirs.body);
-    return row.newer && mine !== null && cloud !== null && mine > cloud ? held.record : theirs.body.record;
-  }
-
-  /** One item only a move carries, as this computer holds it; an automation's switch here is kept (`on`) for the switch
-   * that turns on there what was on here; an app event this computer then lets go of, so only My Cloud collects it. */
+  /** One item only a move carries, as this computer holds it. */
   async function sendKind(ctx, row) {
     const held = await localJson(`/api/cloud-send/kind?key=${encodeURIComponent(row.key)}`);
     if (!record(held) || !("record" in held)) throw Object.assign(new Error("It could not be read on this computer."), { code: "local" });
-    const sent = row.kind === "routine" && ctx.ownMove ? await routineDefinition(ctx, row, held) : held.record;
-    const answer = await ctx.session.call("PUT", "/api/cloud-send/kind", { v: 1, key: row.key, dataDir: held.dataDir, record: sent, ...(Array.isArray(held.runs) ? { runs: held.runs } : {}) });
+    const answer = await ctx.session.call("PUT", "/api/cloud-send/kind", { v: 1, key: row.key, dataDir: held.dataDir, record: held.record });
     if (!answer.ok) throw Object.assign(new Error(refusal(answer, "My Cloud could not take it.")), answer.status === 400 || answer.status === 403 || answer.body?.final === true ? { final: true } : {});
-    if (AUTOMATIONS.has(row.kind) && record(held.record)) {
-      entry(ctx.origin).on[row.key] = row.kind === "call" ? held.record.nextRunAt !== null && held.record.nextRunAt !== undefined : held.record.enabled === true;
-      persist();
-    }
-    if (row.kind === "app-event") {
-      const released = await localSend("DELETE", `/api/cloud-send/kind?key=${encodeURIComponent(row.key)}`).catch(() => null);
-      if (!released?.ok) throw new Error("My Cloud has this app event, but this computer could not stop collecting it yet. It tries again next time.");
-    }
   }
 
   /** A bot's fields only a move carries, for these parts: one absent here is cleared there. */
@@ -129,29 +90,6 @@ export function createMoveKinds({ localJson, localBytes, localSend, entry, persi
     const answer = await ctx.session.call("PUT", "/api/cloud-send/kind", { v: 1, key: `bot:${botId}`, dataDir: held?.dataDir ?? "-", record: fields,
       ...(typeof held?.computer === "string" && held.computer ? { computer: held.computer } : {}), ...(record(held?.record) && held.record.defaultBot ? { sourceDefault: true } : {}) });
     return answer.ok ? {} : Object.fromEntries(parts.filter((part) => MOVE_BOT_PARTS[part]).map((part) => [part, refusal(answer, "My Cloud refused this setting.")]));
-  }
-
-  /** Each bot's memory and journal, then what bots learned about the person and the teams' context and memory, merged
-   * into My Cloud's: nothing is lost, nothing is doubled. */
-  async function moveMemory(ctx, bots) {
-    let merged = 0;
-    for (const bot of bots) {
-      try {
-        const held = await localJson(`/api/cloud-send/memory?bot=${bot.id}`);
-        const answer = await ctx.session.call("POST", "/api/cloud-send/memory", { v: 1, bot: bot.id, files: list(held?.files), journal: list(held?.journal) });
-        if (!answer.ok) throw new Error(refusal(answer, "My Cloud could not keep this bot's memory."));
-        merged += (answer.body?.files ?? 0) + (answer.body?.journal ?? 0);
-        if (list(answer.body?.failed).length) failed(ctx, `memory:${bot.id}`, "memory", bot.name, "My Cloud could not keep some of this bot's memory notes: they are too long.", true);
-      } catch (error) { failed(ctx, `memory:${bot.id}`, "memory", bot.name, error?.message); }
-    }
-    try {
-      const shared = await localJson("/api/cloud-send/memory");
-      const answer = await ctx.session.call("POST", "/api/cloud-send/memory", { v: 1, about: shared?.about ?? { learned: [], removed: [] }, teams: list(shared?.teams) });
-      if (!answer.ok) throw new Error(refusal(answer, "My Cloud could not keep what your bots learned and your teams' notes."));
-      merged += (answer.body?.about ?? 0) + (answer.body?.teams ?? 0);
-      if (list(answer.body?.failed).length) failed(ctx, "memory:shared", "memory", "About me and teams", "My Cloud has no room for some of what your bots learned about you.", true);
-    } catch (error) { failed(ctx, "memory:shared", "memory", "About me and teams", error?.message); }
-    ctx.result.memory = merged;
   }
 
   /** Each conversation's own settings My Cloud's copy lacks: its model, approval, snooze and project; a room's time limit
@@ -263,5 +201,5 @@ export function createMoveKinds({ localJson, localBytes, localSend, entry, persi
     }
   }
 
-  return { sendKind, sendBotFields, moveMemory, moveSettings, moveFiles };
+  return { sendKind, sendBotFields, moveSettings, moveFiles };
 }

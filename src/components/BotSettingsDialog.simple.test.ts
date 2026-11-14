@@ -2,8 +2,6 @@ import { Children, createElement, isValidElement, type ReactElement, type ReactN
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Routine } from "@/lib/routines";
-import type { MemoryDoc } from "@/lib/memory";
 import type { Bot, BotSettingsSection, InstanceInfo } from "@/state/store";
 import { AVATAR_FOCUS_CENTER, AVATAR_ZOOM_MIN } from "../../shared/bot-avatar";
 import type { ManagedSkill } from "./bot-settings/SkillsSection";
@@ -37,8 +35,6 @@ const fixture = vi.hoisted(() => {
       refresh: (() => Promise.resolve()) as () => Promise<void>,
       putAssignments: (() => Promise.resolve()) as (name: string, remove?: boolean) => Promise<void>,
     },
-    memory: { docs: null as MemoryDoc[] | null, error: false, mine: false, setDoc: (() => {}) as (doc: MemoryDoc) => void, reload: () => Promise.resolve() },
-    saveMemory: (() => Promise.resolve({ ok: true })) as (...args: unknown[]) => Promise<unknown>,
     openExternal: (() => Promise.resolve()) as (url: string) => Promise<void>,
     derived: {} as Record<string, unknown>,
     apps: { phase: "ready", apps: [], connectedSlugs: [] } as BotApps,
@@ -71,10 +67,6 @@ vi.mock("@/lib/app-links", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/app-links")>()),
   openExternalLink: (url: string) => fixture.openExternal(url),
 }));
-vi.mock("@/lib/memory", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/memory")>()),
-  saveMemoryDoc: (...args: unknown[]) => fixture.saveMemory(...args),
-}));
 // The server renderer cannot portal; the dialog's props are what these tests read.
 vi.mock("./ConfirmDialog", () => ({ ConfirmDialog: () => null }));
 vi.mock("./bot-settings/useSlackManagement", () => ({ useSlackManagementUrl: () => fixture.slackUrl }));
@@ -96,7 +88,6 @@ vi.mock("./bot-settings/SkillsSection", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./bot-settings/SkillsSection")>()),
   useManagedSkills: () => ({ ...fixture.skills, setReviewing: () => {}, enableReviewed: () => Promise.resolve() }),
 }));
-vi.mock("./bot-panel/use-memory-doc", () => ({ useMemoryDoc: () => fixture.memory }));
 vi.mock("./PlaceChip", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./PlaceChip")>()),
   usePlaceViews: () => Object.fromEntries(Object.entries(fixture.places).map(([place, [policy, reachable, short]]) =>
@@ -130,7 +121,7 @@ const { LibraryTab } = await import("./bot-panel/LibraryTab");
 const { ApprovalChip } = await import("./ComposerPlusMenu");
 const { callMode, setCallMode } = await import("@/lib/call-mode");
 const { ComputerTab, WherePage } = await import("./bot-panel/ComputerTab");
-const { PageBody, AppsPage, RoutinesPage, MemoryPage, SkillsPage, FolderPage, BrowserPage } = await import("./bot-panel/pages");
+const { PageBody, AppsPage, SkillsPage, FolderPage, BrowserPage } = await import("./bot-panel/pages");
 const { BrowserLogins } = await import("./bot-panel/browser-logins");
 const { PAGES, sectionTarget } = await import("./bot-panel/page-registry");
 const { openBotSettings } = await import("./bot-panel/panel-link");
@@ -141,8 +132,6 @@ const { LocalComputerAutoWarning } = await import("./LocalComputerAutoWarning");
 const { ModelPicker } = await import("./ModelPicker");
 const { ThreadModelsLine } = await import("./ThreadModelsLine");
 const { ModelSection } = await import("./bot-settings/ModelSection");
-const { RoutineList } = await import("./routines/RoutineList");
-const { RoutineEditor } = await import("./RoutinesPage");
 const { SignedInSites } = await import("./SignedInSites");
 const { AvatarImageGenerator } = await import("./AvatarImageGenerator");
 const { AvatarFraming } = await import("./avatar-editing");
@@ -229,11 +218,6 @@ const shown = (rendered: Rendered) => ({
 const rowValue = (rendered: Rendered, page: string) => find(rendered, "data-panel-page", page).props.value;
 const skill = (name: string, enabled: boolean, origin?: ManagedSkill["origin"]): ManagedSkill =>
   ({ name, description: `${name} helper`, enabled, source: "github:x/y", warnings: [], ...(origin ? { origin } : {}) });
-const routine = (extra: Partial<Routine> = {}): Routine => ({
-  id: "r1", name: "Morning brief", prompt: "Brief me", target: "bot", botId: "scout", runOn: "maus", enabled: true,
-  schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, durationMinutes: 15,
-  nextRunAt: Date.UTC(2099, 0, 5, 9), createdAt: 1, updatedAt: 1, ...extra,
-});
 const app = (slug: string, scope: "read" | "write" | null) => ({
   slug, label: slug[0]!.toUpperCase() + slug.slice(1), blurb: `${slug} things`, card: { logo: null, domain: null, label: slug }, scope,
 });
@@ -241,7 +225,6 @@ const engine = (extra: Partial<InstanceInfo> & { capabilities?: Record<string, u
   instanceId: "claude", driverKind: "customAcp", snapshot: { state: "available", authenticated: true },
   capabilities: { effortLevels: ["low", "medium", "high", "max"] }, ...extra,
 });
-const memoryDoc = (text: string): MemoryDoc => ({ path: "MEMORY.md", text, hash: "h1", exists: true });
 const switches = (html: string) => html.match(/role="switch"/g)?.length ?? 0;
 const pressed = (html: string, attr: string) => [...html.matchAll(new RegExp(`${attr}="([\\w-]+)" aria-pressed="true"`, "g"))].map((match) => match[1]);
 
@@ -254,21 +237,19 @@ beforeEach(() => {
   fixture.index = 0;
   fixture.dispatch = vi.fn();
   fixture.api = vi.fn(() => Promise.resolve({}));
-  fixture.saveMemory = vi.fn((_bot: unknown, path: unknown, text: unknown) => Promise.resolve({ ok: true, doc: { path, text, hash: "h2", exists: true } }));
   fixture.openExternal = vi.fn(() => Promise.resolve());
   fixture.storeState = { settingsOpen: true, botSettingsSection: "overview", botSettingsExpandAccordion: false };
   fixture.skills = {
     skills: [], loading: false, working: "", error: "", reviewing: null, toggle: vi.fn(() => Promise.resolve()),
     setWorking: vi.fn(), setError: vi.fn(), refresh: vi.fn(() => Promise.resolve()), putAssignments: vi.fn(() => Promise.resolve()),
   };
-  fixture.memory = { docs: null, error: false, mine: false, setDoc: vi.fn(), reload: vi.fn(() => Promise.resolve()) };
   patch.mockReset();
   onOpen.mockReset();
   onClose.mockReset();
   onEditInstructions.mockReset();
   fixture.derived = {
     patch, approvalMode: "ask", engine: engine(), trustedModesAvailable: false, activeState: "idle",
-    botRoutines: [], canCoordinate: true, sectionName: "General", mascotMotion: null,
+    canCoordinate: true, sectionName: "General", mascotMotion: null,
     canUseConnectedApps: true, connectedAppsConfigured: true, connectedAppsEnabled: true, browserEnabled: true,
   };
   fixture.apps = { phase: "ready", apps: [], connectedSlugs: [] };
@@ -326,18 +307,18 @@ describe("the bot panel in Simple mode", () => {
 
   it("drills into a page with its intro and back, naming where Back goes", () => {
     const bot = makeBot();
-    (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
+    (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("skills");
     const page = panel(bot);
-    expect(shown(page)).toEqual({ tab: undefined, page: "routines" });
+    expect(shown(page)).toEqual({ tab: undefined, page: "skills" });
     expect(has(page, "role", "tablist")).toBe(false);
-    expect(ofType(page, PageHeader)!.props).toMatchObject({ back: "Details", title: "Routines" });
+    expect(ofType(page, PageHeader)!.props).toMatchObject({ back: "Details", title: "Skills" });
     expect(page.html).toContain('id="bot-settings-title"');
     (ofType(page, PageHeader)!.props.onBack as () => void)();
     expect(shown(panel(bot))).toEqual({ tab: "details", page: undefined });
 
     click(find(panel(bot), "data-panel-tab", "library"));
-    (ofType(panel(bot), LibraryTab)!.props.onOpen as (page: string) => void)("memory");
-    expect(ofType(panel(bot), PageHeader)!.props).toMatchObject({ back: "Library", title: "What it remembers" });
+    (ofType(panel(bot), LibraryTab)!.props.onOpen as (page: string) => void)("folder");
+    expect(ofType(panel(bot), PageHeader)!.props).toMatchObject({ back: "Library", title: "Working folder" });
     (ofType(panel(bot), PageHeader)!.props.onBack as () => void)();
 
     click(find(panel(bot), "data-panel-tab", "computer"));
@@ -347,7 +328,7 @@ describe("the bot panel in Simple mode", () => {
 
   it("goes back on Escape from a page, and leaves Escape to the dialog on a tab", () => {
     const bot = makeBot();
-    (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
+    (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("skills");
     const event = key(panel(bot).nodes[0]!, "Escape");
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(shown(panel(bot)).page).toBeUndefined();
@@ -380,8 +361,8 @@ describe("the bot panel in Simple mode", () => {
 
   it.each([
     ["overview", "details", undefined], ["identity", "details", undefined], ["slack", "details", undefined],
-    ["soul", "details", "settings"], ["skills", "library", "skills"], ["memory", "library", "memory"],
-    ["routines", "details", "routines"], ["access", "computer", undefined], ["model", "details", undefined],
+    ["soul", "details", "settings"], ["skills", "library", "skills"],
+    ["access", "computer", undefined], ["model", "details", undefined],
     ["permissions", "details", "settings"], ["voice", "details", undefined], ["visibility", "details", undefined],
     ["history", "details", undefined], ["usage", "details", undefined],
   ] as const)("lands a deep link to %s on %s › %s", (section, tab, page) => {
@@ -415,7 +396,7 @@ describe("the bot panel in Simple mode", () => {
     expect(shown(panel(makeBot(), "access"))).toEqual({ tab: "computer", page: undefined });
   });
 
-  it("shows no switch on any tab, and on Bot settings only Notifications and Bot API's: memory, upkeep, browser, record steps and Work until done live elsewhere", () => {
+  it("shows no switch on any tab, and on Bot settings only Notifications and Bot API's: browser, record steps and Work until done live elsewhere", () => {
     const bot = makeBot();
     expect(switches(panel(bot).html)).toBe(0);
     expect(panel(bot).html).not.toContain('aria-label="Work until done"');
@@ -423,7 +404,7 @@ describe("the bot panel in Simple mode", () => {
       click(find(panel(bot), "data-panel-tab", tab));
       const rendered = panel(bot);
       expect(switches(rendered.html), tab).toBe(0);
-      for (const text of ["Memory", "Upkeep", "Record"]) expect(rendered.html).not.toContain(`>${text}<`);
+      for (const text of ["Record"]) expect(rendered.html).not.toContain(`>${text}<`);
     }
     click(find(panel(bot), "data-panel-gear"));
     const settings = panel(bot).html;
@@ -613,46 +594,31 @@ describe("the avatar editor", () => {
 
 
 describe("the Details tab", () => {
-  it("holds the model, the conversations, this conversation's rows and routines, in that order, with no switch or Thinking row", () => {
+  it("holds the model, the conversations, this conversation's rows and the automations entry, in that order, with no switch or Thinking row", () => {
     const rendered = botTab(makeBot());
     expect(ofType(rendered, ModelPicker)!.props).toMatchObject({ bot: expect.objectContaining({ id: "scout" }), threadId: "thread-scout", contained: true });
     expect(ofType(rendered, BotConversations)!.props.bot).toMatchObject({ id: "scout" });
-    const order = ['data-panel-row="model"', 'data-panel-card="conversations"', 'data-panel-item="find"', 'data-panel-item="activity"', 'data-panel-empty="routines"']
+    const order = ['data-panel-row="model"', 'data-panel-card="conversations"', 'data-panel-item="find"', 'data-panel-item="activity"', 'data-panel-empty="automations"']
       .map((marker) => rendered.html.indexOf(marker));
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     for (const gone of ['data-panel-row="thinking"', 'data-panel-edit="soul"', 'data-panel-row="approval"', 'data-panel-row="goal"', 'data-panel-row="call-mode"',
-      'data-panel-page="apps"', 'data-panel-page="memory"', 'data-panel-page="skills"', 'data-panel-page="folder"']) {
+      'data-panel-page="apps"', 'data-panel-page="skills"', 'data-panel-page="folder"']) {
       expect(rendered.html, gone).not.toContain(gone);
     }
     expect(rendered.html).not.toContain(">Settings<");
     expect(switches(rendered.html)).toBe(0);
   });
 
-  it("offers Add a routine, which says what routines are, and Automations while the bot has none, and lists them once it has some", () => {
+  it("offers the Automations entry, which opens the Automations page", () => {
     const empty = botTab(makeBot());
-    expect(empty.html).toContain('data-panel-empty="routines"');
-    expect(empty.html).toContain('title="Jobs this bot runs on a schedule, like a news roundup every morning."');
+    expect(empty.html).toContain('data-panel-empty="automations"');
     expect(empty.html).toMatch(/data-panel-automations=""[^>]*>Automations<svg/);
-    expect(empty.html.match(/data-panel-page="routines"/g)).toHaveLength(1);
-    const add = find(empty, "data-panel-page", "routines");
-    expect(empty.html).toMatch(/data-panel-page="routines"[^>]*>.*<span class="truncate">Add a routine<\/span><\/button>/);
+    expect(empty.html.match(/data-panel-page="automations"/g)).toHaveLength(1);
+    const add = find(empty, "data-panel-page", "automations");
+    expect(empty.html).toMatch(/data-panel-page="automations"[^>]*>.*<span class="truncate">New<\/span><\/button>/);
     click(add);
-    expect(onOpen).toHaveBeenLastCalledWith("routines");
-    fixture.derived.botRoutines = [routine()];
-    const some = botTab(makeBot());
-    expect(some.html).not.toContain('data-panel-empty="routines"');
-    expect(some.html.indexOf('data-panel-card="conversations"')).toBeLessThan(some.html.indexOf('data-panel-page="routines"'));
-  });
-
-  it("values Routines by how many are on, and opens the routines page", () => {
-    fixture.derived.botRoutines = [routine(), routine({ id: "r2", enabled: false }), routine({ id: "r3" })];
-    const rendered = botTab(makeBot());
-    expect(rowValue(rendered, "routines")).toBe("2 on");
-    click(find(rendered, "data-panel-page", "routines"));
-    expect(onOpen).toHaveBeenLastCalledWith("routines");
-    fixture.derived.botRoutines = [routine({ enabled: false })];
-    expect(rowValue(botTab(makeBot()), "routines")).toBe("None");
+    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "showAutomations" });
   });
 
   it("lists Find, Activity and the Inspector for this conversation as rows that run them, leaving Copy and Download to Share", () => {
@@ -880,26 +846,12 @@ describe("the Bot settings page", () => {
 });
 
 describe("the Library tab", () => {
-  it("says what it will hold while the bot has made nothing, then what it remembers, its skills and its folder", () => {
+  it("says what it will hold while the bot has made nothing, then its skills and its folder", () => {
     const rendered = library(makeBot());
     expect(rendered.html).toContain('data-panel-empty="library"');
-    const order = ['data-panel-empty="library"', 'data-panel-page="memory"', 'data-panel-page="skills"', 'data-panel-page="folder"'].map((marker) => rendered.html.indexOf(marker));
+    const order = ['data-panel-empty="library"', 'data-panel-page="skills"', 'data-panel-page="folder"'].map((marker) => rendered.html.indexOf(marker));
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-  });
-
-  it("values What it remembers by the notes in MEMORY.md, says Off when memory is off, and opens the memory page", () => {
-    expect(rowValue(library(makeBot()), "memory")).toBeUndefined();
-    fixture.memory.docs = [memoryDoc("# Notes\n- Likes short replies\n- Uses Resolve\n- Works nights\n")];
-    const rendered = library(makeBot());
-    expect(rowValue(rendered, "memory")).toBe("3 notes");
-    click(find(rendered, "data-panel-page", "memory"));
-    expect(onOpen).toHaveBeenLastCalledWith("memory");
-    fixture.memory.docs = [memoryDoc("- One thing\n")];
-    expect(rowValue(library(makeBot()), "memory")).toBe("1 note");
-    fixture.memory.docs = [memoryDoc("# Empty\n")];
-    expect(rowValue(library(makeBot()), "memory")).toBe("Nothing yet");
-    expect(rowValue(library(makeBot({ memoryEnabled: false })), "memory")).toBe("Off");
   });
 
   it("values Skills by how many are on, and opens the skills page", () => {
@@ -1047,7 +999,7 @@ describe("the Where it works page", () => {
 
 describe("the drill-in pages", () => {
   const PAGE = {
-    settings: SettingsPage, apps: AppsPage, routines: RoutinesPage, memory: MemoryPage, skills: SkillsPage, folder: FolderPage, browser: BrowserPage, where: WherePage,
+    settings: SettingsPage, apps: AppsPage, skills: SkillsPage, folder: FolderPage, browser: BrowserPage, where: WherePage,
   } as const;
   // The walker reads only what a component returns, so each page is called as the function PageBody picks.
   const body = (page: keyof typeof PAGE, bot = makeBot()) => capture(() => PAGE[page]({ bot, derived: derived() }) as ReactNode);
@@ -1144,61 +1096,6 @@ describe("the drill-in pages", () => {
     const failed = body("apps");
     expect(failed.html).toContain("Could not refresh MCP servers.");
     expect(switches(failed.html)).toBe(0);
-  });
-
-  it("lists routines with switches, adds one locked to this bot, and says to ask in chat; no logs page, no schedules link", () => {
-    const morning = routine();
-    fixture.derived.botRoutines = [morning];
-    const rendered = body("routines");
-    const list = ofType(rendered, RoutineList)!;
-    expect(list.props.routines).toBe(fixture.derived.botRoutines);
-    (list.props.onToggle as (routine: Routine) => void)(morning);
-    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateRoutine", routineId: "r1", patch: { enabled: false } });
-    expect(rendered.html).toContain('aria-label="Run Morning brief on its schedule" type="button" role="switch" aria-checked="true"');
-    expect(rendered.html).toContain("Or just ask Scout in chat: “every weekday at 8, send me a summary”.");
-    expect(rendered.html).not.toContain("Open schedules");
-    expect(has(rendered, "data-panel-action", "routine-logs")).toBe(false);
-    click(find(rendered, "data-panel-action", "new-routine"));
-    expect(ofType(body("routines"), RoutineEditor)!.props).toMatchObject({ lockedBotId: "scout", routine: undefined });
-  });
-
-  it("lists what MEMORY.md remembers, forgets one line through the memory file route, and adds one", async () => {
-    fixture.memory.docs = [memoryDoc("# Notes\n- Likes short replies\n\n- Uses Resolve Studio\n")];
-    const rendered = body("memory");
-    expect(rendered.html).toContain("Likes short replies");
-    expect(rendered.html).toContain("Uses Resolve Studio");
-    expect(rendered.html).not.toContain("# Notes");
-    // Memory upkeep is the page's one switch; the rest of advanced Memory stays out.
-    expect(switches(rendered.html)).toBe(1);
-    expect(rendered.html).toContain("Memory upkeep");
-    for (const text of ["Tidy now", "Obsidian", "Daily logs", "Journal"]) expect(rendered.html).not.toContain(text);
-    click(rendered.nodes.filter((node) => node.props.label === "Forget")[0]!);
-    await Promise.resolve();
-    expect(fixture.saveMemory).toHaveBeenLastCalledWith("scout", "MEMORY.md", "# Notes\n\n- Uses Resolve Studio\n", "h1", false);
-    await Promise.resolve();
-    expect(fixture.memory.setDoc).toHaveBeenLastCalledWith(expect.objectContaining({ text: "# Notes\n\n- Uses Resolve Studio\n", hash: "h2" }));
-
-    (find(body("memory"), "data-panel-form", "memory-add").props.onChange as (value: string) => void)("  Prefers the free version ");
-    (find(body("memory"), "data-panel-form", "memory-add").props.onSubmit as () => void)();
-    await Promise.resolve();
-    expect(fixture.saveMemory).toHaveBeenLastCalledWith("scout", "MEMORY.md", "# Notes\n- Likes short replies\n\n- Uses Resolve Studio\n- Prefers the free version\n", "h1", false);
-  });
-
-  it("says when memory is off, empty or unreadable, and re-reads on a conflict", async () => {
-    expect(body("memory", makeBot({ memoryEnabled: false })).html).toContain("Memory is off for Scout.");
-    expect(has(body("memory", makeBot({ memoryEnabled: false })), "data-panel-form", "memory-add")).toBe(false);
-    fixture.memory.docs = [memoryDoc("")];
-    expect(body("memory").html).toContain("Nothing remembered yet.");
-    fixture.memory = { ...fixture.memory, docs: null, error: true };
-    expect(body("memory").html).toContain("Couldn&#x27;t read the memory file just now.");
-
-    fixture.memory = { ...fixture.memory, docs: [memoryDoc("- Old\n")], error: false };
-    fixture.saveMemory = vi.fn(() => Promise.resolve({ ok: false, conflict: true, current: "- New\n", currentHash: "h3" }));
-    click(find(body("memory"), "label", "Forget"));
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(fixture.memory.reload).toHaveBeenCalled();
-    expect(body("memory").html).toContain("Scout changed this file while you were editing.");
   });
 
   it("switches skills, removes one, adds one from a link and browses the library or skills.sh", async () => {
@@ -1333,11 +1230,11 @@ describe("the bot settings dialog", () => {
     expect(ofType(rendered, BotPanel)).toBeUndefined();
     expect(rendered.html).not.toContain('id="bot-panel"');
     expect(rendered.html).toContain("Search settings");
-    for (const label of ["Overview", "Identity", "Soul", "Skills", "Memory", "Routines", "Access", "Model", "Permissions", "Voice &amp; alerts", "History", "Usage"]) {
+    for (const label of ["Overview", "Identity", "Soul", "Skills", "Access", "Model", "Permissions", "Voice &amp; alerts", "History", "Usage"]) {
       expect(rendered.html).toContain(`>${label}</span>`);
     }
-    // The accordion keeps the Memory and Access sections, where the memory, upkeep, browser and record-steps switches live.
-    for (const section of ["memory", "access", "model", "permissions"]) expect(rendered.html).toContain(`data-bot-settings-section="${section}"`);
+    // The accordion keeps the Access section, where the browser and record-steps switches live.
+    for (const section of ["access", "model", "permissions"]) expect(rendered.html).toContain(`data-bot-settings-section="${section}"`);
   });
 
   it("a stored section opens expanded in the full view", () => {

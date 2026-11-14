@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTurnDigest, digestPromptLine, renderDigest, type TurnDigest } from "./digest.ts";
-import type { MemoryJournalEntry } from "./memory-journal.ts";
+import { buildTurnDigest, digestPromptLine, renderDigest, type DigestMemoryChange, type TurnDigest } from "./digest.ts";
 import type { Message } from "./store.ts";
 
 const activity = (name: string, ok: boolean | undefined, summary?: string, turnId = "turn-1"): Message => ({
@@ -13,10 +12,7 @@ const activity = (name: string, ok: boolean | undefined, summary?: string, turnI
   tool: { name, ok, summary, itemId: `tool-${Math.random()}` },
 });
 
-const journal = (path: string, kind: MemoryJournalEntry["kind"]): MemoryJournalEntry => ({
-  id: "j1", at: 1, botId: "dev", path, actor: "bot", via: "turn", threadId: "t1", kind,
-  beforeHash: null, afterHash: "x", before: null, diff: "", added: 1, removed: 0, canRevert: true,
-});
+const journal = (path: string, kind: DigestMemoryChange["kind"]): DigestMemoryChange => ({ path, kind });
 
 const base = {
   turnId: "turn-1",
@@ -73,12 +69,12 @@ describe("buildTurnDigest", () => {
         activity('cp "/Users/someone/.openmausbot/task-workspaces/9d6ab24f-15b8-45e2/out.png" ~/Desktop/', true, "cp out.png ~/Desktop/"),
         activity("swift -e 'import AppKit\n// Target 1080 × 1080\nlet size = NSSize(width: 1080, height: 1080)'", true, "swift -e …"),
         activity("swift -e 'import AppKit\nlet canvas = NSImage()'", true, "swift -e …"),
-        activity("memory_update", true),
+        activity("list_bots", true),
       ],
       memory: [],
     });
     const line = renderDigest(d);
-    expect(line).toContain("tools: shell ×3, memory_update ×1");
+    expect(line).toContain("tools: shell ×3, list_bots ×1");
     expect(line).not.toContain("/Users/");
     expect(line).not.toContain("swift");
   });

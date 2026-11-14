@@ -26,7 +26,6 @@ import { stopReachesLiveTurn } from "../person-stops.ts";
 import type { PhoneSecretSubmissionRegistry } from "../phone-secret.ts";
 import type { ReplyTarget } from "../replies.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import { acceptedSendMatch, parseSendId } from "../send-idempotency.ts";
 import type { DirectSendInput, DirectSendReceipt } from "../direct-send.ts";
 import { cancelSteeredMessage, holdSteeredQueue, queuedSteerSender, queuedSteeredMessage, restoreHeldSteeredQueue, settleHeldSteeredQueue } from "../steer-queue.ts";
@@ -60,7 +59,6 @@ export interface BotMessageRouteDeps {
   registry: Pick<ProviderRegistry, "get">;
   /** On a team: the words for a turn with no AI to answer with, having told who can connect one. */
   noAiRefusal?(threadId: string, sender: ResolvedSender | undefined, instanceId?: string): Error | null;
-  routines(): RoutineManager | null;
   handoffs: Pick<Handoffs, "current" | "steered">;
   /** The turn running in a thread now, as its runtime events name it. */
   liveTurn(threadId: string): string | undefined;
@@ -173,7 +171,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     botAtThreadCapacity, parksBehindCoordination, activeGroupTurnForBot, runningTurnInstance, engineSteersImages, resolveReplyTarget,
     turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendMcp,
     resolveAndSendRoutine, resolveAndSendProfile, resolveAndSendModel, resolveSkillRequest, sendSkillResolution, answerRequest,
-    deliverLateQuestionAnswer, stopThreadForPerson, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
+    deliverLateQuestionAnswer, stopThreadForPerson, revokeInternalCapabilitiesForThread,
     cancelGroupTurnOperations, closeOpenApprovals, harnessCardOutcome, pressRecords, serverPress, relayedReaction, answeredIn, fromPhone, notePhoneSend, goals,
   } = deps; const owners = routeRunOwners(deps.runOwners, deps.runActor);
   const pinnedClientThread = pinnedClientThreadGuard(store);
@@ -189,7 +187,6 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     const { req, res, path, method, auth, json, readBody } = ctx;
     let m: RegExpMatchArray | null = null;
     const requirePinnedClientThread = pinnedClientThread(auth, req);
-    const routines = deps.routines();
     m = path.match(/^\/api\/bots\/([\w-]+)\/messages(?:\/(guarded))?$/);
     if (m && method === "POST") {
       const guarded = m[2] === "guarded";
@@ -463,7 +460,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       const threadId = parsed.data.threadId ?? bot.threadId;
       if (store.botByThread(threadId)?.id !== bot.id) return json(res, 404, { error: "no such conversation" });
       const connects = auth.scopes.includes("admin") ? undefined : deps.teamAiOwnerName?.();
-      const next = helperFollowup(store.messagesFor(threadId), () => followupFacts(bot, parsed.data, store.bots, routines?.listRoutines() ?? [], connects));
+      const next = helperFollowup(store.messagesFor(threadId), () => followupFacts(bot, parsed.data, store.bots, [], connects));
       if (!next) return json(res, 409, { ...userError("serverError.setup.noIntroToFollowUp") });
       if ("existing" in next) return json(res, 200, { message: next.existing });
       return json(res, 201, { message: store.appendMessage(threadId, next.append) });
@@ -672,22 +669,6 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
             reviewedSha256,
           }))) return;
         }
-        const routineCard = store.messagesFor(threadId).find(
-          (message) => message.card?.requestId === requestId && message.card.routineRequest,
-        );
-        if (routineCard?.card?.routineRequest) {
-          // Derive the owner from the conversation, never from the payload being authorized.
-          const routineBotId = routineCard.from?.botId ?? store.botByThread(threadId)?.id;
-          if (!routineBotId) return json(res, 400, { error: "this routine request has no valid owner" });
-          const routineOwner = store.bot(routineBotId);
-          if (resolveAndSendRoutine(res, {
-            botId: routineBotId,
-            botName: routineOwner?.name,
-            threadId,
-            requestId,
-            behavior,
-          })) return;
-        }
         const setupCard = store.messagesFor(threadId).find((message) => message.card?.requestId === requestId && message.card.teamSetupRequest);
         if (setupCard) {
           const setupBotId = setupCard.from?.botId ?? store.botByThread(threadId)?.id;
@@ -797,18 +778,6 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         return json(res, 200, { ok: true });
       }
       const directClaim = directTurnDispatchClaims.get(bot.threadId);
-      const routineRun = routines!.activeBotRunForBot(bot.id);
-      if (routineRun) {
-        if (expectedThreadId !== undefined && routineRun.threadId !== expectedThreadId) {
-          return json(res, 409, userError("serverError.chat.routineElsewhere"));
-        }
-        cancelDirectTurnDispatch(bot.id, routineRun.threadId ?? expectedThreadId);
-        if (routineRun.threadId) {
-          revokeInternalCapabilitiesForThread(routineRun.threadId);
-        }
-        await routines!.cancelRun(routineRun.id);
-        return json(res, 200, { ok: true });
-      }
       const instance = registry.get((botForThread(bot.id, expectedThreadId ?? bot.threadId) ?? bot).modelSelection.instanceId);
       const busyGroup = activeGroupTurnForBot(bot.id);
       if (busyGroup) {

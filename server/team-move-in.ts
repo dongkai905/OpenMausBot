@@ -14,7 +14,6 @@ import type { CloudTeam } from "./cloud-team.ts";
 import { CHATS_BODY_MAX } from "./cloud-send-chats.ts";
 import { personKey } from "./person-key.ts";
 import { botProfileSettings, type RequestAuth } from "./request-auth.ts";
-import type { RoutineManager } from "./routines.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./routes/table.ts";
 import type { SessionRecord, SessionRegistry } from "./sessions.ts";
 
@@ -109,7 +108,6 @@ export interface TeamMoveInDeps {
     botByThread(threadId: string): { id: string } | null | undefined;
     groupByThread(threadId: string): { id: string } | null | undefined;
   };
-  routines(): Pick<RoutineManager, "listRoutines" | "update"> | null;
   library(): Record<string, unknown>;
   starters: { get(threadId: string): string | undefined; set(threadId: string, person: string | undefined): void };
   now?: () => number;
@@ -153,15 +151,6 @@ export function createTeamMoveIn(deps: TeamMoveInDeps) {
     if (path === "/api/cloud-send/kind") {
       const key = typeof body.key === "string" ? body.key : "";
       if (key === `bot:${bot}`) return record(body.record) ? { ...body, record: botProfileSettings(body.record) } : body;
-      const routine = /^routine:([\w-]{1,128})$/u.exec(key);
-      if (routine && record(body.record) && body.record.botId === bot && body.record.target === "bot") {
-        const elsewhere = deps.routines()?.listRoutines().find((held) => held.id === routine[1] && held.botId !== bot);
-        if (elsewhere) return refused;
-        const own = body.record;
-        // A routine reports into a conversation of the mover's that came with it, never into the team's main chat.
-        const reports = typeof own.resultsThreadId === "string" && deps.store.botByThread(own.resultsThreadId)?.id === bot && deps.starters.get(own.resultsThreadId) === move.person;
-        return !reports && move.threadId ? { ...body, record: { ...own, resultsThreadId: move.threadId } } : body;
-      }
       const skill = /^library-skill:([a-z0-9-]{1,64})$/u.exec(key);
       if (skill && !Object.hasOwn(deps.library(), skill[1]!)) return body;
       return refused;
@@ -245,14 +234,7 @@ export function createTeamMoveIn(deps: TeamMoveInDeps) {
       if (!live || live.bot !== bot) { req.resume(); return json(res, 403, { error: "This sign-in only moves one bot in." }); }
       const parsed = doneSchema.safeParse(await readBody(req, 64 * 1024));
       if (!parsed.success) return json(res, 400, { error: "send { v: 1, on: [keys] }" });
-      const routines = deps.routines();
       let switched = 0;
-      for (const key of parsed.data.on) {
-        const id = /^routine:([\w-]{1,128})$/u.exec(key)?.[1];
-        const routine = id ? routines?.listRoutines().find((held) => held.id === id && held.botId === bot) : undefined;
-        if (!routine || routine.enabled) continue;
-        if (routines!.update(routine.id, { enabled: true })) switched++;
-      }
       moves[bot] = { ...live.move, state: "done", doneAt: now() };
       save();
       deps.sessions.revokeMoveIns(bot);

@@ -32,7 +32,6 @@ const INBOX_TITLE = "Inbox";
 const BRIEF_TITLE = "Brief";
 const MAX_ITEMS = 2_000;
 const KEEP_MS = 30 * 24 * 60 * 60_000;
-const NOTE_MAX = 2_000;
 const VIEW_ROWS = 200;
 const ROW_TEXT_MAX = 4_000;
 /** Questions one person's assistant may answer in an hour; past it they wait for the person. */
@@ -111,8 +110,6 @@ export interface PersonInboxDeps {
   /** Starts this bot's turn in its conversation with a line from someone else, or queues it behind the running one. */
   continueTurn(botId: string, threadId: string, text: string, from: { botId: string; name: string }, relay: Relay): void;
   representative?: Representative;
-  /** A bot's shared notes (its team layer). */
-  notes(botId: string): string;
   /** Gives a member who has neither a Chief nor a MausBot yet the MausBot every member gets. */
   ensureOwnBot?(email: string): void;
   /** What waits on this inbox's person may have changed: its bot goes out to them again. */
@@ -181,7 +178,7 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     const kept = homes[person];
     const task = kept?.botId === bot.id ? store.taskByThread(bot.id, kept.threadId) : undefined;
     if (task && !task.archivedAt) return { threadId: task.threadId, kept: true, brief: false };
-    const own = store.tasks(bot.id).filter((one) => !one.archivedAt && !one.routineRunId && !one.openedBy && deps.starters.get(one.threadId) === person);
+    const own = store.tasks(bot.id).filter((one) => !one.archivedAt && !one.openedBy && deps.starters.get(one.threadId) === person);
     const brief = own.find((one) => one.title === BRIEF_TITLE);
     const chat = brief ?? own.sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))[0];
     return chat ? { threadId: chat.threadId, kept: false, brief: Boolean(brief) } : null;
@@ -208,7 +205,7 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     if (group) return group.name;
     const bot = store.bot(origin.botId);
     const task = store.taskByThread(origin.botId, origin.threadId);
-    const first = store.tasks(origin.botId).filter((one) => !one.routineRunId).sort((a, b) => a.createdAt - b.createdAt)[0];
+    const first = store.tasks(origin.botId).sort((a, b) => a.createdAt - b.createdAt)[0];
     const main = deps.audienceOf(origin.threadId) === "team" && first?.threadId === origin.threadId;
     return task && !main ? task.title : bot?.name ?? task?.title ?? "";
   }
@@ -265,11 +262,10 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     deps.send({ kind, botId: bot.id, botName: bot.name, threadId: item.threadId, title, body: oneLine(body, 200), forPerson: item.person, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) });
   }
 
-  /** The person's shared facts: the notes and the work of their bots the whole team sees, and nothing private. */
+  /** The person's shared facts: the work of their bots the whole team sees, and nothing private. */
   function shared(person: string, representative: BotRecord): SharedFacts {
     const theirs = store.bots.filter((bot) => !bot.hidden && !isRestricted(bot.visibility) && (bot.id === representative.id || ownerKey(bot) === person));
     return {
-      notes: theirs.flatMap((bot) => { const text = clip(deps.notes(bot.id), NOTE_MAX); return text ? [{ bot: bot.name, text }] : []; }),
       work: theirs.filter((bot) => bot.id !== representative.id).map((bot) => ({
         bot: bot.name, ...(bot.title ? { role: bot.title } : {}), status: peerStatusWords(peerStatus(bot.activity, bot.busy)),
         on: store.tasks(bot.id).filter((task) => task.activity === "working" && deps.audienceOf(task.threadId) === "team").map((task) => task.title).slice(0, 3),

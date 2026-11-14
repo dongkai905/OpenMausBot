@@ -37,7 +37,6 @@ export interface MeetingRouteDeps {
   folder(botId: string, threadId: string): string | null;
   /** The notes card, then the transcript file as an attachment under it. */
   postNotes(threadId: string, bot: OutboundHoldBot, card: WidgetRoot, transcriptPath: string, name: string): Promise<string | null>;
-  createRoutine(botId: string, threadId: string): string;
   dateLine(at: number): string;
 }
 
@@ -66,7 +65,7 @@ export function createMeetingRoutes(deps: MeetingRouteDeps) {
     switch (action) {
       case "join": {
         const input = parsed.data as z.infer<typeof schemas.join>;
-        if (input.every_calendar_meeting) return { status: 200, text: deps.createRoutine(botId, ctx.threadId) };
+        if (input.every_calendar_meeting) return { status: 400, error: "Joining every calendar meeting is not available here; join one meeting with its link." };
         if (!input.link) return { status: 400, error: "Give the meeting link, or every_calendar_meeting: true." };
         const owner = deps.computerOwner(botId);
         if (typeof owner !== "string") return { status: 409, error: owner.error };

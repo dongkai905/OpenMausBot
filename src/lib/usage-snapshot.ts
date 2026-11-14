@@ -9,7 +9,6 @@ import {
 } from "@/lib/analytics-allowlist";
 import { trialRunning } from "@/lib/cloud-plan";
 import { hasActiveConnection, type ConnectorStatus } from "@/lib/connector-status";
-import type { Routine } from "@/lib/routines";
 import type { AppState, Bot, ConfigStatus, Group, InstanceInfo } from "@/state/store";
 
 export const SNAPSHOT_CHECK_MS = 60 * 60 * 1_000;
@@ -24,10 +23,6 @@ export interface UsageInput {
   bots: ReadonlyArray<Pick<Bot, "computer" | "cloudBackend" | "hidden">>;
   groups: ReadonlyArray<Pick<Group, "dm">>;
   sections?: readonly string[];
-  /** null while the routine list is not loaded. */
-  routines: ReadonlyArray<Pick<Routine, "enabled" | "runOn" | "target" | "schedule">> | null;
-  /** null while webhooks are not loaded. */
-  webhooks: number | null;
   apps: { services: Record<string, ConnectorStatus>; authoritative: boolean } | null;
   sessions: { sessions: ReadonlyArray<{ id?: unknown; email?: unknown }>; current: unknown } | null;
   companionDevices: number | null;
@@ -60,20 +55,6 @@ function keyProviders(config: ConfigStatus): KeyProvider[] {
     [config.treg?.configured, "treg"],
   ];
   return configured.flatMap(([on, provider]) => on === true ? [provider] : []);
-}
-
-function routineCounts(routines: UsageInput["routines"]): Record<string, number> {
-  if (!routines) return {};
-  return {
-    routines: routines.length,
-    routines_enabled: tally(routines, (routine) => routine.enabled === true),
-    routines_cloud: tally(routines, (routine) => routine.runOn === "cloud"),
-    routines_room_goal: tally(routines, (routine) => routine.target === "room-goal"),
-    routines_once: tally(routines, (routine) => routine.schedule.type === "once"),
-    routines_daily: tally(routines, (routine) => routine.schedule.type === "daily"),
-    routines_interval: tally(routines, (routine) => routine.schedule.type === "interval"),
-    routines_cron: tally(routines, (routine) => routine.schedule.type === "cron"),
-  };
 }
 
 function appFacts(apps: UsageInput["apps"]): Record<string, PropValue> {
@@ -121,8 +102,6 @@ export function buildUsageSnapshot(input: UsageInput): EventProps {
     rooms: tally(groups, (group) => group.dm !== true),
     bot_channels: tally(groups, (group) => group.dm === true),
     teams: input.sections?.length ?? 0,
-    ...routineCounts(input.routines),
-    webhooks: count(input.webhooks),
     engines: [...new Set(ready.map((instance) => engineForDriver(instance.driverKind)))].sort(),
     engine_count: ready.length,
     trial_credit: allow(instances.find((instance) => instance.trialCredit !== undefined)?.trialCredit ?? "none", TRIAL_CREDIT),
@@ -165,11 +144,9 @@ export function cloudPlanFromSnapshot(snapshot: CloudPlanSnapshot | null | undef
 }
 
 export function snapshotReady(
-  state: Pick<AppState, "connected" | "hydrated" | "config" | "routinesLoadState" | "instances" | "webhookIngress">,
-  loadsWebhooks: boolean,
+  state: Pick<AppState, "connected" | "hydrated" | "config" | "instances">,
 ): boolean {
-  return state.connected && state.hydrated === true && state.config !== null && state.routinesLoadState !== "loading"
-    && state.instances.length > 0 && (!loadsWebhooks || state.webhookIngress !== null);
+  return state.connected && state.hydrated === true && state.config !== null && state.instances.length > 0;
 }
 
 export interface UsageSources {
@@ -182,7 +159,7 @@ export interface UsageSources {
   remoteClient: boolean;
 }
 
-export type SnapshotState = Pick<AppState, "config" | "instances" | "bots" | "groups" | "sections" | "routines" | "routinesLoadState" | "webhooks" | "webhookIngress">;
+export type SnapshotState = Pick<AppState, "config" | "instances" | "bots" | "groups" | "sections">;
 
 /** Null when the source fails or does not answer in time. */
 function settle<T>(work: () => Promise<T>): Promise<T | null> {
@@ -234,8 +211,6 @@ export async function sendDailySnapshot(state: SnapshotState, sources: UsageSour
       bots: state.bots,
       groups: state.groups,
       sections: state.sections,
-      routines: state.routinesLoadState === "ready" ? state.routines : null,
-      webhooks: state.webhookIngress ? state.webhooks.length : null,
       apps,
       sessions: Array.isArray(sessions?.sessions)
         ? { sessions: sessions.sessions.filter((session) => session !== null && typeof session === "object"), current: sessions.current }

@@ -1,5 +1,4 @@
 // Meeting notes on this server: the meetings, their tools' routes, the Leave button and the computer they keep awake.
-import { MEETING_ROUTINE } from "../../shared/meetings.ts";
 import type { WidgetAction } from "../../shared/widget.ts";
 import * as boat from "../boat.ts";
 import { saveBotAttachment } from "../bot-attachment.ts";
@@ -14,7 +13,6 @@ import { MEETINGS_NEED_CLOUD_COMPUTER } from "../meetings/prompt.ts";
 import { speechSource } from "../meetings/speech.ts";
 import { OUTSIDE, type WorkOrigin } from "../peer-provenance.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 import type { BotRecord, Store } from "../store.ts";
 import type { TurnOwner } from "../turn-resources.ts";
@@ -33,11 +31,10 @@ export interface MeetingsHostDeps {
     used(owner: string): void;
   };
   computerOwner(bot: BotRecord): string;
-  routines(): Pick<RoutineManager, "create" | "listRoutines"> | null;
   log(line: string): void;
 }
 
-export type MeetingsHostRoutes = Omit<MeetingRouteDeps, "meetings" | "computerOwner" | "createRoutine" | "postNotes" | "dateLine">;
+export type MeetingsHostRoutes = Omit<MeetingRouteDeps, "meetings" | "computerOwner" | "postNotes" | "dateLine">;
 
 export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => MeetingsHostRoutes) {
   const { cfg, store } = deps;
@@ -121,18 +118,6 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
       if (!bot) return { error: "The bot is gone." };
       if (!boat.boatConfigured(cfg)) return { error: MEETINGS_NEED_CLOUD_COMPUTER };
       return deps.computerOwner(bot);
-    },
-    createRoutine(botId, threadId) {
-      const manager = deps.routines();
-      if (!manager) return "Routines are not available here right now.";
-      const existing = manager.listRoutines().find((routine) => routine.botId === botId && routine.name === MEETING_ROUTINE.name);
-      if (existing) return `The routine "${MEETING_ROUTINE.name}" is already set up${existing.enabled ? "" : " (paused; turn it on in Routines)"}.`;
-      manager.create({
-        name: MEETING_ROUTINE.name, prompt: MEETING_ROUTINE.prompt, botId, enabled: true, timeoutMinutes: 10, overlap: "skip", resultsThreadId: threadId,
-        schedule: { type: "interval", everyMinutes: MEETING_ROUTINE.everyMinutes, anchorAt: Date.now() + 60_000, weekdays: [1, 2, 3, 4, 5],
-          window: { start: MEETING_ROUTINE.windowStart, end: MEETING_ROUTINE.windowEnd } },
-      });
-      return `Set up the routine "${MEETING_ROUTINE.name}": every ${MEETING_ROUTINE.everyMinutes} minutes on weekdays (${MEETING_ROUTINE.windowStart}–${MEETING_ROUTINE.windowEnd}) it looks at the person's Google Calendar and joins meetings with a Meet or Teams link as they start. It needs Google Calendar connected. It can be paused or changed in Routines.`;
     },
     async postNotes(threadId, bot, card, path, name) {
       const made = createAgentCard({ store, bot, threadId, input: { tool: "show_widget", widget: card }, serverCard: true });

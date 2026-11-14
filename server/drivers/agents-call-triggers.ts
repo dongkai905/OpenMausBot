@@ -1,7 +1,6 @@
 // The trigger tools a bot uses from chat: trigger_info reads (list, events), trigger changes (create, update, pause,
 // resume, run_now) and delete_trigger deletes. Every change applies at once (no confirmation card); the harness records
 // it on the automation's card with Pause, Edit and Undo.
-import { normalizeCronSchedule } from "../../shared/routine-schedule.ts";
 import { plainTimeZone } from "../../shared/plain-time-zone.ts";
 import { plainWhen } from "../plain-time.ts";
 
@@ -74,11 +73,15 @@ function normalizeScheduleInput(args: Json): NormalizedSchedule {
     return { error: `Unsupported ${type} schedule field "${unsupported}". Weekly and daily times use the computer's timezone from trigger_info. ${SUPPORTED_SCHEDULES}` };
   }
   if (type === "cron") {
-    try {
-      return { schedule: { ...normalizeCronSchedule({ type, expression: raw.expression, timeZone: raw.timeZone }) } };
-    } catch (error) {
-      return { error: `${error instanceof Error ? error.message : "Invalid cron schedule"}. ${SUPPORTED_SCHEDULES}` };
+    const expression = typeof raw.expression === "string" ? raw.expression.trim().replace(/\s+/g, " ") : "";
+    const timeZone = typeof raw.timeZone === "string" ? raw.timeZone.trim() : "";
+    if (expression.split(" ").length !== 5) {
+      return { error: `Cron must have five fields: minute hour day-of-month month weekday (no seconds, year, or macros). ${SUPPORTED_SCHEDULES}` };
     }
+    if (!/^([A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)+|UTC)$/.test(timeZone)) {
+      return { error: `A cron schedule needs an explicit IANA timezone, for example Asia/Kolkata. ${SUPPORTED_SCHEDULES}` };
+    }
+    return { schedule: { type: "cron", expression, timeZone } };
   }
   if (type === "limit_reset") return limitResetSchedule(raw.engine, raw.repeat);
   if (type === "once") {

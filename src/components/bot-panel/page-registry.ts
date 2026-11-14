@@ -12,14 +12,14 @@ export const TAB_LABEL: Record<PanelTab, LocaleKey> = {
 
 export type PageId =
   | "settings" | "where"
-  | "setup" | "model" | "instructions" | "approvals" | "always" | "routines" | "apps"
-  | "memory" | "skills"
+  | "setup" | "model" | "instructions" | "approvals" | "always" | "apps"
+  | "skills"
   | "browser" | "folder" | "android"
-  | "voice" | "blurb" | "team" | "chiefteams" | "mcp" | "tools" | "webhooks" | "visibility" | "slack"
+  | "voice" | "blurb" | "team" | "chiefteams" | "mcp" | "tools" | "visibility" | "slack"
   | "overview" | "prompt" | "history";
 
 /** The pages Simple mode draws; a link to any other page lands where its section does. */
-export const SIMPLE_PAGES = ["settings", "apps", "routines", "visibility", "memory", "skills", "folder", "browser", "where"] as const satisfies readonly PageId[];
+export const SIMPLE_PAGES = ["settings", "apps", "visibility", "skills", "folder", "browser", "where"] as const satisfies readonly PageId[];
 export type SimplePageId = (typeof SIMPLE_PAGES)[number];
 
 export function isSimplePage(page: PageId): page is SimplePageId {
@@ -39,9 +39,7 @@ export const PAGES: Record<PageId, PageMeta> = {
   model: { title: "model.simple.model", home: "details" },
   instructions: { title: "botSettings.simple.instructions", home: "details" },
   approvals: { title: "botPanel.page.approvals", home: "details" },
-  routines: { title: "botSettings.simple.routines", home: "details" },
   apps: { title: "botPanel.appsRow", home: "details", intro: "botPanel.apps.intro" },
-  memory: { title: "botPanel.memoryRow", home: "library", intro: "botPanel.memory.intro" },
   skills: { title: "botSettings.simple.skills", home: "library", intro: "botSettings.simple.skillsHint" },
   browser: { title: "settings.sites.title", home: "computer" },
   folder: { title: "computer.files.folder", home: "library", intro: "botPanel.folder.intro" },
@@ -52,7 +50,6 @@ export const PAGES: Record<PageId, PageMeta> = {
   chiefteams: { title: "botPanel.page.chiefTeams", home: "details" },
   mcp: { title: "connectors.tab.mcp", home: "details" },
   tools: { title: "botAccess.tools.title", home: "details" },
-  webhooks: { title: "botPanel.page.webhooks", home: "details" },
   always: { title: "botPanel.page.always", home: "details" },
   visibility: { title: "botSettings.visibility.title", home: "details" },
   slack: { title: "botPanel.page.slack", home: "details" },
@@ -77,9 +74,7 @@ const SECTION_TARGET: Record<BotSettingsSection, PanelTarget> = {
   slack: { tab: "details" },
   soul: { tab: "details", page: "settings", anchor: "instructions", editInstructions: true },
   skills: { tab: "library", page: "skills" },
-  memory: { tab: "library", page: "memory" },
   library: { tab: "library" },
-  routines: { tab: "details", page: "routines" },
   access: { tab: "computer" },
   model: { tab: "details", anchor: "model" },
   permissions: { tab: "details", page: "settings", anchor: "approval" },

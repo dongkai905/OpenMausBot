@@ -61,7 +61,7 @@ test("a bot moving into a team carries its own things only: no apps, keys, login
   const { send, reads, calls } = sides();
   await send.send({ reason: "move" });
   const routes = calls.map(([method, route]) => `${method} ${route}`);
-  for (const personal of ["/api/cloud-connections", "/api/cloud-send/memory", "/api/logins", "/api/config", "/api/cloud-send/verify-secrets"]) {
+  for (const personal of ["/api/cloud-connections", "/api/logins", "/api/config", "/api/cloud-send/verify-secrets"]) {
     assert.ok(!routes.some((route) => route.includes(personal)), personal);
     assert.ok(!reads.some((route) => route.includes(personal)), personal);
   }

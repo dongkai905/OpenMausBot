@@ -15,14 +15,14 @@
 // redeemed at that Cloud alone, signed out after, as Copy does. A secret reaches main only over the server's private
 // port (server/login-handoff.ts) and goes only to that session.
 import { createHash } from "node:crypto";
-import { AUTOMATION_KINDS, BOT_PARTS, EMPTY, MOVE_BOT_PARTS, MOVE_KINDS, PICTURE_PART, differenceSignature, failedSummary, itemKey, parseSendSummary, pendingRows, planSend, resultKey } from "./cloud-send-parts.mjs";
+import { BOT_PARTS, EMPTY, MOVE_BOT_PARTS, MOVE_KINDS, PICTURE_PART, differenceSignature, failedSummary, itemKey, parseSendSummary, pendingRows, planSend, resultKey } from "./cloud-send-parts.mjs";
 import { collectConnections, releaseConnections, sendConnections } from "./cloud-connections.mjs";
-import { createMoveKinds, mergeRoutines } from "./cloud-send-kinds.mjs";
+import { createMoveKinds } from "./cloud-send-kinds.mjs";
 import { botsOnCloud } from "./cloud-logins.mjs";
 import { moveCheck, patientSession, rowIdChunks, unanswered } from "./cloud-send-check.mjs";
 import nativeText from "./native-text.cjs";
 
-const LOCAL_ROUTE = /^\/api\/(?:cloud-send|cloud-send\?move=1|cloud-send\/manifest|cloud-send\/chats|cloud-send\/chats\?attachments=1|cloud-send\/kind\?key=[\w%.-]{1,300}|cloud-send\/memory|cloud-send\/memory\?bot=[\w-]{1,128}|cloud-send\/files|cloud-send\/files\?path=[\w%.()~!*'-]{1,12000}&offset=\d{1,16}&length=\d{1,9}|cloud-send\/chats\/rows\?thread=[\w-]{1,200}&after=\d{1,16}&id=[\w%.-]{0,600}|cloud-send\/chats\/ids\?thread=[\w-]{1,200}&from=\d{1,9}|cloud-send\/chats\/attachment\/[A-Za-z0-9-]{1,80}\.[A-Za-z0-9]{1,10}|cloud-connections|connectors\/connected|config|bots\?messages=0|bots\/[\w-]{1,128}\/(?:skills|skills\/[a-z0-9-]{1,64}|memory|memory\/file\?path=[\w%.-]{1,200})|attachments\/[A-Za-z0-9-]{1,80}\.(?:png|jpg|gif|webp))$/u;
+const LOCAL_ROUTE = /^\/api\/(?:cloud-send|cloud-send\?move=1|cloud-send\/manifest|cloud-send\/chats|cloud-send\/chats\?attachments=1|cloud-send\/kind\?key=[\w%.-]{1,300}|cloud-send\/files|cloud-send\/files\?path=[\w%.()~!*'-]{1,12000}&offset=\d{1,16}&length=\d{1,9}|cloud-send\/chats\/rows\?thread=[\w-]{1,200}&after=\d{1,16}&id=[\w%.-]{0,600}|cloud-send\/chats\/ids\?thread=[\w-]{1,200}&from=\d{1,9}|cloud-send\/chats\/attachment\/[A-Za-z0-9-]{1,80}\.[A-Za-z0-9]{1,10}|cloud-connections|connectors\/connected|config|bots\?messages=0|bots\/[\w-]{1,128}\/(?:skills|skills\/[a-z0-9-]{1,64})|attachments\/[A-Za-z0-9-]{1,80}\.(?:png|jpg|gif|webp))$/u;
 /** One request's chats: a few conversations' rows, well under My Cloud's body limit. */
 const CHATS_BATCH_BYTES = 4 * 1024 * 1024;
 const CHATS_BATCH_PAGES = 40;
@@ -31,7 +31,6 @@ const ATTACHMENT_NAMES = 2000;
 /** My Cloud takes at most this many row ids, of at most this many conversations, a request. */
 const ROW_IDS = 10_000;
 const ROW_ID_CONVERSATIONS = 200;
-const MEMORY_FILES = 100;
 const SCOPED_READ = /^\/api\/cloud-send(?:\?move=1|\/manifest|\/chats(?:\?attachments=1)?|\/files)$/u;
 const PICTURE_TYPES = { png: "image/png", jpg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
 const VAULT_ID = /^[\w-]{1,128}$/u;
@@ -112,10 +111,9 @@ const addCounts = (total, sent) => countsOf({ ...Object.fromEntries(COUNTED.map(
 /** The state main keeps in its own folder: per Cloud what was sent, what the person kept here, the bots a send made
  * there whose fields still wait to be recorded (`created`), the bots a send asked My Cloud to make and has not heard back
  * about (`creating`), the sign-ins My Cloud took that this computer still holds
- * (`release`), the bot files a move put there (`files`, path to sha256), whether each automation a move carried was
- * on here (`on`), the conversations a move's check found whole (`verified`: this computer's newest row and row count
- * then, and how many rows My Cloud's manifest said it had), and those whose earlier rows My Cloud made its owner's
- * (`stamped`). */
+ * (`release`), the bot files a move put there (`files`, path to sha256), the conversations a move's check found whole
+ * (`verified`: this computer's newest row and row count then, and how many rows My Cloud's manifest said it had), and
+ * those whose earlier rows My Cloud made its owner's (`stamped`). */
 export function parseSendState(value) {
   const clouds = {};
   if (record(value?.clouds)) {
@@ -134,7 +132,6 @@ export function parseSendState(value) {
         creating: record(entry.creating) ? Object.fromEntries(Object.entries(entry.creating).filter(([key, on]) => key.startsWith("bot:") && on === true)) : {},
         release: Array.isArray(entry.release) ? entry.release.filter((held) => record(held) && typeof held.id === "string" && typeof held.digest === "string").slice(0, 200) : [],
         files: record(entry.files) ? Object.fromEntries(Object.entries(entry.files).filter(([path, sha]) => typeof sha === "string" && /^[a-f0-9]{64}$/u.test(sha) && path.length <= 4096)) : {},
-        on: record(entry.on) ? Object.fromEntries(Object.entries(entry.on).filter(([key, on]) => /^(?:routine|call|webhook|app-event):[\w-]{1,128}$/u.test(key) && typeof on === "boolean")) : {},
         verified: record(entry.verified) ? Object.fromEntries(Object.entries(entry.verified).filter(([threadId, seen]) => /^[\w-]{1,200}$/u.test(threadId) && record(seen)
           && typeof seen.newest === "string" && Number.isSafeInteger(seen.rows) && Number.isSafeInteger(seen.there))) : {},
         stamped: record(entry.stamped) ? Object.fromEntries(Object.entries(entry.stamped).filter(([threadId, on]) => /^[\w-]{1,200}$/u.test(threadId) && on === true)) : {},
@@ -182,8 +179,8 @@ function sentCounts(result) {
 function emptyResult() {
   return { bots: [], updatedBots: [], skills: 0, logins: 0, onePassword: false, settings: [], connections: 0, chats: null, failed: [], notes: [] };
 }
-/** What a move carried beyond a send: automations and skill extras, memory merged, files, conversations' settings. */
-const movedResult = () => ({ moved: 0, memory: 0, files: { sent: 0, kept: 0 }, conversationSettings: 0 });
+/** What a move carried beyond a send: skill extras, files, conversations' settings. */
+const movedResult = () => ({ moved: 0, files: { sent: 0, kept: 0 }, conversationSettings: 0 });
 
 /**
  * @param {{
@@ -204,11 +201,10 @@ const movedResult = () => ({ moved: 0, memory: 0, files: { sent: 0, kept: 0 }, c
  *   team?: { bot: string, name: string, label: string },
  *   patience?: { stallMs?: number, waits?: number[], blips?: number[] },
  * }} deps `patience`: how long a move waits for a Cloud that does not answer (cloud-send-check.mjs). `open({ move: true })`: the move's session, which counts as someone using My Cloud. `engineWaitMs`: how long a
- * move waits for My Cloud to run the engines whose keys it just took. `local(route, { method })`: a change on this
- * computer's server (an app event My Cloud now collects). `space`: My Cloud's plan disk and the Admin's grow. `team`: a
- * move of this one bot into a team (team-move.mjs): only the bot, its skills, files, chats and routines go, under the
- * name the team gave it; never apps, keys, logins, settings or its notes about the person. `local` is then the bot's
- * own Cloud, and `label` names the person beside a file or bot of the same name.
+ * move waits for My Cloud to run the engines whose keys it just took. `space`: My Cloud's plan disk and the Admin's grow. `team`: a
+ * move of this one bot into a team (team-move.mjs): only the bot, its skills, files and chats go, under the name the
+ * team gave it; never apps, keys, logins or settings. `local` is then the bot's own Cloud, and `label` names the person
+ * beside a file or bot of the same name.
  */
 export function createCloudSend({ local, cloud, handoff, store, onChange = () => {}, now = Date.now, sleep, patience = {}, engineWaitMs, space, team = null, t = nativeText.englishText.t }) {
   let saved = parseSendState(safeRead(store));
@@ -220,7 +216,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
 
   function safeRead(source) { try { return source.read(); } catch { return null; } }
   function persist() { try { store.write(saved); } catch {} }
-  const entry = (origin) => (saved.clouds[origin] ??= { sent: {}, off: {}, dismissed: "", last: null, whole: null, arrived: countsOf(null), chats: {}, created: {}, creating: {}, release: [], files: {}, on: {},
+  const entry = (origin) => (saved.clouds[origin] ??= { sent: {}, off: {}, dismissed: "", last: null, whole: null, arrived: countsOf(null), chats: {}, created: {}, creating: {}, release: [], files: {},
     verified: {}, stamped: {} });
   /** What a move ignores of what the person kept here: everything goes but what was removed on My Cloud. */
   const removedOnly = (off) => Object.fromEntries(Object.entries(off).filter(([, why]) => why === "removed"));
@@ -264,13 +260,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
     if (!response.ok) return null;
     return new Uint8Array(await response.arrayBuffer());
   }
-  async function localSend(method, route) {
-    if (!LOCAL_ROUTE.test(route) || method !== "DELETE") throw new CloudSendError("invalid", "Unsupported local request.");
-    const response = await local(route, { method });
-    await response.body?.cancel();
-    return { ok: response.ok, status: response.status };
-  }
-  const kinds = createMoveKinds({ localJson, localBytes, localSend, entry, persist, refusal, space, scoped,
+  const kinds = createMoveKinds({ localJson, localBytes, entry, persist, refusal, space, scoped,
     progress: (value) => { progress = value; publish(); } });
 
   async function readCloud() {
@@ -289,7 +279,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
     // A Cloud too old to keep a secret by its id would make a new one every send.
     const going = theirs?.vault ? mine : { ...mine, items: (mine?.items ?? []).filter((item) => item.kind !== "secret") };
     const planned = planSend({ local: going, cloud: theirs, sent: kept.sent, off: everything ? removedOnly(kept.off) : kept.off, force: [...force, ...Object.keys(kept.created)] });
-    if (everything && !team) mergeRoutines(planned.rows);
     let changed = false;
     for (const [key, parts] of Object.entries(planned.baseline)) { kept.sent[key] = { ...kept.sent[key], ...parts }; changed = true; }
     for (const key of planned.removed) { kept.off[key] = "removed"; delete kept.sent[key]; delete kept.created[key]; changed = true; }
@@ -298,13 +287,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       // move's check (manifestGaps) agrees with this plan instead of calling it missing on every pass.
       const here = new Map((mine?.items ?? []).map((item) => [item.key, item])), there = new Map((theirs?.items ?? []).map((item) => [item.key, item]));
       for (const row of planned.rows) {
-        // A routine's runs are history My Cloud adds by id and never drops: when they are all that differs, it goes.
-        if (row.kind === "routine" && row.differs?.includes("runs") && !row.differs.includes("def")) {
-          row.differs = row.differs.filter((part) => part !== "runs");
-          row.parts = [...(row.parts ?? []), "runs"];
-          row.state = "to-update";
-          if (!row.differs.length) delete row.differs;
-        }
         for (const part of row.differs ?? []) {
           kept.sent[row.key] = { ...kept.sent[row.key], [part]: [here.get(row.key).parts[part], there.get(row.key)?.parts[part] ?? EMPTY] };
           changed = true;
@@ -385,8 +367,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
 
   /** Every item that waits, and then the chats, over one owner session, always signed out; what My Cloud holds after. A
    * move's apps and keys go first, so the bots that follow find their engines; then the skills only a move carries, the
-   * bots, their memory and files, the chats with each conversation's settings, and last the automations, switched off. An
-   * app event goes only in the final pass, when this computer lets go of it. */
+   * bots, their files, and the chats with each conversation's settings. */
   async function sendItems(origin, mine, result, { keys, force, job, withChats }) {
     const move = job.reason === "move";
     const summaryRoute = move ? scoped("/api/cloud-send?move=1") : "/api/cloud-send";
@@ -407,8 +388,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       settleCreating(origin, theirs);
       const planned = plan(origin, mine, theirs, force, { everything: move });
       const wanted = keys ? new Set(keys) : null;
-      const rows = pendingRows(planned).filter((row) => !wanted || wanted.has(row.key) || (row.bot && wanted.has(itemKey.bot(row.bot))))
-        .filter((row) => row.kind !== "app-event" || job.final);
+      const rows = pendingRows(planned).filter((row) => !wanted || wanted.has(row.key) || (row.bot && wanted.has(itemKey.bot(row.bot))));
       const total = rows.length;
       progress = total ? { done: 0, total } : null;
       publish();
@@ -416,9 +396,8 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       const localItems = new Map(mine.items.map((item) => [item.key, item]));
       const cloudItems = new Map(theirs.items.map((item) => [item.key, item]));
       const ctx = { origin, session, result, cloudBots, localItems, cloudItems, planned: new Map(planned.rows.map((row) => [row.key, row])), bots: null, skillLists: new Map(),
-        sentKeys: new Set(), sentParts: {}, recorded: new Set(), move, ownMove: move && !team, summaryRoute, computer: computer?.label ?? null };
+        sentKeys: new Set(), sentParts: {}, recorded: new Set(), move, summaryRoute, computer: computer?.label ?? null };
       const order = { "library-skill": 0, "imported-skill": 0, bot: 1, skill: 2, setting: 3, login: 4, secret: 4, "1password": 5 };
-      const automations = new Set(AUTOMATION_KINDS);
       const goRow = async (row) => {
         try { await sendRow(ctx, row); }
         catch (error) { result.failed.push({ key: row.key, kind: row.kind, label: row.label, error: sentence(error?.message) ?? "It could not be sent.", ...(error?.final === true ? { final: true } : {}) }); }
@@ -426,11 +405,9 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
         if (progress && !job.chats) progress = { done: progress.done + 1, total };
         publish();
       };
-      for (const row of rows.filter((entry) => !automations.has(entry.kind)).sort((a, b) => order[a.kind] - order[b.kind])) await goRow(row);
+      for (const row of [...rows].sort((a, b) => order[a.kind] - order[b.kind])) await goRow(row);
       const moved = move ? await movedBots(ctx) : [];
       if (move) {
-        // Its notes about the person stay with them when a bot moves into a team.
-        if (!team) await kinds.moveMemory(ctx, moved);
         try { await kinds.moveFiles(ctx, moved, computer?.label); }
         catch (error) { result.failed.push({ key: "files", kind: "files", label: "Files", error: sentence(error?.message) ?? "The files could not be sent." }); }
       }
@@ -449,11 +426,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       if (move) {
         try { result.conversationSettings = await kinds.moveSettings(ctx); }
         catch (error) { result.failed.push({ key: "conversation-settings", kind: "chats", label: "Chats", error: sentence(error?.message) ?? "The chats' settings could not be added." }); }
-        const last = rows.filter((entry) => automations.has(entry.kind));
-        for (const row of last) await goRow(row);
-        // The pass's closing plan reads My Cloud as it is now: read before the automations went, it would take each one
-        // just carried for one removed there.
-        if (last.length) return parseSendSummary((await session.call("GET", summaryRoute)).body) ?? latest;
       }
       return latest;
     } finally {
@@ -773,7 +745,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       try { await putSkill(ctx, bot.id, item.id, false); done(ctx, key); ctx.result.skills++; }
       catch (error) { ctx.result.failed.push({ key, kind: "skill", label: item.label, error: sentence(error?.message) ?? "It could not be sent." }); }
     }
-    if (!ctx.move) await sendMemory(ctx, bot.id).catch(() => ctx.result.notes.push({ kind: "memory", bot: bot.name }));
   }
 
   async function updateBot(ctx, row) {
@@ -792,7 +763,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
     if (Object.keys(refused).length < parts.length) ctx.result.updatedBots.push(bot.name);
     if (refused.model) ctx.result.notes.push({ kind: "model", bot: bot.name });
     if (Object.keys(refused).some((part) => part !== "model")) ctx.result.notes.push({ kind: "settings", bot: bot.name });
-    if (entry(ctx.origin).created[row.key] && !ctx.move) await sendMemory(ctx, bot.id).catch(() => ctx.result.notes.push({ kind: "memory", bot: bot.name }));
   }
 
   /** The bot's own skill, by its SKILL.md: My Cloud's copy is replaced when the text changed here. */
@@ -835,18 +805,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
     }
     done(ctx, row.key, there && parts.length === 1 && parts[0] === "on" ? parts : null);
     ctx.result.skills++;
-  }
-
-  /** A new bot's memory notes go with it once; after that each side's bot keeps its own memory. */
-  async function sendMemory(ctx, botId) {
-    const overview = await localJson(`/api/bots/${botId}/memory`);
-    const files = ["MEMORY.md", ...(Array.isArray(overview?.topics) ? overview.topics.map((topic) => topic?.path).filter((path) => typeof path === "string") : [])];
-    for (const path of files.slice(0, MEMORY_FILES)) {
-      const doc = await localJson(`/api/bots/${botId}/memory/file?path=${encodeURIComponent(path)}`);
-      if (!doc?.exists || typeof doc.text !== "string" || !doc.text.trim()) continue;
-      const put = await ctx.session.call("PUT", `/api/bots/${botId}/memory/file`, { path, text: doc.text });
-      if (!put.ok) throw refusedError("refused", put, "My Cloud could not save a memory note.");
-    }
   }
 
   async function sendSetting(ctx, row) {
@@ -955,11 +913,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       const origin = cloud.origin();
       if (origin && typeof signature === "string") { entry(origin).dismissed = signature.slice(0, 20_000); persist(); }
       return publish();
-    },
-    /** Each automation a move carried, by key, and whether it was on here when it went: what the switch turns on there. */
-    switches() {
-      const origin = cloud.origin();
-      return origin ? { ...entry(origin).on } : {};
     },
     /** For the native menu: what is waiting, from the last comparison, without asking anyone. */
     waiting() {

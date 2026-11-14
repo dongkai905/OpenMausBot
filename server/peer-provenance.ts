@@ -2,12 +2,14 @@
 
 import { z } from "zod";
 import { redactSecretsInText } from "../shared/redact.ts";
-import type { RoutineRunTrigger } from "../shared/routines.ts";
 import type { WireMessage as Message } from "../shared/wire.ts";
 import { peerName } from "./peer-roster.ts";
 import { AUTHORITY, botWho, fromNoteWith, informationOnly, lineNote, type LineLabels, type ProvenanceLine } from "./provenance-label.ts";
 
 const REQUEST_QUOTE_MAX = 400;
+
+/** What started the work: a schedule, a trigger, a person pressing start, the server starting up, or an API call. */
+export type RoutineRunTrigger = "schedule" | "manual" | "webhook" | "startup" | "api";
 
 /** From the harness's records, never from model text; work handed on keeps the origin it came from. `person`: on work
  * handed on, whom it acts for (server/host/acting-person.ts), so it may use that person's own apps. `lends`: the turn that

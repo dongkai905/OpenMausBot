@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { arrivedCounts, CHECK_PASSES, COPY_RETRY_MS, createOneHome, FAILING_LINE_MS, FROZEN_RETRY_MAX_MS, FROZEN_RETRY_MS, INCOMPLETE, KEPT_MS, missingOf, QUIET_MS, switchOn } from "./one-home.mjs";
+import { arrivedCounts, CHECK_PASSES, COPY_RETRY_MS, createOneHome, FAILING_LINE_MS, FROZEN_RETRY_MAX_MS, FROZEN_RETRY_MS, INCOMPLETE, KEPT_MS, missingOf, QUIET_MS } from "./one-home.mjs";
 import { oneHomeCloud } from "./one-home-main.mjs";
 import nativeText from "./native-text.cjs";
 
@@ -14,7 +14,7 @@ const reply = (status, body = {}) => ({ ok: status < 400, status, body });
  * the clock and its timers. `relaunch()` makes a new one-home over the same journal and server, as the app does after a
  * crash.
  */
-function world({ cloud = {}, switches = { "routine:r1": true, "routine:r2": false, "webhook:w1": true, "call:c1": true }, checks = [], moves = [], busy = [] } = {}) {
+function world({ cloud = {}, checks = [], moves = [], busy = [] } = {}) {
   let journal = null, clock = 1_000_000, typedAt = 0;
   const timers = [];
   const w = {
@@ -45,7 +45,6 @@ function world({ cloud = {}, switches = { "routine:r1": true, "routine:r2": fals
           },
           // A check answers `true`/`false`, or a whole report (cloud-send.mjs `check`).
           async check() { w.checked++; const next = checks.shift(); return next && typeof next === "object" ? next : { ok: next ?? true }; },
-          switches: () => switches,
           snapshot: () => ({ running: w.running ?? null, whole: { result: { notes: w.notes ?? [{ kind: "held", connection: "OpenRouter" }], failed: w.failed ?? [] } } }),
         },
         local: {
@@ -62,7 +61,7 @@ function world({ cloud = {}, switches = { "routine:r1": true, "routine:r2": fals
           async json(route) {
             if (route === "/api/cloud-connections") return { computer: { label: "MacBook Air" } };
             if (route.startsWith("/api/bots")) return { bots: [{ id: "b1", cwd: "/Users/p/code/shop" }, { id: "b2" }] };
-            if (route === "/api/cloud-send/manifest") return { items: [{ key: "bot:b1", kind: "bot" }, { key: "bot:b2", kind: "bot" }, { key: "login:l1", kind: "login" }], conversations: [{ threadId: "t1" }], automations: [{ key: "routine:r1" }] };
+            if (route === "/api/cloud-send/manifest") return { items: [{ key: "bot:b1", kind: "bot" }, { key: "bot:b2", kind: "bot" }, { key: "login:l1", kind: "login" }], conversations: [{ threadId: "t1" }] };
             return {};
           },
           async call(method, route, body) { w.localCalls.push([method, route, body]); return reply(200); },
@@ -72,7 +71,7 @@ function world({ cloud = {}, switches = { "routine:r1": true, "routine:r2": fals
           return {
             async call(method, route, body) {
               w.cloudCalls.push([method, route, body]);
-              if (route === "/api/cloud-send/manifest") return reply(200, { items: [{ key: "bot:b1", kind: "bot" }, { key: "bot:b2", kind: "bot" }, { key: "login:l1", kind: "login" }], conversations: [{ threadId: "t1" }], automations: [{ key: "routine:r1" }] });
+              if (route === "/api/cloud-send/manifest") return reply(200, { items: [{ key: "bot:b1", kind: "bot" }, { key: "bot:b2", kind: "bot" }, { key: "login:l1", kind: "login" }], conversations: [{ threadId: "t1" }] });
               return w.cloudAnswer?.(method, route) ?? reply(200, { v: 1 });
             },
             async close() {},
@@ -105,13 +104,13 @@ test("a new buyer's move runs every phase and ends with home on My Cloud, this c
   assert.deepEqual(w.passes, ["copy", "final"]);
   assert.equal(w.checked, 1);
   assert.equal(w.server.frozen, true, "this computer's copy stays frozen for good");
-  assert.deepEqual(w.switchedOn().sort(), ["/api/calendar-calls/c1", "/api/routines/r1", "/api/webhooks/w1"], "only what was on here, and nothing off");
-  assert.deepEqual(w.cloudCalls.find(([, route]) => route === "/api/cloud-send/arrived")?.[2], { v: 1, computer: "MacBook Air", webhooks: ["w1"] });
+  assert.deepEqual(w.switchedOn(), [], "nothing is switched on anywhere: there is nothing left to switch");
+  assert.deepEqual(w.cloudCalls.find(([, route]) => route === "/api/cloud-send/arrived")?.[2], { v: 1, computer: "MacBook Air" });
   assert.deepEqual(w.lent, [["/Users/p/code/shop"]], "lent once, with each bot's own project folder");
   assert.equal(w.phone.stopped, 0, "a phone paired here hears from the frozen copy where its bots went, and reaches a workspace of this computer's own once one is open");
   assert.deepEqual(w.opened, ["cloud"]);
   assert.equal(w.home.away(), true);
-  assert.deepEqual(w.home.view(), { phase: "done", at: w.journal.doneAt, counts: { bots: 2, skills: 0, logins: 1, onePassword: false, chats: 1, routines: 1 }, phone: true, held: ["OpenRouter"] });
+  assert.deepEqual(w.home.view(), { phase: "done", at: w.journal.doneAt, counts: { bots: 2, skills: 0, logins: 1, onePassword: false, chats: 1 }, phone: true, held: ["OpenRouter"] });
   assert.equal(w.home.seen(), null, "the done line shows until it is closed");
 
   await w.relaunch().kick();
@@ -185,7 +184,7 @@ test("the wait says what holds the move as the server names it, and claims no on
 
 test("a check's log line names the rooms and conversations it found missing by id, never by name, and counts the rest", () => {
   const rooms = Array.from({ length: 12 }, (_, i) => ({ id: `room-${i}`, name: `Client ${i} pricing` }));
-  const said = missingOf({ gaps: { items: [{ key: "bot:ember", kind: "bot", label: "Ember" }], rooms: rooms.slice(0, 3), conversations: ["t-1"], memory: [] },
+  const said = missingOf({ gaps: { items: [{ key: "bot:ember", kind: "bot", label: "Ember" }], rooms: rooms.slice(0, 3), conversations: ["t-1"] },
     chats: [{ threadId: "t-2", missing: 1, unstamped: 0, path: "equal" }, { threadId: "t-3", missing: 0, unstamped: 0, path: "equal" }], attachments: [], secrets: { differs: [], missing: ["key:openrouter"] } });
   assert.equal(said, "1 items, 3 rooms (room-0, room-1, room-2), 1 conversations (t-1), 1 chat paths (t-2), 1 credentials");
   assert.doesNotMatch(said, /Client|Ember|openrouter/u);
@@ -196,13 +195,13 @@ test("a check's log line names the rooms and conversations it found missing by i
 test("a check that still finds things missing after three passes says so at once, naming what did not go and why", async () => {
   const w = world({ checks: [false, false, false] });
   w.failed = [{ key: "skill:b1:tidy", kind: "skill", label: "tidy", error: "OpenMausBot on this computer did not answer. Try again in a moment." },
-    { key: "app-event:e1", kind: "app-event", label: "Reply to email", error: "This app automation stays on the computer it came from.", final: true }];
+    { key: "file:f1", kind: "files", label: "notes.md", error: "This file could not be read on this computer.", final: true }];
   await w.home.kick();
   assert.equal(w.journal.failure.code, "incomplete");
   assert.ok(w.now() - w.journal.failingSince < FAILING_LINE_MS, "not a day later");
   assert.deepEqual(w.home.view(), { phase: "copy", failing: { error: INCOMPLETE, items: [
     { label: "tidy", error: "OpenMausBot on this computer did not answer. Try again in a moment." },
-    { label: "Reply to email", error: "This app automation stays on the computer it came from." }] } });
+    { label: "notes.md", error: "This file could not be read on this computer." }] } });
 });
 
 test("a move done while a connector stayed on this computer names it on the done line, with what it needs", async () => {
@@ -216,9 +215,9 @@ test("a move done while a connector stayed on this computer names it on the done
   assert.deepEqual(w.home.view().stayed, [{ name: "fetch", needs: "uvx" }, { name: "easy" }], "kept with the move, not read again");
 });
 
-/** A check that finds the same things missing on every pass: one attachment and one bot's memory note that sending again
- * never carries (a file gone from this computer, a note My Cloud can't keep). */
-const stuckReport = (extra = {}) => ({ ok: false, gaps: { items: [], memory: [{ bot: "b1", path: "memory/notes.md" }], conversations: [] },
+/** A check that finds the same things missing on every pass: one attachment and one bot file that sending again
+ * never carries (a file gone from this computer, a file My Cloud can't keep). */
+const stuckReport = (extra = {}) => ({ ok: false, gaps: { items: [], files: ["workspaces/b1/notes.md"], conversations: [] },
   chats: [{ threadId: "t1", missing: 2, unstamped: 0, path: "equal" }], attachments: ["a1.mp3"], secrets: { equal: [], differs: [], missing: [] },
   names: { b1: "Scout" }, owners: { t1: "b1" }, ...extra });
 
@@ -229,7 +228,7 @@ test("what sending again never carries stays on this computer once two tries end
   await w.home.kick();
   assert.equal(w.journal.phase, "copy", "the first try that ends this way still goes again: My Cloud may have been busy");
   assert.equal(w.journal.failure.code, "incomplete");
-  assert.equal(w.journal.gaps, "1 memory, 1 chats (2 rows), 1 attachments");
+  assert.equal(w.journal.gaps, "1 files, 1 chats (2 rows), 1 attachments");
   assert.equal(w.home.view().failing.error, INCOMPLETE, "the line says what happens next, not only that it failed");
   assert.equal(w.server.frozen, false);
 
@@ -238,7 +237,7 @@ test("what sending again never carries stays on this computer once two tries end
   assert.equal(w.journal.phase, "done", "the next try ending the same way moves the rest");
   assert.equal(w.server.frozen, true);
   assert.deepEqual(w.journal.left, [
-    { label: "Scout", error: "One of its memory notes didn't reach My Cloud." },
+    { label: "Scout", error: "One of its files didn't reach My Cloud." },
     { label: "Scout", error: "Part of one chat didn't reach My Cloud." },
     { label: "An attachment", error: "It didn't reach My Cloud." },
   ]);
@@ -292,12 +291,12 @@ test("a move that keeps failing frozen waits twice as long each time, up to half
 
 test("a move done without what My Cloud refused for good names it on the done line", async () => {
   const w = world();
-  w.failed = [{ key: "app-event:e1", kind: "app-event", label: "Reply to email", error: "This app automation stays on the computer it came from.", final: true }];
+  w.failed = [{ key: "file:f1", kind: "files", label: "notes.md", error: "This file could not be read on this computer.", final: true }];
   await w.home.kick();
   assert.equal(w.journal.phase, "done");
-  assert.deepEqual(w.home.view().left, [{ label: "Reply to email", error: "This app automation stays on the computer it came from." }]);
+  assert.deepEqual(w.home.view().left, [{ label: "notes.md", error: "This file could not be read on this computer." }]);
   w.failed = [];
-  assert.deepEqual(w.home.view().left, [{ label: "Reply to email", error: "This app automation stays on the computer it came from." }], "kept with the move, not read again");
+  assert.deepEqual(w.home.view().left, [{ label: "notes.md", error: "This file could not be read on this computer." }], "kept with the move, not read again");
 });
 
 test("a check that still fails after three passes lifts the freeze and tries again in an hour; a day of it shows Try again", async () => {
@@ -367,15 +366,13 @@ test("an app killed at any phase goes on from the journal: nothing is switched o
   for (const at of ["copy", "wait", "freeze", "final", "check", "switch"]) {
     const w = world();
     // The crash: the journal as it was written at `at`, the server as it was then, and a new app.
-    w.journal = { v: 1, phase: at, cloud: { origin: CLOUD, account: "acct-1", machine: CLOUD }, startedAt: 1, ...(at === "switch" ? { switched: { "routine:r1": true } } : {}) };
+    w.journal = { v: 1, phase: at, cloud: { origin: CLOUD, account: "acct-1", machine: CLOUD }, startedAt: 1 };
     w.server.frozen = ["freeze", "final", "check", "switch"].includes(at);
     await w.relaunch().kick();
     assert.equal(w.journal.phase, "done", at);
     assert.equal(w.server.frozen, true, at);
     assert.equal(w.server.unfreezes, 0, `${at}: a resumed move never lifts the freeze when nothing failed`);
-    const routes = w.switchedOn();
-    assert.equal(new Set(routes).size, routes.length, `${at}: each automation switched on once`);
-    if (at === "switch") assert.ok(!routes.includes("/api/routines/r1"), "one switched on before the crash is not switched on again");
+    assert.deepEqual(w.switchedOn(), [], `${at}: nothing is switched on, and nothing is switched on twice`);
     if (at === "copy") assert.deepEqual(w.passes, ["copy", "final"], at);
     if (["wait", "freeze", "final"].includes(at)) assert.deepEqual(w.passes, ["final"], at);
     if (["check", "switch"].includes(at)) assert.deepEqual(w.passes, [], at);
@@ -430,15 +427,15 @@ test("when My Cloud ends after the move, this computer is home again at once, th
   assert.deepEqual(w.opened, ["cloud", "local"]);
   assert.equal(w.home.away(), false);
 
-  w.again = () => ({ restored: "restore-1", switches: { "routine:r1": true, "routine:r9": true, "webhook:w1": false } });
+  w.again = () => ({ restored: "restore-1" });
   w.advance(60_000);
   await w.tick();
   assert.equal(w.journal.phase, "back");
   assert.equal(w.restarted, 1, "the app opens again to finish the restore");
   await w.relaunch().kick();
-  assert.deepEqual(w.localCalls.map(([method, route, body]) => [method, route, body]).sort(), [["PATCH", "/api/routines/r1", { enabled: true }], ["PATCH", "/api/routines/r9", { enabled: true }],
-    ["POST", "/api/cloud-send/home", { v: 1 }]], "and the bots whose webhooks moved say their address is here again");
-  assert.equal(w.journal.switchBack, undefined);
+  assert.deepEqual(w.localCalls.map(([method, route, body]) => [method, route, body]).sort(), [["POST", "/api/cloud-send/home", { v: 1 }]],
+    "and the record of where the bots came from goes");
+  assert.equal(w.journal.homed, undefined);
   assert.deepEqual(w.home.view(), { phase: "back" });
   w.home.seen();
   assert.equal(w.home.view(), null);
@@ -504,14 +501,10 @@ test("one home reads the Admin's word: a ready Cloud the account may move to, an
     { origin: null, account: "acct-1", machine: null, ready: false, moves: false, ended: false, paid: false, verified: true }, "a Team plan has no My Cloud: nothing moves, and nothing here counts as paid for");
 });
 
-test("automations switch on through their own routes, and the done line counts only what both sides hold", () => {
-  assert.deepEqual(switchOn("routine:r1"), { method: "PATCH", route: "/api/routines/r1", body: { enabled: true } });
-  assert.deepEqual(switchOn("call:c1"), { method: "PATCH", route: "/api/calendar-calls/c1", body: {} });
-  assert.deepEqual(switchOn("app-event:a1"), { method: "PATCH", route: "/api/app-triggers/a1", body: { enabled: true } });
-  assert.equal(switchOn("bot:b1"), null);
+test("the done line counts only what both sides hold", () => {
   assert.deepEqual(arrivedCounts({ items: [{ key: "bot:a", kind: "bot" }, { key: "bot:b", kind: "bot" }, { key: "1password", kind: "1password" }], conversations: [{ threadId: "t1" }, { threadId: "t2" }] },
     { items: [{ key: "bot:a", kind: "bot" }, { key: "1password", kind: "1password" }], conversations: [{ threadId: "t1" }] }),
-  { bots: 1, skills: 0, logins: 0, onePassword: true, chats: 1, routines: 0 });
+  { bots: 1, skills: 0, logins: 0, onePassword: true, chats: 1 });
 });
 
 test("a move left off while My Cloud was away goes on as soon as it is back; a switch that fails waits before it tries again", async () => {
@@ -529,13 +522,14 @@ test("a move left off while My Cloud was away goes on as soon as it is back; a s
 
   const s = world();
   let refusing = true;
-  s.cloudAnswer = (method) => (refusing && method === "PATCH" ? reply(503, { error: "Bad gateway" }) : null);
+  s.cloudAnswer = (_method, route) => (refusing && route === "/api/cloud-send/arrived" ? reply(503, { error: "Bad gateway" }) : null);
   await s.home.kick();
   assert.equal(s.journal.phase, "switch");
-  const tried = s.switchedOn().length;
+  const arrived = () => s.cloudCalls.filter(([, route]) => route === "/api/cloud-send/arrived").length;
+  const tried = arrived();
   await s.home.kick();
   await s.home.kick();
-  assert.equal(s.switchedOn().length, tried, "each look of the app is not another try");
+  assert.equal(arrived(), tried, "each look of the app is not another try");
   refusing = false;
   s.advance(2 * 60_000 + 1);
   await s.tick();
@@ -544,7 +538,7 @@ test("a move left off while My Cloud was away goes on as soon as it is back; a s
 });
 
 test("turning the switch back while the bots are on their way home is refused in the app's language", () => {
-  const journal = { v: 1, phase: "keeping", offThere: true, cloud: { origin: "https://omb-u-1.fly.dev", account: "acct-1" } };
+  const journal = { v: 1, phase: "keeping", thawed: true, cloud: { origin: "https://omb-u-1.fly.dev", account: "acct-1" } };
   const home = (t) => createOneHome({ journal: { read: () => journal, write: () => {} }, cloud: () => null, send: {}, local: {}, session: async () => ({}), keep: { read: () => null, write: () => {} }, ...(t ? { t } : {}) });
   assert.throws(() => home().keep(false), { message: "This computer's bots are on their way back. Try again once they're here." });
   const { t } = nativeText.createNativeText({ saved: "pt-br" });

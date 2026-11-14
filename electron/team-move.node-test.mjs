@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BUSY_POLL_MS, CHECK_PASSES, createTeamMove, RETRY_MS, routinesOn } from "./team-move.mjs";
+import { BUSY_POLL_MS, CHECK_PASSES, createTeamMove, RETRY_MS } from "./team-move.mjs";
 
 const ACME = { id: "team-acme", name: "Acme", origin: "https://omb-u-acme.fly.dev" };
 const SCOUT = { id: "scout-1", name: "Scout" };
@@ -40,7 +40,7 @@ function world({ checks = [], passes = [], freeze = [], begin = [], done = [], m
                   if (next === "busy") return reply(409, { busy: "Scout" });
                   if (next) throw new Error(next);
                   w.held = true;
-                  return reply(200, { movedTo: { team: ACME, state: "moving", held: ["routine:r1", "webhook:w1"] } });
+                  return reply(200, { movedTo: { team: ACME, state: "moving", held: [] } });
                 }
                 const next = moved.shift();
                 if (next) return reply(500, { error: next });
@@ -49,7 +49,7 @@ function world({ checks = [], passes = [], freeze = [], begin = [], done = [], m
             },
             team: {
               async begin() { w.calls.push("begin"); const next = begin.shift(); if (next instanceof Error) throw next; return next ?? { name: "Scout" }; },
-              async done(on) { w.calls.push("done"); const next = done.shift(); if (next) throw new Error(next); w.team = { done: true, on }; },
+              async done() { w.calls.push("done"); const next = done.shift(); if (next) throw new Error(next); w.team = { done: true }; },
             },
             ...(prepare ? { prepare } : {}),
             close: async () => { w.closes++; },
@@ -68,7 +68,7 @@ test("a move goes copy, hold, final, check, switch: the team switches on what wa
   const w = world();
   await w.moves.start({ bot: SCOUT, team: ACME });
   assert.deepEqual(w.calls, ["begin", "copy", "POST /api/bot-moves/scout-1 moving", "final", "check", "done", "POST /api/bot-moves/scout-1 moved"]);
-  assert.deepEqual(w.team, { done: true, on: ["routine:r1"] });
+  assert.deepEqual(w.team, { done: true });
   assert.equal(phase(w), "done");
   assert.deepEqual([w.opens, w.closes], [1, 1]);
   assert.deepEqual(w.moves.view(), { bot: SCOUT, team: { id: ACME.id, name: ACME.name }, phase: "done" });
@@ -181,7 +181,9 @@ test("one move per bot: starting it again goes on with it, to another team is re
   assert.equal(w.journal.moves.length, 1);
 });
 
-test("the routines switched on in the team are those that were on on My Cloud", () => {
-  assert.deepEqual(routinesOn(["routine:r1", "webhook:w1", "app-event:a1", "routine:r2", 4, "routine:"]), ["routine:r1", "routine:r2"]);
-  assert.deepEqual(routinesOn(undefined), []);
+test("the team takes the bot in, and nothing of its own goes with it", async () => {
+  const w = world();
+  await w.moves.start({ bot: SCOUT, team: ACME });
+  assert.deepEqual(w.team, { done: true });
+  assert.deepEqual(w.calls, ["begin", "copy", "POST /api/bot-moves/scout-1 moving", "final", "check", "done", "POST /api/bot-moves/scout-1 moved"]);
 });

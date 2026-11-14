@@ -2,15 +2,15 @@
 // (cloud-send.mjs, kept to that one bot) carries it; this runs it in phases and keeps where each move is in one journal
 // (userData/team-moves.json), so a move goes on after the app quits:
 //
-//   copy    the bot, its skills, files, chats and routines go while it keeps working on My Cloud
-//   freeze  My Cloud holds it: no turns, its automations off (server/bot-moves.ts)
+//   copy    the bot, its skills, files and chats go while it keeps working on My Cloud
+//   freeze  My Cloud holds it: no turns (server/bot-moves.ts)
 //   final   the same pass again, for what changed since
 //   check   what arrived, against what My Cloud has; what is missing goes again, three passes at most
-//   switch  the team switches on the routines that were on, then My Cloud keeps the bot as the line that opens it there
+//   switch  the team takes the bot in, then My Cloud keeps it as the line that opens it there
 //   done    the line says so, until it is closed
 //
 // Before the switch a failure lets the bot go on on My Cloud as it was, and the move tries again later; from the switch
-// on it only goes forward, so a routine never runs in both places.
+// on it only goes forward, so the bot never runs in both places.
 
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const sentence = (value) => (typeof value === "string" && value.trim() ? value.trim().replace(/\s+/gu, " ").slice(0, 300) : null);
@@ -45,16 +45,13 @@ export function parseTeamMoves(value) {
   return { v: 1, moves: record(value) && Array.isArray(value.moves) ? value.moves.map(parseMove).filter(Boolean).slice(0, 50) : [] };
 }
 
-/** The routines that were on on My Cloud when the move held the bot there: what the team switches on. */
-export const routinesOn = (held) => (Array.isArray(held) ? held.filter((key) => typeof key === "string" && /^routine:[\w-]{1,128}$/u.test(key)) : []);
-
 /**
  * @param {{
  *   journal: { read(): unknown, write(value: unknown): void },
  *   open(move: any): {
  *     engine: { move(options?: { final?: boolean }): Promise<any>, check(): Promise<{ ok: boolean }> },
  *     myCloud: { call(method: string, route: string, body?: unknown): Promise<{ ok: boolean, status: number, body: any }> },
- *     team: { begin(): Promise<{ name: string } | { done: true }>, done(on: string[]): Promise<void> },
+ *     team: { begin(): Promise<{ name: string } | { done: true }>, done(): Promise<void> },
  *     prepare?(): Promise<Record<string, unknown>>,
  *     close(): Promise<void>,
  *   },
@@ -161,11 +158,11 @@ export function createTeamMove(deps) {
     return update(move.bot.id, { phase: "switch", passes, checkedAt: now() });
   }
 
-  /** The point of no return: the team switches on what was on, then My Cloud keeps the bot as its line. */
+  /** The point of no return: the team takes the bot in, then My Cloud keeps it as its line. */
   async function switchOver(io, move) {
     try {
       if (!move.teamDone) {
-        await io.team.done(routinesOn(move.held));
+        await io.team.done();
         move = update(move.bot.id, { teamDone: true });
       }
       const kept = await io.myCloud.call("POST", `/api/bot-moves/${move.bot.id}`, { v: 1, state: "moved", team: { id: move.team.id, name: move.team.name } });

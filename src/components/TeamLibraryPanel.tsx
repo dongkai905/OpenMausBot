@@ -5,7 +5,6 @@ import { teamImportPreview, type PendingTeamImport } from "@/lib/team-import";
 import { addTemplate } from "@/lib/template-add";
 import { orgCardAction, orgPackagePreview, type OrgLibraryListing, type OrgLibraryPackage } from "@/lib/org-library";
 import type { PackageDocument } from "../../shared/package-format";
-import type { Routine } from "@/lib/routines";
 import { api, useStore, type Bot, type Group } from "@/state/store";
 import { ArrowLeft, Check, Compass, ExternalLink, FolderOpen, Github, Loader2, Search, Share2, UploadCloud, Users, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -317,10 +316,9 @@ export function TeamLibraryPanel({
       const response = (await api("/api/org-library/add", {
         method: "POST",
         body: JSON.stringify({ packageId: entry.packageId }),
-      })) as { alreadyAdded: boolean; bots?: Bot[]; groups?: Group[]; routines?: Routine[]; connections?: unknown[] };
+      })) as { alreadyAdded: boolean; bots?: Bot[]; groups?: Group[]; connections?: unknown[] };
       for (const bot of response.bots ?? []) dispatch({ type: "botAdded", bot });
       for (const group of response.groups ?? []) dispatch({ type: "groupPatched", group });
-      for (const routine of response.routines ?? []) dispatch({ type: "routinePatched", routine });
       const first = response.bots?.find((bot) => !bot.hidden);
       track("team_imported", { members: response.bots?.length ?? 0, source: "organization", mode: "add", format: "package" });
       if (first) {

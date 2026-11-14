@@ -19,7 +19,6 @@ import type { ComputerIdleTimer } from "../computer-idle.ts";
 import type { LocalVmLease } from "../local-vm-lease.ts";
 import { redactSecretsInText } from "../redact.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import { sectionKey, type BotRecord, type Store } from "../store.ts";
 import { teamComputerAssignment, teamComputerCreate, teamComputerOwner, type TeamComputerRecord, type TeamComputers } from "../team-computers.ts";
@@ -42,7 +41,6 @@ export interface ComputerRouteDeps {
   sessions: Pick<SessionRegistry, "isLive">;
   teamComputers: Pick<TeamComputers, "get" | "create" | "assign" | "setProblem" | "list">;
   computerControl: Pick<ComputerControl, "snapshot" | "take" | "release" | "acquireLease" | "releaseLease" | "ownsLease">;
-  routines(): Pick<RoutineManager, "activeRunForBot"> | null;
   controlLeaseIdSchema: ZodString;
   boatLifecycleBusyBots: Pick<Set<string>, "has">;
   computerProviderConfigTransitions: Pick<Set<RemoteComputerProvider>, "has">;
@@ -97,7 +95,6 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
     if (await usage(context) !== PASS) return;
     if (await frames(context) !== PASS) return;
     const { req, res, url, path, method, auth, json, readBody } = context;
-    const routines = deps.routines();
     let m: RegExpMatchArray | null = null;
     // Team Boats have real ownership, never a hidden bot or an arbitrary provider id. Admin-only.
     if (path === "/api/team-computers" && method === "GET") {
@@ -145,7 +142,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
           assertCurrentOwner();
           if (section !== null && section !== "" && !store.sections.includes(section)) throw Object.assign(new Error("Create the team before assigning a computer"), { status: 404 });
           if (section !== null && store.bots.some(bot => sectionKey(bot.section) === section && (
-            botHasActiveTurn(bot.id) || routines?.activeRunForBot(bot.id) || botComputerControlSnapshot(bot.id).held || boatLifecycleBusyBots.has(bot.id)
+            botHasActiveTurn(bot.id) || botComputerControlSnapshot(bot.id).held || boatLifecycleBusyBots.has(bot.id)
           ))) throw Object.assign(new Error("Stop the target team's work and release computer control before assigning this computer"), { status: 409 });
         };
         checkAssignment();

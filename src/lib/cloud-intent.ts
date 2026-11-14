@@ -59,11 +59,6 @@ export function markIntentSent(botId: string, at = Date.now()): void {
   update({ pending: null, reopened: false, sent: { botId, at } });
 }
 
-export function jobRoutine<R extends { botId: string; createdAt: number }>(routines: readonly R[], sent: SentIntent | null): R | undefined {
-  const fresh = routines.filter((routine) => !sent || (routine.botId === sent.botId && routine.createdAt >= sent.at - 60_000));
-  return fresh.sort((a, b) => a.createdAt - b.createdAt)[0];
-}
-
 export function setPendingIntent(job: string | null): void {
   update({ pending: job?.trim() || null });
 }

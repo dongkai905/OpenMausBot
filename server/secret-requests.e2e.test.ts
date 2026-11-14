@@ -201,9 +201,6 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
   expect(pathAsRef.isError).toBe(true);
   expect(pathAsRef.text).toMatch(/^That is a secret file for your own commands, not a secretRef/u);
 
-  // A bot that disobeys and writes a value into its memory still leaves it out of every record.
-  expect((await tools.call("memory_update", { action: "append", text: `Stripe test key: ${FILE_CANARY}` })).isError).toBe(false);
-
   // Only the secret files hold one value, and nothing plain holds the other: the Vault keeps both sealed.
   expect(filesHolding(home, FILE_CANARY).sort()).toEqual([relative(home, cardFile), relative(home, secretFile)].sort());
   expect(filesHolding(home, REF_CANARY)).toEqual([]);

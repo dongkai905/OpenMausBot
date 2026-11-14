@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { RoutineRun } from "../routines.ts";
 import { Store, type Message } from "../store.ts";
 import { createFirstHour, firstName, greetingMessage, LOOK_DRAFTS, lookPrompt, OFFER_UNASKED_MS, type FirstHourDeps } from "./first-hour.ts";
 import { createValueLedger } from "./value-ledger.ts";
@@ -29,7 +28,7 @@ function setup(options: { start?: string; connected?: { gmail?: boolean; googlec
   const world = {
     person: {} as { name?: string; email?: string }, language: undefined as string | undefined, zone: "UTC",
     connected: { gmail: false, googlecalendar: false, ...options.connected }, briefOn: false, phones: 0, busy: false,
-    pushed: [] as string[], turns: [] as Array<{ text: string; threadId: string }>, welcomeDone: 0, runs: [] as RoutineRun[],
+    pushed: [] as string[], turns: [] as Array<{ text: string; threadId: string }>, welcomeDone: 0,
     reply: "This week: Standup Tue 10:00." as string | null,
     /** While set, the first look's turn runs until this is called. */
     held: null as null | (() => void), hold: false,
@@ -50,7 +49,7 @@ function setup(options: { start?: string; connected?: { gmail?: boolean; googlec
       else end();
     },
     notify: (_bot, _thread, body) => world.pushed.push(body), wrote: () => {}, welcomeDone: () => { world.welcomeDone += 1; },
-    runs: () => world.runs, ledger,
+    ledger,
   };
   const make = () => {
     const made = createFirstHour(deps);
@@ -281,11 +280,6 @@ describe("a new Cloud's first hour", () => {
     const other = t.make();
     other.begin();
     t.ledger.add("drafted", 1);
-    t.world.runs.push(
-      { id: "r1", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "posted", threadId: "x", messageId: "y" } },
-      { id: "r2", routineId: "watch", routineName: "Keep an eye on my day", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, deliver: "brief", report: { state: "posted", threadId: "x", messageId: "y" } },
-      { id: "r3", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "quiet" } },
-    );
     t.set("2026-10-28T09:00:00Z");
     other.tick();
     expect(t.texts().filter((text) => text?.startsWith("So far"))).toEqual(["So far I've drafted 1 reply and ran 1 routine: about 10 minutes back."]);

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { INSTRUCTION_FILE, restorePaths } from "./workspace-backup-paths.ts";
 
-const DEFINITIONS = ["bots.json", "groups.json", "config.json", "routines.json", "calendar-calls.json"];
+const DEFINITIONS = ["bots.json", "groups.json", "config.json"];
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_FILE_BYTES = 16 * 1024 ** 2;
 // The folder a desktop keeps its data in by default, <home>\.openmausbot or <home>/.openmausbot, where a path ends.
@@ -46,8 +46,7 @@ function instructionFiles(dataDir: string): string[] {
   for (const bot of list("bots")) if (bot.isDirectory()) files.push(`bots/${bot.name}/SOUL.md`);
   for (const workspace of list("workspaces")) {
     if (!workspace.isDirectory()) continue;
-    files.push(`workspaces/${workspace.name}/MEMORY.md`);
-    memory(`workspaces/${workspace.name}/memory`);
+    files.push(`workspaces/${workspace.name}/SOUL.md`);
   }
   return files.filter((path) => INSTRUCTION_FILE.test(path));
 }
@@ -71,9 +70,6 @@ function rewrite(name: string, value: unknown, paths: Paths): void {
   paths.definitions(value);
   if (name === "groups.json" && Array.isArray(value)) {
     for (const group of value) if (record(group) && typeof group.bulletin === "string") group.bulletin = paths.text(group.bulletin);
-  }
-  if (name === "routines.json" && record(value) && Array.isArray(value.routines)) {
-    for (const routine of value.routines) if (record(routine) && typeof routine.prompt === "string") routine.prompt = paths.text(routine.prompt);
   }
 }
 

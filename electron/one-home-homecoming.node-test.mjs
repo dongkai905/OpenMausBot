@@ -11,16 +11,16 @@ const AIR = installationOf("8f0c6a51-2b7e-4c1d-9a3f-5e6d7c8b9a01"), IMAC = insta
 
 /**
  * Two computers that both moved to one My Cloud, each with its own app, journal, server, installation and sign-in, and the
- * Admin's word shared between them. Each server's automations are on or off; while a server is not frozen, every
- * automation that is on runs (`live`), which is what the schedulers spy on. My Cloud holds what both brought plus one
- * made there since; the Admin's export of it is counted per computer, and refused to any computer but the one it names.
+ * Admin's word shared between them. Each server's waits are on or off; while a server is not frozen, every wait that is on
+ * runs (`live`). My Cloud holds what both brought plus one made there since; the Admin's export of it is counted per
+ * computer, and refused to any computer but the one it names.
  * `homecoming`: the computer the Admin names once My Cloud ends ("a", "b", or null while none can be chosen).
  */
 function desks({ homecoming = "a" } = {}) {
   let clock = 1_000_000;
   const timers = [];
   const admin = { ended: false, answers: true, homecoming, starting: false, takesReports: true, exportAsks: { a: 0, b: 0 }, reports: { a: [], b: [] } };
-  const cloudOn = { "routine:a1": true, "routine:b1": true, "webhook:bw": true, "routine:c1": true };
+  const cloudOn = { "wait:a1": true, "wait:b1": true, "wait:bw": true, "wait:c1": true };
   const named = () => (admin.homecoming === "a" ? { installationId: AIR, name: "MacBook Air" } : { installationId: IMAC, name: "Studio iMac" });
   const make = (id, name, installation, own) => {
     const desk = {
@@ -47,7 +47,7 @@ function desks({ homecoming = "a" } = {}) {
         admin.reports[id].push({ installation: desk.installation, signIn: desk.signIn });
         return true;
       },
-      send: { move: async () => {}, check: async () => ({ ok: true }), switches: () => ({ ...own }), snapshot: () => ({ running: null }) },
+      send: { move: async () => {}, check: async () => ({ ok: true }), snapshot: () => ({ running: null }) },
       local: {
         async freeze() { desk.server.frozen = true; return { frozen: true }; },
         async unfreeze(options) {
@@ -63,8 +63,6 @@ function desks({ homecoming = "a" } = {}) {
         },
         async call(method, route, body) {
           desk.localCalls.push([method, route, body]);
-          const match = /^\/api\/(routines|webhooks)\/([\w-]+)$/u.exec(route);
-          if (method === "PATCH" && match && body?.enabled === true) desk.server.on[`${match[1] === "routines" ? "routine" : "webhook"}:${match[2]}`] = true;
           return reply(200);
         },
       },
@@ -79,9 +77,9 @@ function desks({ homecoming = "a" } = {}) {
           admin.exportAsks[id]++;
           if (admin.homecoming && admin.homecoming !== id) throw new Error("Your bots came back to MacBook Air. Only that computer brings My Cloud's things home.");
           if (admin.starting) return { later: 60_000 };
-          // The restore leaves every automation off, with what My Cloud had; then what was on there is switched on.
+          // The restore leaves every wait off, with what My Cloud held.
           desk.server.on = Object.fromEntries(Object.keys(cloudOn).map((key) => [key, false]));
-          return { restored: `restore-${id}`, switches: { ...cloudOn } };
+          return { restored: `restore-${id}` };
         },
       },
       restart: () => { desk.restarted++; },
@@ -95,22 +93,22 @@ function desks({ homecoming = "a" } = {}) {
   };
   const w = {
     admin, clock: () => clock,
-    a: make("a", "MacBook Air", AIR, { "routine:a1": true }),
-    b: make("b", "Studio iMac", IMAC, { "routine:b1": true, "webhook:bw": true }),
+    a: make("a", "MacBook Air", AIR, { "wait:a1": true }),
+    b: make("b", "Studio iMac", IMAC, { "wait:b1": true, "wait:bw": true }),
     advance(ms) { clock += ms; },
     async tick(desk) { const due = timers.splice(0); for (const timer of due) timer.work(); await desk.home.kick(); },
     /** Both computers moved: each is frozen, and My Cloud is their home. */
     async moved() {
       w.advance(QUIET_MS + 1);
       for (const desk of [w.a, w.b]) { await desk.home.kick(); assert.equal(desk.journal.phase, "done", desk.name); assert.equal(desk.server.frozen, true); }
-      // A computer's own automations went to My Cloud: frozen here, they no longer run.
+      // A computer's own waits went to My Cloud: frozen here, they no longer run.
       assert.deepEqual([w.a.live(), w.b.live()], [[], []]);
     },
   };
   return w;
 }
 
-/** Each automation runs on at most one computer. */
+/** Each wait runs on at most one computer. */
 const runsOnBoth = (w) => w.a.live().filter((key) => w.b.live().includes(key));
 const story = (desk) => ({ writes: desk.journalWrites, thaws: desk.server.thaws, calls: desk.localCalls, opened: desk.opened, phone: desk.phoneStarts, restarted: desk.restarted, view: desk.home.view() });
 
@@ -127,7 +125,7 @@ async function alone({ reports = true } = {}) {
   return story(w.a);
 }
 
-test("My Cloud ends after two computers moved to it: the one the Admin names restores it and runs its automations; the other opens its own copy with every automation off", async () => {
+test("My Cloud ends after two computers moved to it: the one the Admin names restores it; the other opens its own copy with everything it runs off", async () => {
   const w = desks();
   await w.moved();
   // Each told the Admin once, as itself, that its move is done.
@@ -141,7 +139,7 @@ test("My Cloud ends after two computers moved to it: the one the Admin names res
   await w.b.home.kick();
   assert.deepEqual(w.b.server.thaws, [{ automations: "off" }]);
   assert.equal(w.b.server.frozen, false, "the person isn't locked out of it");
-  assert.deepEqual(w.b.live(), [], "and none of its automations runs");
+  assert.deepEqual(w.b.live(), [], "and none of its waits runs");
   assert.deepEqual(Object.values(w.b.server.on), [false, false]);
   assert.equal(w.b.journal.phase, "back");
   assert.deepEqual(w.b.journal.elsewhere, { name: "MacBook Air", since: frozenAt });
@@ -157,12 +155,12 @@ test("My Cloud ends after two computers moved to it: the one the Admin names res
   assert.equal(w.a.journal.phase, "back");
   assert.equal(w.a.restarted, 1, "the app opens again to finish the restore");
   await w.a.relaunch().kick();
-  assert.deepEqual(w.a.live(), ["routine:a1", "routine:b1", "routine:c1", "webhook:bw"], "everything comes home here, with what was on at My Cloud on");
+  assert.deepEqual(w.a.live(), [], "nothing runs here: the restore leaves every wait off");
   assert.deepEqual(w.a.home.view(), { phase: "back" });
   assert.deepEqual(w.admin.exportAsks, { a: 1, b: 0 });
   assert.deepEqual(story(w.a), await alone(), "write for write and call for call what one computer alone does");
 
-  assert.deepEqual(runsOnBoth(w), [], "an automation never runs on both computers");
+  assert.deepEqual(runsOnBoth(w), [], "a wait never runs on both computers");
   for (const desk of [w.b, w.a]) await desk.relaunch().kick();
   assert.deepEqual([w.b.server.thaws.length, w.b.brought, w.admin.exportAsks.b], [1, 0, 0]);
   assert.deepEqual(w.b.live(), []);
@@ -245,7 +243,7 @@ test("the app killed as its copy opens: it opens it again with every automation 
   assert.deepEqual([w.b.live(), w.b.brought], [[], 0]);
 });
 
-test("a computer already coming home when the Admin names another stops asking for My Cloud's backup and switches its automations off", async () => {
+test("a computer already coming home when the Admin names another stops asking for My Cloud's backup and switches everything it runs off", async () => {
   const w = desks();
   await w.moved();
   // It started coming home before the Admin named a computer, and is waiting for the export.
@@ -256,7 +254,7 @@ test("a computer already coming home when the Admin names another stops asking f
   await refusing.home.kick();
   assert.equal(refusing.journal.phase, "home-again");
   assert.deepEqual(refusing.server.thaws, [null]);
-  assert.deepEqual(refusing.live(), ["routine:b1", "webhook:bw"], "home again as it was, as one computer alone is");
+  assert.deepEqual(refusing.live(), ["wait:b1", "wait:bw"], "home again as it was, as one computer alone is");
   w.admin.homecoming = "a";
   w.admin.starting = false;
   const asked = refusing.brought;

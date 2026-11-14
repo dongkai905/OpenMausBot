@@ -4,7 +4,7 @@ import { Copy } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
-import { relativeTime } from "@/lib/memory";
+import { relativeTime } from "@/lib/clock-time";
 import { api, useStore, type Bot } from "@/state/store";
 import { BOT_API_KEY_PLACEHOLDER, BOT_API_UPGRADE, botApiCurl } from "../../../shared/bot-api";
 import { NoteLine, useCloudUsage, useUpgrade } from "../CloudUsageMeter";
@@ -190,7 +190,7 @@ function BotApiSection({ bot, webhooksLink = false, className }: { bot: Bot; web
       {webhooksLink && (
         <button
           type="button"
-          onClick={() => dispatch({ type: "showRoutines", view: "list" })}
+          onClick={() => dispatch({ type: "showAutomations" })}
           className="mt-3 text-[13px] text-ink-secondary hover:text-ink"
           data-testid="bot-api-webhooks"
         >

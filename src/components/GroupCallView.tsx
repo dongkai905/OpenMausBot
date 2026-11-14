@@ -18,7 +18,7 @@ import { CallTargetButton, type CallButtonPlacement } from "./CallView";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { speechBridge } from "@/lib/speech";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
-import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
+import { isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 import { titledCard } from "./ApprovalCard";
 
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|allow|approve|approved|fine|please do)\b/i;
@@ -102,7 +102,6 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   const askedApproval = useRef<{
     requestId: string;
     member?: Bot;
-    routine: boolean;
     skill: boolean;
     submitted: boolean;
   } | null>(null);
@@ -271,7 +270,7 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
               ) return;
               pending.submitted = false;
               const detail = error.trim().slice(0, 240);
-              const decision = openApproval.routine ? "routine decision" : "approval";
+              const decision = "approval";
               enqueueSpeech(
                 `I couldn't save that ${decision}${detail ? `: ${detail}` : "."} Please try again.`,
                 openApproval.member,
@@ -344,19 +343,13 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   }, [dispatch, enqueueSpeech, group.id, group.threadId, hush, listen, move, scheduleListen]);
 
   useEffect(() => {
-    let resumeAfterRoutine = false;
     if (askedApproval.current && approval?.requestId !== askedApproval.current.requestId) {
-      resumeAfterRoutine = askedApproval.current.routine && askedApproval.current.submitted;
       askedApproval.current = null;
     }
     if (askedQuestion.current && question?.card?.requestId !== askedQuestion.current.requestId) {
       askedQuestion.current = null;
     }
 
-    if (resumeAfterRoutine && !approval && !question && !group.working && !group.busyBotId) {
-      scheduleListen(true);
-      return;
-    }
     // Voice queue and microphone stay closed until this exact decision settles or its request errors.
     if (askedApproval.current?.submitted) return;
 
@@ -365,7 +358,6 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
       askedApproval.current = {
         requestId: approval.requestId,
         member,
-        routine: isRoutineApproval(approval),
         skill: isSkillApproval(approval),
         submitted: false,
       };

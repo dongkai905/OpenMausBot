@@ -20,7 +20,6 @@ export function gapKey(report) {
     if (!record(entry)) return text(entry);
     if (kind === "items") return text(entry.key);
     if (kind === "parts") return `${text(entry.key)}:${list(entry.parts).join(",")}`;
-    if (kind === "memory") return `${text(entry.bot)}/${text(entry.path)}`;
     if (kind === "rooms") return text(entry.id);
     return JSON.stringify(entry);
   };
@@ -33,7 +32,7 @@ export function gapKey(report) {
   return createHash("sha256").update(JSON.stringify(shape)).digest("hex").slice(0, 24);
 }
 
-/** "2 chats (1 broken path, 3 rows), 4 attachments, 1 memory": what is missing by kind and count, never a name or an id. */
+/** "2 chats (1 broken path, 3 rows), 4 attachments": what is missing by kind and count, never a name or an id. */
 export function gapSummary(report) {
   const gaps = record(report?.gaps) ? report.gaps : {};
   const parts = Object.entries(gaps).flatMap(([kind, entries]) => (list(entries).length ? [`${list(entries).length} ${kind}`] : []));
@@ -55,9 +54,9 @@ export function gapSummary(report) {
 export const STAYED_MAX = 8;
 
 /**
- * What stayed on this computer, in the person's words, one line per thing they know: a bot's name for its memory, chats
- * and files, a room's name, an app or a key. `report.names`: bot ids and `room:<id>` to their names; `report.owners`: each
- * short chat's bot id or `room:<id>`. Never a path, a secret or anything written in a chat.
+ * What stayed on this computer, in the person's words, one line per thing they know: a bot's name for its chats and files, a
+ * room's name, an app or a key. `report.names`: bot ids and `room:<id>` to their names; `report.owners`: each short chat's
+ * bot id or `room:<id>`. Never a path, a secret or anything written in a chat.
  */
 export function stayedBehind(report, t = nativeText.englishText.t) {
   const gaps = record(report?.gaps) ? report.gaps : {};
@@ -76,15 +75,10 @@ export function stayedBehind(report, t = nativeText.englishText.t) {
   for (const item of list(gaps.items)) add(text(item?.label) || t("native.cloud.stayed.something"), t("native.cloud.stayed.notArrived"));
   for (const item of list(gaps.parts)) add(text(item?.label) || t("native.cloud.stayed.something"), t("native.cloud.stayed.settings"));
   for (const room of list(gaps.rooms)) add(text(room?.name) || t("native.cloud.stayed.room"), t("native.cloud.stayed.roomNotArrived"));
-  for (const [bot, count] of byBot(list(gaps.memory), (entry) => entry?.bot)) add(nameOf(bot) ?? t("room.aBot"), plural(count, "native.cloud.stayed.memoryOne", "native.cloud.stayed.memoryMany"));
-  for (const bot of new Set(list(gaps.journal))) add(nameOf(bot) ?? t("room.aBot"), t("native.cloud.stayed.memoryHistory"));
   const files = byBot(list(gaps.files), (path) => /^(?:workspaces|task-workspaces)\/([\w-]{1,128})\//u.exec(text(path))?.[1]);
   for (const [bot, count] of files) add(nameOf(bot) ?? t("room.aBot"), plural(count, "native.cloud.stayed.fileOne", "native.cloud.stayed.fileMany"));
   const chats = byBot([...list(gaps.conversations), ...list(gaps.settings), ...shortChats(report).map((entry) => entry.threadId)], (threadId) => owners[threadId]);
   for (const [owner, count] of chats) add(nameOf(owner) ?? t("native.cloud.stayed.chats"), plural(count, "native.cloud.stayed.chatOne", "native.cloud.stayed.chatMany"));
-  if (list(gaps.runs).length) add(t("native.cloud.stayed.routineHistory"), plural(gaps.runs.length, "native.cloud.stayed.runOne", "native.cloud.stayed.runMany"));
-  if (list(gaps.learned).length) add(t("native.cloud.stayed.learned"), t("native.cloud.stayed.learnedNotArrived"));
-  if (list(gaps.teams).length) add(t("native.cloud.stayed.teamNotes"), t("native.cloud.stayed.teamNotesNotArrived"));
   for (const id of list(gaps.connections)) add(text(id).replace(/^(?:mcp|key):/u, "") || t("native.cloud.stayed.app"), t("native.cloud.stayed.addAgain"));
   const attachments = list(report?.attachments).length;
   if (attachments) add(plural(attachments, "native.cloud.stayed.attachmentOne", "native.cloud.stayed.attachmentMany"), plural(attachments, "native.cloud.stayed.notArrived", "native.cloud.stayed.notArrivedMany"));

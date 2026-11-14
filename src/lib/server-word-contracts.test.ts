@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { en, type LocaleKey } from "@/locales";
-import { activityText, noticeText, routineLineText } from "./activity-text";
+import { activityText, noticeText } from "./activity-text";
 import { setLocale, t } from "./i18n";
 import { serverErrorText } from "./server-error";
 import { USER_ERROR, userError, type UserErrorKey } from "../../server/user-errors";
 import { CHAT_NOTICE, noticeFailure, noticeLine, noticeSummary, noticeTool, type ChatNoticeKey } from "../../server/chat-notices";
-import { ROUTINE_LINE, codedLine, type RoutineLineKey } from "../../server/routine-lines";
 
 const paramsFor = (template: string) => Object.fromEntries([...template.matchAll(/\{(\w+)\}/g)].map(([, name]) => [name!, `Fixture ${name}`]));
 afterEach(() => setLocale("en"));
@@ -39,15 +38,6 @@ describe("fixed server words across transport and renderer", () => {
     expect(activityText(tool, tool.name)).toBe(t(key as LocaleKey, params));
     expect(noticeText(failure.text.key, failure.message, failure.text.params)).toBe(t(key as LocaleKey, params));
     expect(noticeText(summary.summaryCode, summary.summary, summary.summaryParams)).toBe(t(key as LocaleKey, params));
-    expect(en[key as LocaleKey]).toBe(template);
-  });
-
-  it.each(Object.entries(ROUTINE_LINE).filter(([key]) => !key.includes(".part.")))("renders the routine line %s without changing stored params", (key, template) => {
-    const params = paramsFor(template);
-    const line = codedLine("attention", key as RoutineLineKey, params);
-    expect(routineLineText(line.codes.attentionCode, line.text, line.codes.attentionParams)).toBe(line.text);
-    setLocale("pt-br");
-    expect(routineLineText(line.codes.attentionCode, line.text, line.codes.attentionParams)).toBe(t(key as LocaleKey, params));
     expect(en[key as LocaleKey]).toBe(template);
   });
 });

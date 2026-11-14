@@ -8,7 +8,7 @@
 // reached through a link: every folder between a root and what is removed must be a real folder, and a link found
 // there is removed as a link, never what it points at. Nothing here throws into the delete, which has already happened.
 import { lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { baseBotId, isLayerId } from "../audience.ts";
 
@@ -49,16 +49,9 @@ export interface DeleteLeftoversDeps {
   keptAttachments(): ReadonlySet<string> | null;
   deleteAttachment(name: string): void;
   engineFolders(): EngineSessionFolders;
-  layers: MemoryLayerRecords;
   /** Runs `flush` once the delete under way has finished, so one pass covers every conversation it removed. */
   defer?(flush: () => void): void;
   warn?(line: string): void;
-}
-
-export interface MemoryLayerRecords {
-  journalFile(layer: string): string;
-  /** The layer's indexed notes and its journal's state in memory. */
-  forget(layer: string): void;
 }
 
 function entries(dir: string): string[] {
@@ -138,13 +131,10 @@ function loggedSessions(dataDir: string, threadId: string): string[] {
 
 const cursorsOf = (cursors: Cursors): string[] => Object.values(cursors ?? {}).filter((cursor): cursor is string => typeof cursor === "string" && cursor !== "");
 
-/** Removes one memory layer of a bot: its folder beside the bot's own, its journal and its indexed notes. */
-export function removeMemoryLayer(dataDir: string, layer: string, records: MemoryLayerRecords): void {
+/** Removes one memory layer of a bot: its folder beside the bot's own. */
+export function removeMemoryLayer(dataDir: string, layer: string): void {
   if (!isLayerId(layer)) return;
   removeUnder(dataDir, join(dataDir, "workspaces", layer));
-  const journal = records.journalFile(layer);
-  removeUnder(dirname(dirname(journal)), journal);
-  records.forget(layer);
 }
 
 /** Where each engine keeps its sessions, for every environment an engine of this server runs with. */
@@ -259,7 +249,7 @@ export function createDeleteLeftovers(deps: DeleteLeftoversDeps) {
     const live = new Set(deps.store.bots.map((bot) => bot.id));
     for (const layer of entries(join(dataDir, "workspaces"))) {
       if (!isLayerId(layer) || baseBotId(layer) !== botId || live.has(layer)) continue;
-      attempt(`the memory layer ${layer}`, () => removeMemoryLayer(dataDir, layer, deps.layers));
+      attempt(`the memory layer ${layer}`, () => removeMemoryLayer(dataDir, layer));
     }
   }
 

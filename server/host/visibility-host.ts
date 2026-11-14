@@ -2,18 +2,14 @@
 // room or conversation change), the one check every request naming a bot, conversation, room, routine or file passes, and
 // the per-conversation filter a list uses. On a Team Cloud an admin is a viewer with a person too: every bot and room, but
 // only their own private chats (audience.ts).
-import { basename } from "node:path";
-
 import { baseBotId } from "../audience.ts";
-import { audienceEquals, narrowestAudience, roomFeeds, routineRunVisible, routineVisible, SEES_EVERYTHING, VisibleSet, type PathSubject, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
+import { audienceEquals, narrowestAudience, roomFeeds, SEES_EVERYTHING, VisibleSet, type PathSubject, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import type { RoutineManager } from "../routines.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
 
 export interface VisibilityHostDeps {
   /** index.ts's store, made after this host. */
   store(): Pick<Store, "bots" | "groups" | "bot" | "group" | "botByThread" | "groupByThread" | "patchGroup">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns"> | null;
   /** A Team Cloud: an admin session is a person too. */
   team: boolean;
   audiencesFor(viewer: Viewer): ThreadAudiences | undefined;
@@ -73,14 +69,6 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     return threads;
   }
 
-  /** On a Team Cloud a file a routine carries is refused when only routines hidden from the viewer use it and no
-   * conversation they read does. */
-  function routineFileShown(name: string, visible: VisibleSet): boolean {
-    if (!visible.filtersThreads) return true;
-    const users = (deps.routines()?.listRoutines() ?? []).filter((routine) => routine.attachments?.some((file) => basename(file.path) === name));
-    return !users.length || users.some((routine) => routineVisible(routine, visible)) || threadsUsingAttachment(name).some((threadId) => visible.thread(threadId));
-  }
-
   /** The one visibility check every member request naming a subject passes through (a team's admin's too). */
   function subjectVisible(subject: PathSubject, visible: VisibleSet): boolean {
     switch (subject.kind) {
@@ -94,16 +82,11 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
         return !threadOwner(subject.id) || visible.thread(subject.id);
       case "group":
         return !store.group(subject.id) || visible.group(subject.id);
-      case "routine": {
-        const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === subject.id);
-        return !routine || routineVisible(routine, visible);
-      }
-      case "routine-run": {
-        const run = deps.routines()?.listRuns().find((candidate) => candidate.id === subject.id);
-        return !run || routineRunVisible(run, visible);
-      }
+      case "routine":
+      case "routine-run":
+        return true;
       case "attachment":
-        return visible.attachment(subject.name, threadsUsingAttachment) && routineFileShown(subject.name, visible);
+        return visible.attachment(subject.name, threadsUsingAttachment);
     }
   }
 

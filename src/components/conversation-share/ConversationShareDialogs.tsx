@@ -9,22 +9,18 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { Select } from "../Select";
 import { UndoToast, useTeamName } from "../bot-access/ShareBotButton";
 import {
-  closeConversationDialog, removeTeamMemoryEntry, saveToTeamMemory, shareConversation, sharingOf, useConversationDialog,
+  closeConversationDialog, shareConversation, sharingOf, useConversationDialog,
   type ConversationDialog, type Sharing,
 } from "./conversation-share";
 
-/** The server keeps one note's worth and says it was shortened; this only keeps a very long message off the wire. */
-const MEMORY_TEXT_SENT = 20_000;
-
-/** The confirm step of sharing a conversation and of saving a message to team memory, wherever either was chosen. */
+/** The confirm step of sharing a conversation, wherever it was chosen. */
 export function ConversationShareDialogs() {
   const dialog = useConversationDialog();
   const teamName = useTeamName();
   const { state } = useStore();
   const bot = dialog ? state.bots.find((candidate) => candidate.id === dialog.botId) : undefined;
   if (!dialog || !teamName || !bot) return null;
-  const key = `${dialog.kind}:${dialog.threadId}:${dialog.kind === "memory" ? dialog.messageId : ""}`;
-  if (dialog.kind === "memory") return <SaveToTeamMemory key={key} dialog={dialog} botName={bot.name} />;
+  const key = `${dialog.kind}:${dialog.threadId}`;
   return <ShareConversation key={key} dialog={dialog} botName={bot.name} teamName={teamName} />;
 }
 
@@ -87,29 +83,4 @@ function ShareConversation({ dialog, botName, teamName }: { dialog: Conversation
       confirmLabel={person ? t("conversationShare.personConfirm", { name: person.name }) : t("conversationShare.withPerson")}
       confirmDisabled={!person} pending={pending} onCancel={closeConversationDialog} onConfirm={() => { if (person) share({ email: person.email }); }} />
   );
-}
-
-/** One click saves the message as it is; the toast's Undo takes it out again. Changing or removing it later is the bot's
- * memory view. */
-function SaveToTeamMemory({ dialog, botName }: { dialog: ConversationDialog & { kind: "memory" }; botName: string }) {
-  const [state, setState] = useState<{ saved: string } | { error: string } | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const started = useRef(-1);
-  const retrying = useRef(false);
-  useEffect(() => {
-    if (started.current === attempt) return;
-    started.current = attempt;
-    void saveToTeamMemory({ ...dialog, text: dialog.text.slice(0, MEMORY_TEXT_SENT) }).then(
-      (answer) => setState({ saved: answer.entry.id }),
-      (cause: unknown) => setState({ error: cause instanceof Error ? cause.message : String(cause) }),
-    );
-  }, [attempt]);
-  if (!state) return null;
-  if ("error" in state) {
-    const retry = async () => { retrying.current = true; setState(null); setAttempt((count) => count + 1); };
-    const done = () => { if (retrying.current) retrying.current = false; else closeConversationDialog(); };
-    return <UndoToast text={state.error} actionLabel={t("common.tryAgain")} onDone={done} onUndo={retry} />;
-  }
-  return <UndoToast text={t("teamMemorySave.saved", { bot: botName })} onDone={closeConversationDialog}
-    onUndo={() => removeTeamMemoryEntry(dialog.botId, state.saved)} />;
 }

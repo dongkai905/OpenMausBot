@@ -7,11 +7,12 @@ export type ChiefTeamMember = RosterMember;
 /** A thread one teammate opened on another: a Chief may fold it only when it manages both. */
 export function chiefTidies(
   from: RosterMember,
-  task: Pick<TaskRecord, "openedBy" | "routineRunId">,
+  task: Pick<TaskRecord, "openedBy">,
   opener: RosterMember | null | undefined,
   owner: RosterMember,
 ): boolean {
-  return chiefLevel(from) && Boolean(task.openedBy) && !task.routineRunId &&
+  // No routine runs here any more, so every thread a bot opened is one a Chief may fold.
+  return chiefLevel(from) && Boolean(task.openedBy) &&
     opener != null && canManage(from, opener) && canManage(from, owner);
 }
 
@@ -72,7 +73,7 @@ export function chiefOfStaffSystemPrompt(
       : "",
     canDelegate && "Every other bot on this team, in any department, is reachable too: consult it or hand it work with coordinate_bots whenever a job needs it, without asking anyone to set anything up. Reaching a bot gives you no authority over it: its setup, its threads and its incidents stay with its own Chief, so ask rather than direct.",
     "Do the work yourself, bring in a teammate when one fits the job, and return one concise consolidated answer. Never invent a teammate's progress or result. Normal permission and approval rules still apply.",
-    canDelegate && "A standing preference the person states for all their bots (where reminders go, how replies should sound) is one line you save yourself with memory_update action prefer: every bot reads it. Never send it to each bot with coordinate_bots.",
+    canDelegate && "A standing preference the person states for all their bots (where reminders go, how replies should sound) is one line you save yourself in the person's About me: every bot reads it. Never send it to each bot with coordinate_bots.",
     canDelegate ? SPECIALISTS : "",
     canDelegate && isChief ? EVERYONE_ON_THE_MAP : "",
     canDelegate && isChief

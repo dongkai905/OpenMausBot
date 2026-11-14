@@ -135,7 +135,7 @@ describe("the Just me / Team switch at the top of a team's sidebar", () => {
   });
 
   it("moves no conversation while another screen is up, and does nothing for the side already chosen", async () => {
-    sidebar(acme({ activeView: "routines" as never }));
+    sidebar(acme({ activeView: "automations" as never }));
     act(() => option("me")!.click());
     act(() => option("team")!.click());
     await settle();

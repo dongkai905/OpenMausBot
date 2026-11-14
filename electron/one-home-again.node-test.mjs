@@ -20,7 +20,6 @@ function world(restores) {
     async open() {
       return {
         async call(method, route) {
-          if (route === "/api/cloud-send/manifest") return reply(200, { automations: [{ key: "routine:r1", on: true }, { key: "webhook:w1", on: false }] });
           if (method === "POST" && route === "/api/workspace-backup/export") { w.exports++; return reply(200, { id: `export-${w.exports}` }); }
           return reply(404);
         },
@@ -48,12 +47,12 @@ test("a restore this computer refuses while its bots are busy waits seconds, not
   assert.ok("later" in first && first.later <= 15_000, `it tries again in seconds: ${JSON.stringify(first)}`);
   const second = await w.again.bring();
   assert.ok("later" in second && second.later <= 15_000, `still busy, still seconds: ${JSON.stringify(second)}`);
-  assert.deepEqual(await w.again.bring(), { restored: "staged-1", switches: { "routine:r1": true, "webhook:w1": false } });
+  assert.deepEqual(await w.again.bring(), { restored: "staged-1" });
   assert.deepEqual(w.restored, ["staged-1", "staged-1", "staged-1"], "the same staged backup each time");
   assert.deepEqual([w.asked, w.exports, w.downloads, w.uploads, w.previews], [1, 1, 1, 1, 1], "My Cloud's backup is taken once");
 
   // A later come-home takes a new one.
-  assert.deepEqual(await w.again.bring(), { restored: "staged-2", switches: { "routine:r1": true, "webhook:w1": false } });
+  assert.deepEqual(await w.again.bring(), { restored: "staged-2" });
   assert.deepEqual([w.asked, w.downloads], [2, 2]);
 });
 
@@ -61,6 +60,6 @@ test("a restore that fails otherwise still fails, and the next try takes My Clou
   const w = world([reply(404, { error: "This backup has expired or belongs to another session. Select the file again." })]);
   t.after(() => rmSync(w.tempRoot, { recursive: true, force: true }));
   await assert.rejects(w.again.bring(), /This backup has expired/u);
-  assert.deepEqual(await w.again.bring(), { restored: "staged-2", switches: { "routine:r1": true, "webhook:w1": false } });
+  assert.deepEqual(await w.again.bring(), { restored: "staged-2" });
   assert.deepEqual([w.asked, w.downloads, w.restored], [2, 2, ["staged-1", "staged-2"]]);
 });

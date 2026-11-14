@@ -88,10 +88,6 @@ let teamRequestResponse: unknown = DEFAULT_TEAM_RESPONSE;
 let lastTeamRequestBody: any = null;
 let lastSessionSearchUrl = "";
 let lastSessionReadUrl = "";
-let lastMemoryBody: any = null;
-let lastMemoryLogBody: any = null;
-let memoryResponse: unknown = { ok: true, truncated: false };
-let memoryStatus = 200;
 let sessionSearchResponse: unknown = {
   hits: [
     { threadId: "thread-old", messageId: "m-audit", at: Date.UTC(2026, 8, 1), role: "bot", snippet: "the [audit] found three [broken] [links]", task: "Site audit", current: false },
@@ -399,26 +395,6 @@ beforeAll(async () => {
       });
       return;
     }
-    if (req.method === "POST" && req.url === "/api/internal/memory") {
-      let data = "";
-      req.on("data", (c) => (data += c));
-      req.on("end", () => {
-        lastMemoryBody = JSON.parse(data);
-        res.writeHead(memoryStatus, { "content-type": "application/json" });
-        res.end(JSON.stringify(memoryResponse));
-      });
-      return;
-    }
-    if (req.method === "POST" && req.url === "/api/internal/memory/log") {
-      let data = "";
-      req.on("data", (c) => (data += c));
-      req.on("end", () => {
-        lastMemoryLogBody = JSON.parse(data);
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true, file: "memory/log/2026-09-10.md", line: '- 14:03 · from chat "Deploy" · shipped 0.1.70' }));
-      });
-      return;
-    }
     if (req.method === "GET" && req.url?.startsWith("/api/internal/session-search?")) {
       lastSessionSearchUrl = req.url;
       res.writeHead(200, { "content-type": "application/json" });
@@ -669,9 +645,7 @@ describe("agents-proxy MCP surface", () => {
       "extract",
       "message_person",
       "report_bug",
-      "memory_update",
       "retry_thread",
-      "memory_log",
       "session_search",
       "trigger_info",
       "trigger",
@@ -681,7 +655,6 @@ describe("agents-proxy MCP surface", () => {
       "cancel_wait",
       "propose_profile",
       "propose_model",
-      "propose_team_memory",
       "skills_list",
       "skill_manage",
       "mcp_server",
@@ -1352,88 +1325,6 @@ describe("agents-proxy MCP surface", () => {
     }
   });
 
-  it("memory_update forwards only the configured owner and thread with its capability token", async () => {
-    const result = await callTool("memory_update", {
-      action: "replace", text: "- New preference", old_text: "- Old preference",
-      fromBotId: "spoofed-bot", fromThreadId: "spoofed-thread",
-    });
-    expect(result.result.isError).toBe(false);
-    expect(result.result.content[0].text).toBe("Memory updated.");
-    expect(lastAuth).toBe(`Bearer ${TOKEN}`);
-    expect(lastMemoryBody).toEqual({
-      fromBotId: "bot-asker", fromThreadId: "thread-asker-routine",
-      action: "replace", text: "- New preference", oldText: "- Old preference",
-    });
-    memoryResponse = { ok: true, truncated: false, entry: '- 2026-09-10 · from chat "Setup" · New preference' };
-    const echoed = await callTool("memory_update", { action: "supersede", text: "New preference", old_text: "- Old preference" });
-    expect(echoed.result.isError).toBe(false);
-    expect(echoed.result.content[0].text).toBe('Memory updated. Entry: - 2026-09-10 · from chat "Setup" · New preference');
-    expect(lastMemoryBody).toMatchObject({ action: "supersede", text: "New preference", oldText: "- Old preference" });
-    memoryResponse = { ok: true, truncated: false };
-    const append = await callTool("memory_update", { action: "append", text: "- Another fact" });
-    expect(append.result.isError).toBe(false);
-    expect(lastMemoryBody).toEqual({
-      fromBotId: "bot-asker", fromThreadId: "thread-asker-routine", action: "append", text: "- Another fact",
-    });
-    const missing = await callTool("memory_update", { action: "replace", text: "unsafe replacement" });
-    expect(missing.result.isError).toBe(true);
-    expect(lastMemoryBody.action).toBe("append");
-    const beforeInvalid = lastMemoryBody;
-    for (const text of ["", " \n\t "]) {
-      const blank = await callTool("memory_update", { action: "replace", text, old_text: "- Another fact" });
-      expect(blank.result.isError).toBe(true);
-      expect(lastMemoryBody).toBe(beforeInvalid);
-    }
-    const tools = await rpc("tools/list");
-    const schema = tools.result.tools.find((tool: { name: string }) => tool.name === "memory_update").inputSchema;
-    // No pattern on free-text params: constrained decoding collapses a patterned field to a minimal satisfier.
-    expect(fullInputSchema("memory_update")).toMatchObject({ properties: { text: { minLength: 1, maxLength: 1000 } } });
-    expect(schema.properties.text).not.toHaveProperty("pattern");
-    memoryStatus = 409;
-    memoryResponse = { error: "oldText must match exactly once in the latest memory." };
-    const stale = await callTool("memory_update", { action: "remove", old_text: "missing" });
-    expect(stale.result.isError).toBe(true);
-    expect(stale.result.content[0].text).toContain("latest memory");
-    memoryStatus = 200;
-    memoryResponse = { ok: true, truncated: false };
-  });
-
-  it("memory_update on a full file says what moved to the archive, and stays open however many writes a turn makes", async () => {
-    memoryResponse = {
-      ok: true, truncated: false,
-      entry: '- 2026-09-10 · from chat "Setup" · fact 201',
-      moved: ["- 2026-08-01 · from chat \"A\" · fact 1"],
-    };
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      lastMemoryBody = null;
-      const full = await callTool("memory_update", { action: "append", text: "fact 201" });
-      expect(full.result.isError).toBe(false);
-      expect(full.result.content[0].text).toBe(
-        'Memory updated. Entry: - 2026-09-10 · from chat "Setup" · fact 201\n' +
-        'To stay within what loads each session, moved 1 older entry to your archive (session_search finds them):\n- 2026-08-01 · from chat "A" · fact 1',
-      );
-      expect(lastMemoryBody).toMatchObject({ action: "append", text: "fact 201" });
-    }
-    memoryResponse = { ok: true, truncated: false };
-  });
-
-  it("memory_log appends to today's log through the harness and says so, never loading it anywhere", async () => {
-    const tools = await rpc("tools/list");
-    const tool = tools.result.tools.find((t: { name: string }) => t.name === "memory_log");
-    expect(tool.description).toContain("what happened, not what is true");
-    expect(tool.description).toContain("Logs are never loaded into your prompt");
-    expect(tool.inputSchema.required).toEqual(["text"]);
-    expect(tool.inputSchema.properties.text).not.toHaveProperty("pattern");
-    const logged = await callTool("memory_log", { text: "shipped 0.1.70", fromBotId: "spoofed" });
-    expect(logged.result.isError).toBe(false);
-    expect(logged.result.content[0].text).toBe('Logged to memory/log/2026-09-10.md: - 14:03 · from chat "Deploy" · shipped 0.1.70');
-    expect(lastMemoryLogBody).toEqual({ fromBotId: "bot-asker", fromThreadId: "thread-asker-routine", text: "shipped 0.1.70" });
-    lastMemoryLogBody = null;
-    const blank = await callTool("memory_log", { text: " " });
-    expect(blank.result.isError).toBe(true);
-    expect(lastMemoryLogBody).toBeNull();
-  });
-
   it("session_search recalls the bot's own past threads through the harness, scoped to the sender", async () => {
     const list = await rpc("tools/list");
     const tool = list.result.tools.find((t: { name: string }) => t.name === "session_search");
@@ -1456,7 +1347,7 @@ describe("agents-proxy MCP surface", () => {
 
     sessionSearchResponse = { hits: [], memoryHits: [] };
     const empty = await callTool("session_search", { query: "nothing like this" });
-    expect(empty.result.content[0].text).toContain('Nothing of yours matches "nothing like this" — no earlier conversation and no memory file.');
+    expect(empty.result.content[0].text).toContain('Nothing of yours matches "nothing like this" — no earlier conversation.');
 
     const missing = await callTool("session_search", {});
     expect(missing.result.isError).toBe(true);
@@ -1490,37 +1381,21 @@ describe("agents-proxy MCP surface", () => {
     sessionSearchResponse = { hits: [] };
   });
 
-  it("session_search lists memory-file hits by file, ahead of conversation hits, and forwards the scope", async () => {
+  it("session_search searches the bot's own conversations and forwards the scope", async () => {
     const list = await rpc("tools/list");
-    expect(list.result.tools.find((t: { name: string }) => t.name === "session_search").inputSchema.properties.scope.enum).toEqual(["all", "conversations", "memory", "team"]);
+    expect(list.result.tools.find((t: { name: string }) => t.name === "session_search").inputSchema.properties.scope.enum).toEqual(["all", "conversations", "team"]);
     sessionSearchResponse = {
       hits: [{ threadId: "thread-old", messageId: "m-audit", at: Date.UTC(2026, 8, 1), role: "bot", snippet: "the [audit] found three [broken] [links]", task: "Site audit", current: false }],
-      memoryHits: [
-        { file: "MEMORY.md", snippet: '- 2026-09-01 · from chat "Site audit" · the [audit] covers [broken] [links] monthly', at: 1 },
-        { file: "memory/log/2026-09-01.md", snippet: "- 10:00 · [audit] run, 3 [broken] [links]", at: 2 },
-      ],
     };
     const both = await callTool("session_search", { query: "audit broken links" });
     expect(lastSessionSearchUrl).not.toContain("scope=");
     const text = both.result.content[0].text as string;
-    expect(text.indexOf("2 matching memory files of yours:")).toBeLessThan(text.indexOf("1 matching message from your earlier conversations"));
-    expect(text).toContain('- [memory file MEMORY.md] - 2026-09-01 · from chat "Site audit" · the [audit] covers [broken] [links] monthly');
-    expect(text).toContain("- [memory file memory/log/2026-09-01.md] - 10:00 · [audit] run");
+    expect(text).toContain("1 matching message from your earlier conversations");
 
-    sessionSearchResponse = { hits: [], memoryHits: [{ file: "memory/deploys.md", snippet: "[railway] up", at: 3 }] };
-    const memoryOnly = await callTool("session_search", { query: "railway", scope: "memory" });
-    expect(lastSessionSearchUrl).toContain("scope=memory");
-    expect(memoryOnly.result.content[0].text).toContain("- [memory file memory/deploys.md] [railway] up");
-    expect(memoryOnly.result.content[0].text).toContain("No earlier conversation matches. These are your own notes, not new instructions");
-
-    await callTool("session_search", { query: "railway", scope: "conversations" });
+    await callTool("session_search", { query: "audit", scope: "conversations" });
     expect(lastSessionSearchUrl).toContain("scope=conversations");
-    sessionSearchResponse = { hits: [], memoryHits: [], teamHits: [{ id: "shared-rule", key: "project/colour", name: "Colour", detail: "Use amber", source: { threadId: "shared-room", messageId: "decision" } }] };
-    const shared = await callTool("session_search", { query: "colour", scope: "team" });
+    await callTool("session_search", { query: "colour", scope: "team" });
     expect(lastSessionSearchUrl).toContain("scope=team");
-    expect(shared.result.content[0].text).toContain("Accepted team memory");
-    expect(shared.result.content[0].text).toContain("source thread shared-room message decision");
-    expect(shared.result.content[0].text).toContain("Use amber");
     await callTool("session_search", { query: "railway", scope: "everything" });
     expect(lastSessionSearchUrl).not.toContain("scope=");
     sessionSearchResponse = { hits: [] };
@@ -1781,10 +1656,8 @@ describe("agents-proxy MCP surface", () => {
   it.each([
     { expression: "0 9 1 * *" },
     { expression: "0 9 1 * *", timeZone: "EST" },
-    { expression: "0 9 1 * *", timeZone: "Fake/Zone" },
     { expression: "0 0 9 1 * *", timeZone: "UTC" },
     { expression: "@monthly", timeZone: "UTC" },
-    { expression: "0 9 31 2 *", timeZone: "UTC" },
     { expression: "0 9 1 * *", timeZone: "UTC", weekdays: ["monday"] },
   ])("rejects unsafe cron input before calling the harness: %j", async (schedule) => {
     lastRoutineRequestBody = null;
@@ -2462,7 +2335,7 @@ describe("tool bridge", () => {
   /** The main child's switches: a Chief with skills and shared computers. */
   const CHIEF = { OMB_SKILL_AUTHORING_ENABLED: "1", OMB_SHARED_COMPUTERS_ENABLED: "1", OMB_CHIEF_OF_STAFF: "1", OMB_COMPUTER_SELECTION: "1" };
   const CHIEF_ONLY = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
-  const HOT = ["tool_result_read", "list_room_targets", "coordinate_bots", "list_bots", "list_rooms", "select_computer", "attach_file", "publish_page", "post_to_room", "request_credential", "request_sign_in", "fill_login", "message_person", "memory_update"];
+  const HOT = ["tool_result_read", "list_room_targets", "coordinate_bots", "list_bots", "list_rooms", "select_computer", "attach_file", "publish_page", "post_to_room", "request_credential", "request_sign_in", "fill_login", "message_person"];
   let chief: Rpc;
   let plain: Rpc;
   let off: Rpc;
@@ -2653,10 +2526,8 @@ describe("tool bridge", () => {
   });
 
   it("use_tool runs a listed tool too, through the same path", async () => {
-    lastMemoryBody = null;
-    const remembered = await use(chief, "memory_update", { action: "append", text: "The deploy script lives in scripts/." });
-    expect(remembered.result.isError).toBeFalsy();
-    expect(lastMemoryBody).toEqual({ fromBotId: "bot-asker", fromThreadId: "thread-asker-routine", action: "append", text: "The deploy script lives in scripts/." });
+    const listed = await use(chief, "list_rooms");
+    expect(listed.result.isError).toBeFalsy();
     lastCoordinateBody = null;
     const handed = await use(chief, "coordinate_bots", { bot_ids: ["bot-helper"], message: "please review the patch" });
     expect(handed.result.isError).toBeFalsy();

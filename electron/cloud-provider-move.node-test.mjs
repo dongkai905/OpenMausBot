@@ -24,7 +24,7 @@ function computer({ journal, cloud = {}, admin = {} }) {
     journal: { read: () => structuredClone(w.journal), write: (value) => { w.journal = structuredClone(value); } },
     cloud: () => ({ ...w.cloud }),
     gone: async (origin) => { w.asked.push(origin); return w.admin[origin] ?? null; },
-    send: { move: async () => {}, check: async () => ({ ok: true }), switches: () => ({}), snapshot: () => ({ running: null }) },
+    send: { move: async () => {}, check: async () => ({ ok: true }), snapshot: () => ({ running: null }) },
     local: {
       async freeze(origin) { w.server.frozenFor.push(origin); w.server.marker = { frozen: true, cloud: origin }; return { frozen: true }; },
       async unfreeze(options) { w.server.thaws.push(options ?? null); w.server.marker = { frozen: false }; },

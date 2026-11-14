@@ -76,9 +76,9 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   writeFileSync(join(data, "logins.json"), JSON.stringify([{ password: marker }]));
   writeFileSync(join(data, "providers", "key"), marker);
   writeFileSync(join(data, "tools", "token"), marker);
-  writeFileSync(join(otherWorkspace, "MEMORY.md"), `other bot ${marker}`);
+  writeFileSync(join(otherWorkspace, "SOUL.md"), `other bot ${marker}`);
   writeFileSync(join(otherTask, "notes.md"), `other turn ${marker}`);
-  writeFileSync(join(botFolder, "MEMORY.md"), "own bot");
+  writeFileSync(join(botFolder, "SOUL.md"), "own bot");
   // An engine laid out as `npm install -g --prefix` leaves one: its bin entry a relative link into the package.
   const engineBin = join(npmEnginesPrefix(data), "bin"), engineName = "omb-probe-engine", engineSays = "omb-probe-engine ran";
   const enginePackage = join(npmEnginesPrefix(data), "lib", "node_modules", engineName, "bin");
