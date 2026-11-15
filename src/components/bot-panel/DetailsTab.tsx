@@ -1,14 +1,14 @@
-import { CalendarPlus, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { useStore, type Bot } from "@/state/store";
+import type { Bot } from "@/state/store";
 import { useChatMoreItems } from "../ChatMoreMenu";
 import { ModelPicker } from "../ModelPicker";
 import type { SidebarMenuItem } from "../SidebarPopoverMenu";
 import { BotConversations } from "./Conversations";
 import { TryAsking } from "./TryAsking";
-import { CardLabel, LabelAction, panelActionCls, RowIcon, rowCls, RowText } from "./rows";
+import { CardLabel, RowIcon, rowCls, RowText } from "./rows";
 
 export const CONVERSATION_ITEMS = ["find", "start-fresh", "share-team", "share-person", "usage", "activity", "inspector"];
 
@@ -38,7 +38,6 @@ export function ItemRow({ item }: { item: SidebarMenuItem }) {
 
 export function DetailsTab({ bot }: { bot: Bot }) {
   const { items } = useChatMoreItems(bot);
-  const { dispatch } = useStore();
   const conversationItems = CONVERSATION_ITEMS.flatMap((key) => items.filter((item) => item.key === key));
 
   return (
@@ -65,22 +64,6 @@ export function DetailsTab({ bot }: { bot: Bot }) {
           {conversationItems.map((item) => <ItemRow key={item.key} item={item} />)}
         </section>
       )}
-
-      <section data-panel-empty="automations">
-        <CardLabel action={<LabelAction data-panel-automations="" onClick={() => dispatch({ type: "showAutomations" })}>{t("sidebar.nav.automations")}</LabelAction>}>
-          {t("automations.title")}
-        </CardLabel>
-        <button
-          type="button"
-          data-panel-page="automations"
-          title={t("automations.title")}
-          onClick={() => dispatch({ type: "showAutomations" })}
-          className={cn(panelActionCls, "w-full")}
-        >
-          <CalendarPlus size={15} aria-hidden="true" className="shrink-0 text-ink-secondary" />
-          <span className="truncate">{t("automations.new")}</span>
-        </button>
-      </section>
     </div>
   );
 }

@@ -121,14 +121,13 @@ function sharedTeamPreview(document: PackageDocument, manifest: unknown): Pendin
       : null),
     rooms: pkg.rooms?.length ?? 0,
     playbooks: pkg.playbooks?.length ?? 0,
-    routines: pkg.routines?.length ?? 0,
+    routines: 0,
     apps: pkg.requirements.apps.map((app) => ({ label: app.label, optional: app.optional === true })),
     skills: (pkg.skills?.entries ?? []).filter((skill) => referenced.has(skill.name)).map((skill) => skill.name),
     offeredSkills: (pkg.skills?.entries ?? []).filter((skill) => !referenced.has(skill.name)).map((skill) => skill.name),
     connections: (pkg.connections ?? []).map((connection) => ({
       label: connection.label, url: connection.mcp.url, values: connection.mcp.valueNames.length,
     })),
-    notes: pkg.agents.reduce((total, agent) => total + Object.keys(agent.seed?.memory ?? {}).length, 0),
     presets: (pkg.presets ?? []).map((preset) => preset.name),
   };
 }

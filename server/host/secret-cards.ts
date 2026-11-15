@@ -24,7 +24,6 @@ import { EMAIL_CREDENTIAL, outgoingFieldsOf, type EmailAccountView, type EmailCo
 import type { SecretRequestCardData } from "../../shared/wire.ts";
 import type { AppConfig } from "../config.ts";
 import { perBotLocalVmTarget, poolLocalVmTarget, SHARED_LOCAL_VM_TARGET, VM_WORKSPACE_GUEST } from "../container-computer.ts";
-import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import { addHeldSecretScrubber } from "../redact.ts";
 import { SECRET_VALUE_MAX_BYTES, SecretVault, type SavedSecret, type SecretFileHome } from "../secret-vault.ts";
 import {
@@ -550,7 +549,7 @@ export function createSecretCards(deps: SecretCardsDeps) {
     if (credentialIsConfigured(botLogins.credentialConfig(cfg), credentialId)) {
       return { status: 200, body: { alreadyConfigured: true, label: target.label } };
     }
-    if (deps.providerKeysRefused && isProviderCredentialTarget(credentialId)) return { status: 403, body: { error: HOSTED_PROVIDER_SETTINGS_ERROR } };
+    if (deps.providerKeysRefused && isProviderCredentialTarget(credentialId)) return { status: 403, body: { error: "Company models and provider accounts are managed in Admin." } };
     // A later request supersedes pending cards; the fresh card is appended FIRST, so a failed save leaves the prior cards actionable.
     const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 240) : "";
     const language = deps.threadLanguage?.(fromThreadId);

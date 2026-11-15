@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Hand, Loader2, Minimize2, RefreshCw, Send } from "lucide-react";
+/// <reference path="./novnc.d.ts" />
 import type RFB from "@novnc/novnc";
 import { cn } from "@/lib/cn";
 import { connectDesktop, typeOnDesktop } from "@/lib/desktop-connection";

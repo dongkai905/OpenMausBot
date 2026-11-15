@@ -44,8 +44,6 @@ export interface CloudAccountState {
   purchase?: import("./cloud-home.mjs").CloudPurchase;
   /** Connected: the free trial on this account's Cloud, when the Admin says (display only). */
   trial?: import("./cloud-home.mjs").CloudTrial;
-  /** Connected: the trial's Claude credit, while it lasts. */
-  credit?: import("./cloud-home.mjs").CloudCredit;
   /** Connected: what this account may buy now (the session's `offer`), for wording only. */
   offer?: import("./cloud-home.mjs").CloudOffer;
   /** Connected with an active plan: its allowances and this month's use of them, and the bigger plans the app can move to (display only). */
@@ -212,9 +210,8 @@ export interface AccountSheetBridge { offered(): Promise<boolean>; open(): Promi
 export interface CloudPlanSnapshot {
   status: "paid" | "attention" | "checking" | "signin" | "none";
   tier?: string;
-  /** Verified: the free trial on the Cloud and its Claude credit. */
+  /** Verified: the free trial on the Cloud. */
   trial?: import("./cloud-home.mjs").CloudTrial;
-  credit?: import("./cloud-home.mjs").CloudCredit;
   /** The trial's popup due now, not yet shown today on either page. */
   notice?: import("./cloud-home.mjs").CloudTrialState;
   /** Verified: the plan sleeps when idle. */

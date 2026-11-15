@@ -11,14 +11,17 @@ vi.mock("@/state/store", async (importOriginal) => {
 });
 
 const { CloudBackendPicker } = await import("./CloudBackendPicker");
-const picker = (value: "box" | "vps" = "box") => renderToStaticMarkup(createElement(CloudBackendPicker, { value, onChange: () => {} }));
+const picker = (compact = false) => renderToStaticMarkup(createElement(CloudBackendPicker, { value: "vps", compact, onChange: () => {} }));
 
 describe("CloudBackendPicker", () => {
   afterEach(() => { fixture.config = null; });
 
-  it("offers Boat or a self-hosted VPS on a desktop or self-hosted server", () => {
+  it("names the one backend that is left: the person's own VPS", () => {
     fixture.config = { cloudHome: false };
-    expect(picker()).toContain("Self-hosted VPS");
+    const markup = picker();
+    expect(markup).toContain("Self-hosted VPS");
+    expect(markup).toContain("Auto reuses a running desktop on your VPS.");
+    expect(picker(true)).toContain("Your own server, connected over SSH.");
   });
 
   it("is hidden on My Cloud", () => {
@@ -26,11 +29,11 @@ describe("CloudBackendPicker", () => {
     expect(picker()).toBe("");
   });
 
-  it.each(["box", "vps"] as const)("offers both backends whichever is chosen (%s)", (value) => {
-    const markup = picker(value);
-    expect(markup).toContain("Boat");
-    expect(markup).toContain("Self-hosted VPS");
-    expect(markup).not.toContain("disabled");
+  it("offers no other backend, and no message that asks for one", () => {
+    fixture.config = { cloudHome: false };
+    const markup = picker();
+    expect(markup).not.toContain("Boat");
+    expect(markup).not.toMatch(/disabled/);
     expect(markup).not.toMatch(/ACP model provider/);
   });
 

@@ -123,27 +123,26 @@ test("a connection that fails while the Admin says My Cloud can't be reached say
   await assert.rejects(f.client.pairHome(), { message: "Cloud request failed." });
 });
 
-test("a free trial and its AI credit come with a verified session, for display only; an Admin without them changes nothing", async t => {
+test("a free trial comes with a verified session, for display only; an Admin without one changes nothing", async t => {
   const f = await fixture(t); await f.connect();
   const DAY = 86_400_000, endsAt = f.now + 2 * DAY, origin = "https://home-7f3k2.fly.dev";
   const trial = { state: "active", tier: "pro", endsAt, amount: 4900, chargeAt: endsAt, holdUntil: null, deleteAt: null, keep: "none" };
-  const credit = { grantedUsd: 5, remainingUsd: 3.2, state: "active" };
   f.entitlement = { plan: "pro", tier: "pro", status: "active", expiresAt: endsAt + 3 * DAY, version: 1 };
   f.cloud = { state: "ready", origin, pairingAvailable: true };
   let state = await f.client.refresh();
-  assert.equal(state.trial, undefined); assert.equal(state.credit, undefined);
+  assert.equal(state.trial, undefined);
   assert.deepEqual(cloudPlanSnapshot(state), { status: "paid", tier: "pro" });
-  f.cloud = { state: "ready", origin, pairingAvailable: true, trial, credit };
+  f.cloud = { state: "ready", origin, pairingAvailable: true, trial };
   state = await f.client.refresh();
-  assert.deepEqual(state.trial, trial); assert.deepEqual(state.credit, credit); assert.deepEqual(state.machine, { status: "ready", origin });
+  assert.deepEqual(state.trial, trial); assert.deepEqual(state.machine, { status: "ready", origin });
   assert.equal(state.entitlement.status, "active", "the trial grants nothing; the entitlement does");
-  assert.ok(!JSON.stringify(f.saved).includes("trial") && !JSON.stringify(f.saved).includes("credit"), "nothing about a trial is kept beside the sign-in");
+  assert.ok(!JSON.stringify(f.saved).includes("trial"), "nothing about a trial is kept beside the sign-in");
   const snapshot = cloudPlanSnapshot(state, { notice: "active" });
-  assert.deepEqual(snapshot, { status: "paid", tier: "pro", trial, credit, notice: "active" });
+  assert.deepEqual(snapshot, { status: "paid", tier: "pro", trial, notice: "active" });
   assert.ok(!JSON.stringify(snapshot).includes("person@example.test") && !JSON.stringify(snapshot).includes("fixture-account"));
-  f.cloud = { state: "ready", origin, pairingAvailable: true, trial: { ...trial, state: "paused" }, credit: { ...credit, remainingUsd: 9 } };
+  f.cloud = { state: "ready", origin, pairingAvailable: true, trial: { ...trial, state: "paused" } };
   state = await f.client.refresh();
-  assert.equal(state.trial, undefined); assert.equal(state.credit, undefined); assert.equal(state.machine.status, "ready"); assert.equal(state.entitlement.status, "active");
+  assert.equal(state.trial, undefined); assert.equal(state.machine.status, "ready"); assert.equal(state.entitlement.status, "active");
   const ended = { ...trial, state: "ended", chargeAt: null, deleteAt: endsAt + 3 * DAY, keep: "checkout" };
   f.entitlement = { plan: "free", status: "inactive", expiresAt: null, version: 2 };
   f.cloud = { state: "stopped", origin: null, pairingAvailable: false, trial: ended };
@@ -152,10 +151,10 @@ test("a free trial and its AI credit come with a verified session, for display o
   f.sessionStatus = 503; await f.client.refresh(); f.now += 15 * 60_000;
   assert.equal(f.client.state().trial, undefined);
   assert.deepEqual(cloudPlanSnapshot(f.client.state(), { notice: "ended" }), { status: "none" });
-  for (const unverified of [{ status: "unavailable", trial: ended, credit, lastPlan: { tier: "pro", active: true } }, { status: "unavailable", trial: ended, credit },
-    { status: "reauth-required", trial: ended, credit }, { status: "signed-out", trial: ended }]) {
+  for (const unverified of [{ status: "unavailable", trial: ended, lastPlan: { tier: "pro", active: true } }, { status: "unavailable", trial: ended },
+    { status: "reauth-required", trial: ended }, { status: "signed-out", trial: ended }]) {
     const shown = cloudPlanSnapshot(unverified, { notice: "ended" });
-    assert.equal(shown.trial, undefined); assert.equal(shown.credit, undefined); assert.equal(shown.notice, undefined);
+    assert.equal(shown.trial, undefined); assert.equal(shown.notice, undefined);
   }
   assert.deepEqual(cloudPlanSnapshot({ status: "connected", entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 1 } }, { notice: "ended" }), { status: "none" });
 });
@@ -169,10 +168,10 @@ test("what this person may buy: the session's own offer when signed in, else the
   const asked = () => f.requests.filter(row => row.route === "/api/public/config");
   assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1);
   assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
-  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "OpenMausBot", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
+  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "OpenMausBot", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3 }, refundDays: 14 } };
   const [first, second] = await Promise.all([f.client.offer(), f.client.offer()]);
   assert.deepEqual(first.plans.map(plan => [plan.tier, plan.amount, plan.trialDays]), [["starter", 1500, 7], ["pro", 4900, 7]]);
-  assert.deepEqual([first.recommended, first.creditUsd, first.refundDays], ["pro", 5, 14]);
+  assert.deepEqual([first.recommended, first.refundDays], ["pro", 14]);
   assert.deepEqual(second, first); assert.equal(asked().length, 2, "one ask at a time");
   f.now += 9 * 60_000; await f.client.offer(); assert.equal(asked().length, 2, "an answer counts for 10 minutes");
   assert.ok(asked().every(row => row.token === undefined && row.cookie === undefined && row.method === "GET" && row.version === undefined));

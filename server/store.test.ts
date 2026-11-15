@@ -39,7 +39,7 @@ describe("Store", () => {
     const bot = store.createBot({ name: "Mail reader" });
     const file = join(DATA_DIR, "bots.json");
     const rows = JSON.parse(readFileSync(file, "utf8")) as BotRecord[];
-    Object.assign(rows.find((row) => row.id === bot.id)!, { composio: true, connectorTools: {}, connectorScopes: { apps: { gmail: "read", googlecalendar: "write" } } });
+    Object.assign(rows.find((row) => row.id === bot.id)!, { apps: true, connectorTools: {}, connectorScopes: { apps: { gmail: "read", googlecalendar: "write" } } });
     writeFileSync(file, JSON.stringify(rows));
     const loaded = new Store(selection);
     expect(loaded.bot(bot.id)?.connectorTools).toEqual({ gmail: { tools: "*" }, googlecalendar: { tools: "*" } });
@@ -55,9 +55,9 @@ describe("Store", () => {
     const only = store.createBot({ name: "Limited bot" });
     const file = join(DATA_DIR, "bots.json");
     const rows = JSON.parse(readFileSync(file, "utf8")) as BotRecord[];
-    Object.assign(rows.find((row) => row.id === crm.id)!, { composio: true,
+    Object.assign(rows.find((row) => row.id === crm.id)!, { apps: true,
       connectorTools: { gmail: { tools: "*" }, highlevel: { tools: ["HIGHLEVEL_GET_CONTACT"] } }, connectorScopes: { apps: { gmail: "read", highlevel: "write" } } });
-    Object.assign(rows.find((row) => row.id === only.id)!, { composio: true, connectorTools: { highlevel: { tools: "*" } }, connectorScopes: { apps: { highlevel: "read" } } });
+    Object.assign(rows.find((row) => row.id === only.id)!, { apps: true, connectorTools: { highlevel: { tools: "*" } }, connectorScopes: { apps: { highlevel: "read" } } });
     writeFileSync(file, JSON.stringify(rows));
 
     const loaded = new Store(selection);
@@ -910,12 +910,12 @@ describe("Store", () => {
     expect(store.activePath(bot.threadId).at(-1)?.id).toBe(orphan.id);
   });
 
-  it("persists the per-bot composio gate", () => {
+  it("persists the per-bot apps gate", () => {
     const store = new Store(selection);
     const bot = store.createBot();
-    store.patchBot(bot.id, { composio: false });
+    store.patchBot(bot.id, { apps: false });
     const reloaded = new Store(selection);
-    expect(reloaded.bot(bot.id)?.composio).toBe(false);
+    expect(reloaded.bot(bot.id)?.apps).toBe(false);
   });
 
   it("persists per-bot connector tool grants without touching legacy records", () => {
@@ -935,7 +935,7 @@ describe("Store", () => {
     const reloaded = new Store(selection);
     expect(reloaded.bot(bot.id)?.connectorTools).toEqual(store.bot(bot.id)?.connectorTools);
     expect(reloaded.bot(legacy.id)?.connectorTools).toBeUndefined();
-    expect(reloaded.bot(legacy.id)?.composio).toBeUndefined();
+    expect(reloaded.bot(legacy.id)?.apps).toBeUndefined();
   });
 
   it("rejects malformed connector tool grants at the store boundary", () => {
@@ -1105,25 +1105,25 @@ describe("Store", () => {
 
   it("normalizes persisted cloud backends without changing valid or absent values", () => {
     const store = new Store(selection);
-    const boat = store.createBot();
+    const gone = store.createBot();
     const vps = store.createBot();
     const invalid = store.createBot();
     const absent = store.createBot();
     const raw: BotRecord[] = JSON.parse(readFileSync(join(DATA_DIR, "bots.json"), "utf8"));
-    raw.find((bot) => bot.id === boat.id)!.cloudBackend = "box";
+    (raw.find((bot) => bot.id === gone.id) as unknown as { cloudBackend: string }).cloudBackend = "box";
     raw.find((bot) => bot.id === vps.id)!.cloudBackend = "vps";
     (raw.find((bot) => bot.id === invalid.id) as unknown as { cloudBackend: string }).cloudBackend = "daytona";
     delete raw.find((bot) => bot.id === absent.id)!.cloudBackend;
     writeFileSync(join(DATA_DIR, "bots.json"), JSON.stringify(raw));
 
     const reloaded = new Store(selection);
-    expect(reloaded.bot(boat.id)?.cloudBackend).toBe("box");
+    expect(reloaded.bot(gone.id)?.cloudBackend, "the retired backend is gone").toBeUndefined();
     expect(reloaded.bot(vps.id)?.cloudBackend).toBe("vps");
     expect(reloaded.bot(invalid.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(absent.id)?.cloudBackend).toBeUndefined();
 
     const saved: BotRecord[] = JSON.parse(readFileSync(join(DATA_DIR, "bots.json"), "utf8"));
-    expect(saved.find((bot) => bot.id === boat.id)?.cloudBackend).toBe("box");
+    expect(saved.find((bot) => bot.id === gone.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === vps.id)?.cloudBackend).toBe("vps");
     expect(saved.find((bot) => bot.id === invalid.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === absent.id)).not.toHaveProperty("cloudBackend");
@@ -1711,12 +1711,12 @@ describe("Store", () => {
     expect(store.messagesFor(bot.threadId)).toHaveLength(0);
   });
 
-  it("persists the per-bot composio gate", () => {
+  it("persists the per-bot apps gate", () => {
     const store = new Store(selection);
     const bot = store.createBot();
-    store.patchBot(bot.id, { composio: false });
+    store.patchBot(bot.id, { apps: false });
     const reloaded = new Store(selection);
-    expect(reloaded.bot(bot.id)?.composio).toBe(false);
+    expect(reloaded.bot(bot.id)?.apps).toBe(false);
   });
 
   it("deleteBot removes the bot and its durable transcript", () => {
@@ -2300,13 +2300,13 @@ describe("Store askedAt from before builds kept it", () => {
     const asked = store.appendMessage(first, { role: "user", kind: "text", text: "Good morning.", sendId: "send-1" });
     store.appendMessage(first, { role: "bot", kind: "text", text: "Morning!" });
     store.appendMessage(later, { role: "user", kind: "text", text: "Report this run's state." });
-    store.appendMessage(run, { role: "user", kind: "text", text: "Go.", sendId: "send-2" });
+    const askedRun = store.appendMessage(run, { role: "user", kind: "text", text: "Go.", sendId: "send-2" });
     expect(existsSync(join(DATA_DIR, "asked-at-filled"))).toBe(true);
     rmSync(join(DATA_DIR, "asked-at-filled"));
     const upgraded = new Store(selection);
     expect(upgraded.taskByThread(bot.id, first)?.askedAt).toBe(asked.at);
     expect(upgraded.taskByThread(bot.id, later)).not.toHaveProperty("askedAt");
-    expect(upgraded.taskByThread(bot.id, run)).not.toHaveProperty("askedAt");
+    expect(upgraded.taskByThread(bot.id, run)?.askedAt).toBe(askedRun.at);
     expect(toWireTask(upgraded.taskByThread(bot.id, first)!, selection())).not.toHaveProperty("askedAt");
     upgraded.appendMessage(later, { role: "user", kind: "text", text: "Hello.", sendId: "send-3" });
     expect(new Store(selection).taskByThread(bot.id, later)).not.toHaveProperty("askedAt");
@@ -2540,16 +2540,16 @@ describe("soul", () => {
       ] });
     return store.bot(botId)!;
   };
-  const grantsOf = (bot: BotRecord) => ({ composio: bot.composio, connectorTools: bot.connectorTools, connectorScopes: bot.connectorScopes, mcpServers: bot.mcpServers });
+  const grantsOf = (bot: BotRecord) => ({ apps: bot.apps, connectorTools: bot.connectorTools, connectorScopes: bot.connectorScopes, mcpServers: bot.mcpServers });
 
   it("starts a bot a Chief creates with the Chief's own connected apps and levels, copied, never more", () => {
     const store = new Store(selection);
     const chief = store.createBot({ name: "Ops", section: "Ops" });
-    store.patchBot(chief.id, { chiefOfStaff: true, composio: true, mcpServers: ["notes"],
+    store.patchBot(chief.id, { chiefOfStaff: true, apps: true, mcpServers: ["notes"],
       connectorTools: { gmail: { tools: ["GMAIL_FETCH_EMAILS"] }, slack: { tools: "*" } },
       connectorScopes: { apps: { gmail: "read", slack: "write" } } });
     const helper = createdBy(store, chief, "helper");
-    expect(grantsOf(helper)).toEqual({ composio: true, mcpServers: ["notes"],
+    expect(grantsOf(helper)).toEqual({ apps: true, mcpServers: ["notes"],
       connectorTools: { gmail: { tools: ["GMAIL_FETCH_EMAILS"] }, slack: { tools: "*" } },
       connectorScopes: { apps: { gmail: "read", slack: "write" } } });
     expect(grantsOf(new Store(selection).bot("helper")!)).toEqual(grantsOf(helper));
@@ -2561,20 +2561,20 @@ describe("soul", () => {
 
     store.patchBot(chief.id, { connectorScopes: { apps: { slack: "read" } }, connectorTools: { slack: { tools: ["SLACK_LIST_CHANNELS"] } }, mcpServers: [] });
     const later = createdBy(store, chief, "later");
-    expect(grantsOf(later), "what the Chief has when the bot is made").toEqual({ composio: true, mcpServers: [],
+    expect(grantsOf(later), "what the Chief has when the bot is made").toEqual({ apps: true, mcpServers: [],
       connectorTools: { slack: { tools: ["SLACK_LIST_CHANNELS"] } }, connectorScopes: { apps: { slack: "read" } } });
     expect(grantsOf(helper).connectorScopes, "a bot made earlier keeps its own").toEqual({ apps: { gmail: "read", slack: "write" } });
 
-    store.patchBot(chief.id, { composio: false, connectorTools: undefined, connectorScopes: undefined, mcpServers: undefined });
-    expect(grantsOf(createdBy(store, chief, "off")), "off stays off, even once the switch is turned on").toEqual({ composio: false, connectorTools: {} });
+    store.patchBot(chief.id, { apps: false, connectorTools: undefined, connectorScopes: undefined, mcpServers: undefined });
+    expect(grantsOf(createdBy(store, chief, "off")), "off stays off, even once the switch is turned on").toEqual({ apps: false, connectorTools: {} });
   });
 
   it("leaves a bot the person creates with today's defaults, whatever a Chief has", () => {
     const store = new Store(selection);
     const chief = store.createBot({ name: "Ops", section: "Ops" });
-    store.patchBot(chief.id, { chiefOfStaff: true, composio: false, connectorTools: {}, connectorScopes: { apps: {} }, mcpServers: [] });
+    store.patchBot(chief.id, { chiefOfStaff: true, apps: false, connectorTools: {}, connectorScopes: { apps: {} }, mcpServers: [] });
     const mine = store.createBot({ name: "Mine", section: "Ops" });
-    for (const field of ["composio", "connectorTools", "connectorScopes", "mcpServers"]) expect(mine).not.toHaveProperty(field);
+    for (const field of ["apps", "connectorTools", "connectorScopes", "mcpServers"]) expect(mine).not.toHaveProperty(field);
   });
 
   it("on a Team Cloud, gives a member's Chief's apps only to the bot it makes for that member", () => {

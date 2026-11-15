@@ -8,7 +8,6 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { TEAM_SESSION_MAX_MS } from "./cloud-team.ts";
 import { personKey } from "./person-key.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const TOKEN = `ops_fake-team-${randomBytes(8).toString("hex")}`;
@@ -20,14 +19,13 @@ const ENGINE = `import { readFileSync as readToolCalls } from "node:fs";
 process.env.FAKE_CLAUDE_DUMP = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/dump.json";
 try { process.env.FAKE_CLAUDE_TOOL_CALLS = readToolCalls(process.env.FAKE_CLAUDE_FIXTURE_DIR + "/tool-calls.json", "utf8"); } catch {}`;
 
-let fx: CloudSendFixture, team: CloudTeamFixture, broker: BrokerFake;
+let fx: CloudSendFixture, team: CloudTeamFixture;
 let owner = "", admin = "", ada = "", cleo = "";
 let bot: { id: string; mainThreadId: string };
 const adaKey = personKey({ id: "", email: MEMBER_A.email }), benKey = personKey({ id: "", email: ADMIN.email });
 
 beforeAll(async () => {
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
   team = fx.team!;
   owner = (await team.pair(OWNER)).token!;
   admin = (await team.pair(ADMIN)).token!;
@@ -40,7 +38,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fx?.close();
-  await broker?.close();
 });
 
 const dump = () => JSON.parse(readFileSync(join(team.home, "dump.json"), "utf8")) as { systemPrompt: string; prompt: unknown; mcpConfig: { mcpServers: Record<string, unknown> } };
@@ -277,10 +274,7 @@ it("a member's upload is hers alone; a team file is everyone's; About you is per
   expect((await fx.onCloud("GET", "/api/me")).status).toBe(404);
 }, hostTimeout(120_000));
 
-it("a person's own connected apps cannot be brought into the team, and the team's connection serves any member's turn", async () => {
-  const refused = await team.as(owner, "POST", "/api/cloud-connections/connected-apps", { share: "share-code-from-a-laptop", apps: ["gmail"] });
-  expect(refused.status).toBe(403);
-  expect(refused.body.error).toBe("Personal connections never enter Acme. Ask an admin to connect these apps for Acme.");
+it("a person's own connections cannot be brought into the team", async () => {
   expect((await team.as(owner, "PUT", "/api/cloud-connections/email", { accounts: [{ address: "owner@example.test" }] })).body.error).toContain("Personal connections never enter Acme");
   // Nor anything of a computer's one-time move: every send and move route answers the same plain line.
   for (const [method, route] of [["GET", "/api/cloud-send/manifest"], ["POST", "/api/cloud-send/chats"], ["GET", "/api/cloud-send?move=1"]] as const) {
@@ -292,16 +286,6 @@ it("a person's own connected apps cannot be brought into the team, and the team'
     });
   }
   expect((await fx.onCloud("GET", "/api/cloud-send/manifest")).status).toBe(200);
-  // My Cloud still takes its owner's share (the one-time move), as before.
-  expect((await fx.onCloud("POST", "/api/cloud-connections/connected-apps", { share: "not-a-real-code", apps: [] })).status).not.toBe(403);
-  // The Team Cloud's own installation on the connected-apps service, registered as it started, is the team's: every member's view says connected apps are set up.
-  const teamInstallation = broker.installationIds().filter((id) => broker.actingUser(id) === broker.userFor(id) && id !== fx.desktopInstallation?.id).at(-1)!;
-  expect(teamInstallation).toBeTruthy();
-  broker.account(broker.userFor(teamInstallation), "gmail");
-  expect((await team.as(ada, "GET", "/api/config")).body.composio).toEqual({ configured: true, mode: "managed" });
-  expect((await team.as(cleo, "GET", "/api/config")).body.composio).toEqual({ configured: true, mode: "managed" });
-  const seen = await turn(cleo, await newThread(cleo, "Cleo and Scout"), "Check my mail.");
-  expect(Object.keys(seen.mcpConfig.mcpServers)).toContain("composio");
 }, hostTimeout(120_000));
 
 it("a member cannot save a login from a sign-in card: the team's refusal arrives with its key, and nothing is saved", async () => {

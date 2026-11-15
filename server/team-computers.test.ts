@@ -87,7 +87,7 @@ describe("named team computer ownership", () => {
 
   it("requires explicit cost and sharing acknowledgements at the API boundary", () => {
     expect(teamComputerCreate.safeParse({ requestId: randomUUID(), name: "One" }).success).toBe(false);
-    expect(teamComputerCreate.safeParse({ requestId: randomUUID(), name: "One", acknowledgeCost: true, boxId: "foreign" }).success).toBe(false);
+    expect(teamComputerCreate.safeParse({ requestId: randomUUID(), name: "One", acknowledgeCost: true, foreignId: "foreign" }).success).toBe(false);
     expect(teamComputerCreate.safeParse({ requestId: randomUUID(), name: "One", acknowledgeCost: true }).success).toBe(true);
     expect(teamComputerAssignment.safeParse({ section: "Design" }).success).toBe(false);
     expect(teamComputerAssignment.safeParse({ section: null, acknowledgeSharedAccess: true }).success).toBe(true);

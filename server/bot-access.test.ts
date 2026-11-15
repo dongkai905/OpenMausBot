@@ -72,7 +72,7 @@ describe("a member's level", () => {
 });
 
 describe("what a request needs", () => {
-  it("reads at view, writes at chat, sharing at edit, and leaves a bot's own PATCH and routines to their routes", () => {
+  it("reads at view, writes at chat, sharing at edit, and leaves a bot's own PATCH to its route", () => {
     expect(levelNeeded("GET", "/api/threads/t1/messages")).toBe("view");
     expect(levelNeeded("POST", "/api/bots/b1/read")).toBe("view");
     expect(levelNeeded("POST", "/api/bots/b1/bot-api")).toBe("edit");
@@ -88,7 +88,6 @@ describe("what a request needs", () => {
     expect(levelNeeded("PATCH", "/api/bots/b1/profile")).toBe("chat");
     expect(levelNeeded("PUT", "/api/bots/b1/access")).toBe("edit");
     expect(levelNeeded("PATCH", "/api/bots/b1")).toBeNull();
-    expect(levelNeeded("DELETE", "/api/routines/r1")).toBeNull();
   });
 
   it("lets each level change only its own fields of a bot", () => {
@@ -100,7 +99,7 @@ describe("what a request needs", () => {
     expect(memberBotPatchViolation({ color: "teal", name: "Mine" }, "chat", true, true)).toBeNull();
     expect(memberBotPatchViolation({ color: "teal" }, "edit", false, true)).toBeNull();
     expect(memberBotPatchViolation({ soul: "x" }, "chat")).toBe("soul");
-    expect(memberBotPatchViolation({ soul: "x", modelSelection: {}, threadId: "t", composio: true, connectorTools: {}, mcpServers: [] }, "edit")).toBeNull();
+    expect(memberBotPatchViolation({ soul: "x", modelSelection: {}, threadId: "t", apps: true, connectorTools: {}, mcpServers: [] }, "edit")).toBeNull();
     for (const field of ["approvalMode", "autoApprove", "alwaysAllow", "cwd", "computer", "section", "chiefOfStaff", "peers", "visibility", "access", "reportsTo", "browserProfile"]) {
       expect(memberBotPatchViolation({ [field]: null }, "edit"), field).toBe(field);
     }
@@ -124,7 +123,6 @@ describe("what a request needs", () => {
     };
     const gate = createBotAccessGate({
       botName: () => "Payroll", roomBots: () => undefined, threadOwner: () => ({ bot: "pay" }),
-      routine: () => undefined, run: () => undefined, routineWriter: () => undefined,
     });
     const stream = new PassThrough();
     const req = stream as unknown as IncomingMessage;

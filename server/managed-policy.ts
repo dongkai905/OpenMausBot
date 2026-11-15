@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts";
 import { appLabel } from "./team-connections.ts";
 
 /** Received over Electron's private port, or on a Team Cloud from the Admin (cloud-team-policy.ts), and held in memory:
@@ -13,10 +12,13 @@ const policySchema = z.object({
   companyModelsOnly: z.boolean(),
   allowedEngines: z.union([z.literal("all"), z.array(z.string().regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/)).max(64)]),
   mcp: z.object({ allowCustom: z.boolean(), allowlist: z.array(z.string().trim().min(1).max(200)).max(100) }).strict(),
-  // "box" is Boat's historical key in the org-policy schema shared with the desktop parent.
-  computers: z.object({ thisComputer: z.boolean(), localVm: z.boolean(), box: z.boolean(), vps: z.boolean() }).strict(),
+  /** "box" is a legacy key in the org-policy schema shared with the desktop parent. It is accepted and ignored,
+   * so a policy written before the cloud computer was removed still loads instead of being refused whole. */
+  computers: z.object({ thisComputer: z.boolean(), localVm: z.boolean(), box: z.boolean().optional(), vps: z.boolean() })
+    .strict()
+    .transform((computers) => ({ thisComputer: computers.thisComputer, localVm: computers.localVm, vps: computers.vps })),
   remoteAccess: z.boolean(),
-  /** Connected apps by service slug. Absent: this policy says nothing about them. */
+  /** Apps by slug, the built-in Email app among them. Absent: this policy says nothing about them. */
   apps: z.object({ allowAll: z.boolean(), allowlist: z.array(z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)).max(200) }).strict().optional(),
   /** Present on a Team Cloud's rules. `requireFresh`: new turns wait while the rules can't be confirmed with the Admin.
    * `ownMcpOnly`: bots get only what the team's admins added; a bot can't add one, and a bot's own doesn't start. */
@@ -24,7 +26,7 @@ const policySchema = z.object({
 }).strict();
 export type ManagedPolicy = z.infer<typeof policySchema>;
 export type ComputerKind = keyof ManagedPolicy["computers"];
-const computerLabels: Record<ComputerKind, string> = { thisComputer: "this computer", localVm: "local virtual machines", box: "cloud computers", vps: "VPS computers" };
+const computerLabels: Record<ComputerKind, string> = { thisComputer: "this computer", localVm: "local virtual machines", vps: "VPS computers" };
 const teamComputerLabels: Record<ComputerKind, string> = { ...computerLabels, thisComputer: "a member's own computer", localVm: "a member's own computer" };
 const ASK_ADMIN = "Ask a team admin.";
 
@@ -63,12 +65,10 @@ export function mcpEntryMatches(entry: string, name: string, url?: string): bool
 export function computerKindForResource(resource: string): ComputerKind | undefined {
   if (resource === "computer:host") return "thisComputer";
   if (resource.startsWith("computer:vm:")) return "localVm";
-  // computer:box: and computer:box-bot: are Boat's historical resource prefixes.
-  if (resource.startsWith("computer:box:") || resource.startsWith("computer:box-bot:")) return "box";
   if (resource.startsWith("computer:vps:")) return "vps";
 }
 
-export class ManagedDesktopPolicy {
+export class ManagedPolicyEngine {
   private policy: ManagedPolicy | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
@@ -158,18 +158,6 @@ export class ManagedDesktopPolicy {
   /** Apps a turn wants to connect: the first one refused. */
   appsConnectRefusal(slugs: readonly string[]): string | undefined {
     for (const slug of slugs) { const refusal = this.appRefusal(slug); if (refusal) return refusal; }
-  }
-  /** Tools a connected-apps call would run, as shared/outbound.ts names them; `connected`: the service slugs in use, since a
-   * slug may hold an underscore. A call that runs code (`COMPOSIO_PROXY_EXECUTE`) could reach any app, so it is refused. */
-  appsCallRefusal(calls: ReadonlyArray<{ slug: string }>, connected: readonly string[] = []): string | undefined {
-    const policy = this.current(), apps = policy?.apps;
-    if (!policy || !apps || apps.allowAll) return;
-    for (const { slug } of calls) {
-      if (slug === "COMPOSIO_PROXY_EXECUTE") return `${policy.organizationName} allows only the apps it has approved, so bots can't run code against them. ${ASK_ADMIN}`;
-      const app = serviceSlugForCandidates(slug, [...apps.allowlist, ...connected]) ?? serviceSlugFor(slug) ?? slug;
-      const refusal = this.appRefusal(app);
-      if (refusal) return refusal;
-    }
   }
 
   /** Read-only view for the renderer; carries nothing secret. */

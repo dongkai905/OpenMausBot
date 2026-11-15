@@ -2,8 +2,11 @@
 // owner wrote there name nobody, and on a Cloud home a conversation with a line that names nobody can never use the lent
 // Mac or feed memory (cloud-lending.ts), so each such line, and each card answered there, is stamped as the owner's.
 import type { CardAnswerer, WireMessage as Message } from "../shared/wire.ts";
-import { BLOCK_OPEN as APP_EVENT_DATA } from "./app-events.ts";
 import { answeredByPerson } from "./cloud-lending.ts";
+
+/** The block that fences an app event's own text out of a run. The app-event product is gone; the marker stays so a
+ * prompt that still carries one is fenced rather than read as the user's words. */
+const APP_EVENT_DATA = "[UNTRUSTED APP EVENT DATA]";
 
 /** My Cloud's owner as the owner's own session is: their person key, and the name their lines read as. */
 export interface CloudOwner { person: string; name: string }

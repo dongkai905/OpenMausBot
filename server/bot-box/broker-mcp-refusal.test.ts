@@ -15,7 +15,6 @@ import { brokerUrl, openCredentialBroker, type CredentialBroker } from "./broker
 import type { McpServerSpec, RemoteMcpSpec } from "../contracts.ts";
 import { McpHttpError, RemoteMcpClient } from "../mcp-http.ts";
 import { probeMcpServer } from "../mcp-probe.ts";
-import type { McpServerApp } from "../mcp-server-app.ts";
 import { startFakeHttpMcp, type FakeHttpMcp, type FakeHttpMcpOptions } from "../testing/fake-http-mcp-server.ts";
 import { startFakeOAuth, type FakeOAuth } from "../testing/fake-oauth-server.ts";
 
@@ -34,7 +33,7 @@ describe.skipIf(process.platform === "win32")("an MCP server that refuses a boxe
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
-  async function boxed(options: FakeHttpMcpOptions, headers: Record<string, string> = {}, app?: McpServerApp) {
+  async function boxed(options: FakeHttpMcpOptions, headers: Record<string, string> = {}) {
     oauth = await startFakeOAuth();
     server = await startFakeHttpMcp({ guard: "listed-tools", acceptBearer: () => false, wwwAuthenticate: oauth.challenge, tools: [READ], ...options });
     dir = mkdtempSync(join(tmpdir(), "omb-broker-refusal-"));
@@ -42,7 +41,7 @@ describe.skipIf(process.platform === "win32")("an MCP server that refuses a boxe
     bridge = await openBridge({ port: 0, socket: credentials.socketPath });
     const broker: BoxBroker = { port: (bridge.address() as AddressInfo).port, mintForThread: credentials.mintForThread, touchThread: credentials.touchThread, revokeThread: credentials.revokeThread, lookup: credentials.lookup };
     const custom: Record<string, McpServerSpec> = { mail: { type: "http", url: server.url, headers } };
-    const mounted = brokerRemoteMcp(custom, TURN, broker, app ? () => app : undefined).mail as RemoteMcpSpec;
+    const mounted = brokerRemoteMcp(custom, TURN, broker).mail as RemoteMcpSpec;
     return { mounted, target: { type: "http" as const, url: server.url, headers, enabled: true }, path: { broker, socketPath: credentials.socketPath } };
   }
   const callTool = async (spec: RemoteMcpSpec) => {
@@ -60,7 +59,7 @@ describe.skipIf(process.platform === "win32")("an MCP server that refuses a boxe
     const result = await callTool(mounted);
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toContain('The MCP server "mail" needs a sign-in');
-    expect(result.content[0]!.text, "no connected app given: the words stay as they were").toBe('The MCP server "mail" needs a sign-in before its tools work, and nobody has signed in (HTTP 401), so nothing ran. '
+    expect(result.content[0]!.text, "the words name the server's own sign-in").toBe('The MCP server "mail" needs a sign-in before its tools work, and nobody has signed in (HTTP 401), so nothing ran. '
       + "Don't retry. Call mcp_server with action sign_in and name mail, then end your turn; if you can't, tell the person to sign in to mail in Apps, MCP servers.");
     expect(server!.calls).toEqual([]);
 
@@ -69,14 +68,6 @@ describe.skipIf(process.platform === "win32")("an MCP server that refuses a boxe
       await expect(probeMcpServer(target, 8_000, undefined, { tryReadOnlyTool: true, via: { url: grant.url, fetch: grant.fetch } }))
         .resolves.toEqual({ ok: false, auth: "required", error: "This server needs you to sign in." });
     } finally { await grant.done(); }
-  });
-
-  it("offers the connected app's card when the server stands for an app this turn can connect", async () => {
-    const { mounted } = await boxed({}, {}, { slug: "gmail", label: "Gmail", connected: false });
-    const text = (await callTool(mounted)).content[0]!.text;
-    expect(text).toContain('Call COMPOSIO_MANAGE_CONNECTIONS with toolkits ["gmail"] to show the card in this chat, then end your turn.');
-    expect(text).toContain("If the card can't be shown, call mcp_server with action sign_in and name mail");
-    expect(server!.calls).toEqual([]);
   });
 
   it("says the key or sign-in was refused when the broker sent one", async () => {
@@ -117,28 +108,13 @@ describe("the answer to a refused call", () => {
   const SIGN_IN = "Call mcp_server with action sign_in and name mail, then end your turn; if you can't, tell the person to sign in to mail in Apps, MCP servers.";
   const REFUSED = 'The MCP server "mail" needs a sign-in before its tools work, and nobody has signed in (HTTP 401), so nothing ran. Don\'t retry.';
 
-  it("names only the server's own sign-in when no connected app stands in for it", () => {
+  it("names the server's own sign-in", () => {
     expect(textOf(refusedCallAnswer("mail", false, CALL))).toBe(`${REFUSED} ${SIGN_IN}`);
   });
 
-  it("offers the app's connect card first, and the server's sign-in second", () => {
-    expect(textOf(refusedCallAnswer("mail", false, CALL, { slug: "gmail", label: "Gmail", connected: false }))).toBe(`${REFUSED} `
-      + "Gmail can be connected in one step with its connect card. Call COMPOSIO_MANAGE_CONNECTIONS with toolkits [\"gmail\"] to show the card in this chat, then end your turn. "
-      + "Once it is connected, use the connected app's Gmail tools instead of this MCP server. "
-      + `If the card can't be shown, call ${SIGN_IN.slice("Call ".length)}`);
-  });
-
-  it("points to the app already connected, with no card", () => {
-    const text = textOf(refusedCallAnswer("mail", false, CALL, { slug: "googlecalendar", label: "Google Calendar", connected: true }));
-    expect(text).toBe(`${REFUSED} Google Calendar is already connected as a connected app here, so use the connected app's Google Calendar tools instead of this MCP server. `
-      + `Don't show a connect card for it. If you don't have those tools, call ${SIGN_IN.slice("Call ".length)}`);
-    expect(text).not.toContain("COMPOSIO_MANAGE_CONNECTIONS");
-  });
-
   it("keeps a refused key or sign-in about the server alone", () => {
-    const text = textOf(refusedCallAnswer("mail", true, CALL, { slug: "gmail", label: "Gmail", connected: false }));
+    const text = textOf(refusedCallAnswer("mail", true, CALL));
     expect(text).toContain('The MCP server "mail" refused the sign-in or key it was sent');
-    expect(text).not.toContain("COMPOSIO_MANAGE_CONNECTIONS");
   });
 
   it("keeps the request's own id, string or number", () => {

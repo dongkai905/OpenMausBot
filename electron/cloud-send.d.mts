@@ -13,7 +13,7 @@ export interface CloudSendResult {
   onePassword: boolean;
   /** "profile" and/or "language". */
   settings: string[];
-  /** Apps and keys a move carried (MCP servers, AI keys, mailboxes, connected apps); 0 or absent for any other send. */
+  /** Apps and keys a move carried (MCP servers, AI keys, mailboxes); 0 or absent for any other send. */
   connections?: number;
   /** The chats My Cloud lacked, added by row or by Bring newer chats; null when this send did not bring chats. `left`:
    * conversations that did not all go this time (a bot answering in one, or My Cloud not taking a page yet). */
@@ -24,9 +24,8 @@ export interface CloudSendResult {
   moved?: number;
   files?: { sent: number; kept: number };
   conversationSettings?: number;
-  /** model: kept My Cloud's engine; settings: a setting My Cloud refused; narrowed: a login kept to bots My Cloud lacks;
-   * held: a key a trial's Cloud keeps unused while its Claude credit lasts. */
-  notes: Array<{ kind: "model" | "settings" | "narrowed" | "held"; bot?: string; login?: string; connection?: string }>;
+  /** model: kept My Cloud's engine; settings: a setting My Cloud refused; narrowed: a login kept to bots My Cloud lacks. */
+  notes: Array<{ kind: "model" | "settings" | "narrowed"; bot?: string; login?: string; connection?: string }>;
 }
 /** `error`: the send failed as a whole (nothing after that point went), in words for the person. */
 export interface CloudSendOutcome { at: number; reason: string; result: CloudSendResult; error?: string }

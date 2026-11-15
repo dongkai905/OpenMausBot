@@ -6,7 +6,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createTailnetShare, remotePolicyAllows, servePortTaken } from "./tailnet-share.mjs";
+import { createTailnetShare, servePortTaken } from "./tailnet-share.mjs";
 
 const NAME = "macmini.tail1234.ts.net";
 const route = (over = {}) => ({ on: true, since: 1, name: NAME, computers: true, ...over });
@@ -129,16 +129,6 @@ test("a new server port moves the serve; turning off stops it and clears the ser
 });
 
 const HTTPS = { state: "ready", name: NAME, addresses: [], https: true, cli: "/usr/bin/tailscale" };
-
-test("the policy check fails closed until the saved policy has been read", () => {
-  const client = (known, policy) => ({ policyKnown: () => known, policy: () => policy });
-  assert.equal(remotePolicyAllows({ managed: false, client: null }), true, "a development build or a client of another computer has no policy of its own");
-  assert.equal(remotePolicyAllows({ managed: true, client: null }), false, "packaged, before the managed client exists");
-  assert.equal(remotePolicyAllows({ managed: true, client: client(false, null) }), false, "created, nothing read yet");
-  assert.equal(remotePolicyAllows({ managed: true, client: client(true, null) }), true);
-  assert.equal(remotePolicyAllows({ managed: true, client: client(true, { remoteAccess: true }) }), true);
-  assert.equal(remotePolicyAllows({ managed: true, client: client(true, { remoteAccess: false }) }), false);
-});
 
 test("the share waits for the policy at launch, and closes and reopens when it changes", async () => {
   let open = false;

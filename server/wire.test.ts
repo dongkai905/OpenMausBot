@@ -16,7 +16,6 @@ const fullTask: TaskRecord = {
   title: "Wire projection",
   createdAt: 1234,
   projectId: "proj",
-  routineRunId: "run-1",
   openedBy: { botId: "b1", name: "Opener", delegationId: "d1", kind: "pair", at: 1 },
   closedBy: { botId: "b1", name: "Opener", at: 2 },
   archivedAt: 3,
@@ -43,7 +42,7 @@ describe("shared wire model", () => {
     expect(Object.keys(wire).sort()).toEqual([
       "activity", "alwaysAllow", "approvalMode", "archivedAt", "autoApprove",
       "busy", "closedBy", "createdAt", "cwd", "followsBotModel", "modelSelection", "openedBy",
-      "pinnedMessageId", "projectId", "rewound", "routineRunId", "surface",
+      "pinnedMessageId", "projectId", "rewound", "surface",
       "threadId", "title", "unread", "usage",
     ]);
     expect(wire).not.toHaveProperty("resumeCursors");

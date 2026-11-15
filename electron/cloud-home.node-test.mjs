@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { createCloudAccountClient } from "./cloud-account.mjs";
-import { CLOUD_HOME_NAME, cloudHomeConnectUrl, cloudPlanDisk, cloudUnreachableText, isCloudHomeEntry, parseCloudCredit, parseCloudOffer, parseCloudPower, parseCloudPurchase, parseCloudSummary, parseCloudTeams, teamRoleLabel, CLOUD_TEAM_ROLES, parseCloudTrial, parsePairingGrant, parsePublicOffer, rememberedCloudHome, savedCloudHomeOrigin, withCloudHome, withoutTrial } from "./cloud-home.mjs";
+import { CLOUD_HOME_NAME, cloudHomeConnectUrl, cloudPlanDisk, cloudUnreachableText, isCloudHomeEntry, parseCloudOffer, parseCloudPower, parseCloudPurchase, parseCloudSummary, parseCloudTeams, teamRoleLabel, CLOUD_TEAM_ROLES, parseCloudTrial, parsePairingGrant, parsePublicOffer, rememberedCloudHome, savedCloudHomeOrigin, withCloudHome, withoutTrial } from "./cloud-home.mjs";
 import environments from "./environments.cjs";
 import { handSaved } from "./own-home-main.mjs";
 import { homeLook, withoutOldCloudHome } from "./cloud-list.mjs";
@@ -307,16 +307,6 @@ test("a free trial is read in the Admin's five states, with only what is well fo
   }
 });
 
-test("the trial's AI credit is read only when it adds up, and only while it lasts", () => {
-  assert.deepEqual(parseCloudCredit({ grantedUsd: 5, remainingUsd: 3.2, state: "active" }), { grantedUsd: 5, remainingUsd: 3.2, state: "active" });
-  assert.deepEqual(parseCloudCredit({ grantedUsd: 5, remainingUsd: 0, state: "used_up", spentUsd: 5 }), { grantedUsd: 5, remainingUsd: 0, state: "used_up" });
-  for (const input of [null, "5", [], { grantedUsd: 5, remainingUsd: 3, state: "ended" }, { grantedUsd: 0, remainingUsd: 0, state: "active" },
-    { grantedUsd: 5, remainingUsd: 6, state: "active" }, { grantedUsd: 5, remainingUsd: -1, state: "active" }, { grantedUsd: "5", remainingUsd: 3, state: "active" },
-    { grantedUsd: Infinity, remainingUsd: 3, state: "active" }, { grantedUsd: 5, remainingUsd: Number.NaN, state: "active" }, { grantedUsd: 5, state: "active" }]) {
-    assert.equal(parseCloudCredit(input), null, JSON.stringify(input));
-  }
-});
-
 const allowances = (computers, diskGb, maxDiskGb = diskGb) => ({ cpus: computers, cpuKind: "shared", memoryMb: computers * 1024, diskGb, maxDiskGb, computers, computerHours: computers * 50, voiceCharacters: 100_000 });
 const catalog = () => [
   { tier: "starter", label: "Starter", price: { currency: "USD", amount: 1500, interval: "month", regularAmount: null, note: null }, allowances: allowances(1, 10) },
@@ -325,19 +315,19 @@ const catalog = () => [
 ];
 
 test("the session's offer is this account's: its plans, the preselected one, and the trial's extras only with a trial", () => {
-  const offer = parseCloudOffer({ plans: catalog(), recommended: "pro", trialDays: 7, creditUsd: 5, refundDays: 14, reminderDays: 2, checkout: { plan: "pro", openUntil: NOW + 3600_000 } });
+  const offer = parseCloudOffer({ plans: catalog(), recommended: "pro", trialDays: 7, refundDays: 14, reminderDays: 2, checkout: { plan: "pro", openUntil: NOW + 3600_000 } });
   assert.ok(offer.plans.every(plan => !("sleeps" in plan.allowances)), "a plan says nothing about sleeping unless the Admin does");
   assert.deepEqual(offer.plans.map(plan => [plan.tier, plan.label, plan.amount, plan.trialDays]), [["starter", "Starter", 1500, 7], ["pro", "Pro", 4900, 7], ["max", "Max", 9900, 7]]);
   assert.deepEqual(offer.plans[1].allowances, { cpus: 4, cpuKind: "shared", memoryMb: 4096, diskGb: 40, maxDiskGb: 50, computers: 4, computerHours: 200, voiceCharacters: 100_000 });
   assert.equal(offer.recommended, "pro");
-  assert.deepEqual([offer.creditUsd, offer.refundDays, offer.reminderDays], [5, 14, 2]);
+  assert.deepEqual([offer.refundDays, offer.reminderDays], [14, 2]);
   assert.deepEqual(offer.checkout, { plan: "pro", openUntil: NOW + 3600_000 });
   assert.ok(!JSON.stringify(offer).includes("8900") && !JSON.stringify(offer).includes("Launch"));
-  const perPlan = parseCloudOffer({ plans: catalog().map(plan => plan.tier === "max" ? plan : { ...plan, trialDays: 7 }), trialDays: 7, creditUsd: 5 });
+  const perPlan = parseCloudOffer({ plans: catalog().map(plan => plan.tier === "max" ? plan : { ...plan, trialDays: 7 }), trialDays: 7 });
   assert.deepEqual(perPlan.plans.map(plan => plan.trialDays ?? null), [7, 7, null]);
-  const paid = parseCloudOffer({ plans: catalog(), creditUsd: 5, reminderDays: 2, refundDays: 14 });
+  const paid = parseCloudOffer({ plans: catalog(), reminderDays: 2, refundDays: 14 });
   assert.deepEqual(paid.plans.map(plan => plan.trialDays ?? null), [null, null, null]);
-  assert.deepEqual([paid.creditUsd, paid.reminderDays, paid.refundDays], [undefined, undefined, 14]);
+  assert.deepEqual([paid.reminderDays, paid.refundDays], [undefined, 14]);
   assert.equal(parseCloudOffer({ plans: catalog(), recommended: "team" }).recommended, "pro");
   assert.equal(parseCloudOffer({ plans: catalog().filter(plan => plan.tier !== "pro") }).recommended, "starter");
 });
@@ -378,27 +368,27 @@ test("a malformed offer is no offer, and a malformed plan or extra is left out, 
   }
   const [starter, pro] = catalog();
   const offer = parseCloudOffer({ plans: [starter, { ...pro, label: "Pro <script>", allowances: { cpus: "4" }, trialDays: 99 }, { ...pro }, { tier: "team", price: null }],
-    trialDays: 0, creditUsd: 500, refundDays: 400, reminderDays: 2, checkout: { plan: "max", openUntil: NOW } });
+    trialDays: 0, refundDays: 400, reminderDays: 2, checkout: { plan: "max", openUntil: NOW } });
   assert.deepEqual(offer.plans, [{ tier: "starter", label: "Starter", amount: 1500, allowances: { cpus: 1, cpuKind: "shared", memoryMb: 1024, diskGb: 10, maxDiskGb: 10, computers: 1, computerHours: 50,
     voiceCharacters: 100_000 } },
     { tier: "pro", amount: 4900 }]);
-  assert.equal(offer.checkout, undefined); assert.equal(offer.refundDays, undefined); assert.equal(offer.creditUsd, undefined);
+  assert.equal(offer.checkout, undefined); assert.equal(offer.refundDays, undefined);
 });
 
 test("the public offer is the catalog, with the free trial for new customers when the Admin says so", () => {
-  const offer = parsePublicOffer({ name: "OpenMausBot", surface: "cloud", plans: catalog(), trial: { days: 7, holdDays: 3, creditUsd: 5, reminderDays: 2 }, refundDays: 14 });
+  const offer = parsePublicOffer({ name: "OpenMausBot", surface: "cloud", plans: catalog(), trial: { days: 7, holdDays: 3, reminderDays: 2 }, refundDays: 14 });
   assert.deepEqual(offer.plans.map(plan => plan.trialDays), [7, 7, 7]);
-  assert.deepEqual([offer.recommended, offer.creditUsd, offer.reminderDays, offer.refundDays, offer.checkout], ["pro", 5, 2, 14, undefined]);
+  assert.deepEqual([offer.recommended, offer.reminderDays, offer.refundDays, offer.checkout], ["pro", 2, 14, undefined]);
   const today = parsePublicOffer({ plans: catalog() });
   assert.deepEqual(today.plans.map(plan => plan.trialDays ?? null), [null, null, null]);
-  assert.equal(today.creditUsd, undefined); assert.equal(today.refundDays, undefined);
+  assert.equal(today.refundDays, undefined);
   for (const config of [null, "config", { trial: { days: 7 } }, { plans: [], trial: { days: 7 } }]) assert.equal(parsePublicOffer(config), null);
   for (const trial of [{ days: 0 }, { days: 31 }, { days: "7" }, { days: 7.5 }]) {
     assert.deepEqual(parsePublicOffer({ plans: catalog(), trial }).plans.map(plan => plan.trialDays ?? null), [null, null, null], JSON.stringify(trial));
   }
   const plain = withoutTrial(offer);
   assert.deepEqual(plain.plans.map(plan => plan.trialDays ?? null), [null, null, null]);
-  assert.deepEqual([plain.creditUsd, plain.reminderDays, plain.refundDays], [undefined, undefined, 14]);
+  assert.deepEqual([plain.reminderDays, plain.refundDays], [undefined, 14]);
   assert.equal(withoutTrial(null), null);
 });
 
@@ -431,7 +421,7 @@ test("the Cloud's address is remembered through a failed check for the same acco
 
 test("the Server menu opens My Cloud through the Cloud's own connection, never a pairing-code page", async () => {
   const source = readFileSync(new URL("./main.mjs", import.meta.url), "utf8");
-  const start = source.indexOf("let rememberedHome = null;"), end = source.indexOf("const organizationEntry = createOrganizationEntry", start);
+  const start = source.indexOf("let rememberedHome = null;"), end = source.indexOf("function createLocalEnvironment(name, dataDir)", start);
   assert.ok(start > 0 && end > start);
   const calls = [];
   let connect = async () => { calls.push("connect"); }, signedIn = false;

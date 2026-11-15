@@ -39,15 +39,7 @@ const readCommandLine = (pid) =>
   });
 
 /**
- * Security: whether an organization's policy lets this computer share itself. `managed` is a packaged app running its own
- * server; until its client has read the saved policy nothing is known, and unknown counts as no.
- */
-export function remotePolicyAllows({ managed, client }) {
-  return !managed || (client?.policyKnown?.() === true && client.policy()?.remoteAccess !== false);
-}
-
-/**
- * `check()` is checkTailscale. `allowed()` is false while an organization's policy keeps remote access off. `apply` takes
+ * `check()` is checkTailscale. `allowed()` is the share's own gate. `apply` takes
  * the saved Tailscale route, `attach` each new server process; a server process forgets its share when it exits.
  * `recheck` follows a change in `allowed()`. `markerFile()` notes a running `tailscale serve`, so the next launch can end
  * one a crash left behind.

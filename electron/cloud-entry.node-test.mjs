@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-import { patchOrganizationUpdater } from "../scripts/patch-organization-updater.mjs";
 import { CLOUD_DEEP_LINK, createCloudEntry, isCloudDeepLink, takeCloudDeepLink } from "./cloud-entry.mjs";
 
 const main = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -117,26 +116,24 @@ test("a consumed launch link is not replayed by the companion or updater relaunc
     desktopShutdownStarted: false, process: { argv }, setTimeout: callback => { callback(); return {}; },
     app: { relaunch: options => calls.push(options.args), quit: () => {} },
   });
-  const patched = patchOrganizationUpdater("      relaunch() {\n        this.app.relaunch();\n      }");
-  runInNewContext(`({ app, ${patched} }).relaunch();`, { process: { argv }, app: { relaunch: options => calls.push(options.args) } });
-  assert.deepEqual(calls, [["--fixture", "openmausbot://cloud?ignored"], ["--fixture", "openmausbot://cloud?ignored"]]);
+  assert.deepEqual(calls, [["--fixture", "openmausbot://cloud?ignored"]]);
 });
 
 test("main takes the link from launch arguments, open-url and a second instance", () => {
   assert.ok(main.indexOf("cloudEntry.fromLaunch(process.argv);") < main.indexOf("app.requestSingleInstanceLock()"),
     "the launch argument is consumed before anything can relaunch");
-  assert.match(between('app.on("open-url"', "});"), /!queueOrganizationEntry\(url\) && !cloudEntry\.fromUrl\(url\) && !queuePackageInstall\(url\)/);
+  assert.match(between('app.on("open-url"', "});"), /!cloudEntry\.fromUrl\(url\) && !queuePackageInstall\(url\)/);
   const secondInstance = between('app.on("second-instance"', "\n});");
   assert.ok(secondInstance.indexOf("if (cloudEntry.fromArgs(commandLine)) return;") > secondInstance.indexOf("takeOrganizationDeepLink(commandLine)"));
   assert.ok(secondInstance.indexOf("if (cloudEntry.fromArgs(commandLine)) return;") < secondInstance.indexOf("packageUrlFromCommandLine(commandLine)"));
 });
 
 test("startup delivers a pending Cloud link before default navigation", () => {
-  const startup = between("  let restoredOrganizationEntry = false;", "  // Reconcile incomplete setup");
+  const startup = between("  // A cold-start action owns its first navigation", "  // Reconcile incomplete setup");
   const delivered = startup.indexOf("const deliveredCloudEntry = await cloudEntry.ready();");
-  assert.ok(delivered > startup.indexOf("await deliverOrganizationEntry()"));
-  assert.ok(delivered < startup.indexOf("await showStartPlace()"));
-  assert.ok(main.indexOf("cloudAccountStarted = ensureCloudAccount().start()") < main.indexOf("  let restoredOrganizationEntry = false;"),
+  assert.ok(delivered >= 0, "the link is delivered in this startup");
+  assert.ok(delivered < startup.indexOf("await showStartPlace()"), "the link owns the first navigation");
+  assert.ok(main.indexOf("cloudAccountStarted = ensureCloudAccount().start()") < main.indexOf("const deliveredCloudEntry = await cloudEntry.ready();"),
     "the saved sign-in starts restoring before the link is delivered");
 });
 

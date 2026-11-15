@@ -45,7 +45,6 @@
 //   FAKE_CLAUDE_STREAM_CADENCE  "chars:ms" (happy mode): stream each scripted reply as
 //     text_delta chunks of `chars` chars every `ms` ms before its assistant message
 //   FAKE_CLAUDE_USES_CLOUD_COMPUTER  1: first take one screenshot through the `computer` MCP server
-//   FAKE_CLAUDE_CONNECT_APPS  toolkits (gmail,slack): first call COMPOSIO_MANAGE_CONNECTIONS via `composio`
 //   FAKE_CLAUDE_HOOKS  1: run the --settings hooks like the CLI (PostToolUse per tool_result, PostToolUseFailure for
 //     an ok:false call with its additionalContext echoed into the reply, Stop at the end)
 //   FAKE_CLAUDE_COMPACT  1: from the second turn, play a compaction (PreCompact, compact_boundary, then SessionStart "compact")
@@ -752,26 +751,6 @@ const mcpToolCall = (serverName: string, name: string, input: Record<string, unk
   return { ok: !reply.error && !reply.result?.isError, content: reply.result?.content ?? reply.error?.message ?? "" };
 };
 
-/** COMPOSIO_MANAGE_CONNECTIONS through the launched connected-apps server, if
- * this turn has one: the bridge turns it into a Connect card in the chat. */
-const connectApps = (toolkits: string[]) => {
-  launchFiles ??= readLaunchFiles();
-  const server = (launchFiles.mcpConfig as { mcpServers?: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }> } | null)
-    ?.mcpServers?.composio;
-  if (!server?.command) return;
-  const id = `tu-${process.pid}-${++toolUseCount}`;
-  const input = { toolkits };
-  out({ type: "assistant", message: { content: [{ type: "tool_use", id, name: "mcp__composio__COMPOSIO_MANAGE_CONNECTIONS", input }] } });
-  const request = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "COMPOSIO_MANAGE_CONNECTIONS", arguments: input } };
-  const ran = spawnSync(process.execPath, ["-e", MCP_CALL_PROGRAM, JSON.stringify({ command: server.command, args: server.args ?? [], env: server.env ?? {}, request })], {
-    encoding: "utf8", timeout: 60_000,
-  });
-  let reply: { result?: { isError?: boolean; content?: unknown }; error?: { message?: string } } = {};
-  try { reply = JSON.parse(ran.stdout.trim().split("\n")[0] ?? ""); } catch { reply = { error: { message: ran.stderr || "no answer" } }; }
-  out({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id,
-    is_error: Boolean(reply.error || reply.result?.isError), content: reply.result?.content ?? reply.error?.message ?? "" }] } });
-};
-
 let volatileNote: string | null = null;
 /** The volatile half of the instructions a user message carries (prompt-split.ts withVolatileNote), if any. */
 const volatileNoteIn = (prompt: JsonValue): string | null => {
@@ -1076,8 +1055,6 @@ const playTurn = (prompt: JsonValue, late = false) => {
       event: { type: "content_block_delta", delta: { type: "text_delta", text: "SUBAGENT NOISE" } },
     });
   }
-
-  if (process.env.FAKE_CLAUDE_CONNECT_APPS) connectApps(process.env.FAKE_CLAUDE_CONNECT_APPS.split(",").filter(Boolean));
 
   let replyParts = replyForPrompt(prompt) ?? nextScriptedReply();
   const defaultToolId = `tu-${process.pid}-${++toolUseCount}`;

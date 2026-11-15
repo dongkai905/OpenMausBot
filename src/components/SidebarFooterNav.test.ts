@@ -19,13 +19,6 @@ vi.mock("@/lib/sidebar-preferences", async (importOriginal) => ({
 vi.mock("@/lib/web-panel-preferences", () => ({ useWebPanels: () => fixture.panels }));
 vi.mock("./UpdateIndicator", () => ({ UpdateIndicator: () => null }));
 import { SidebarAppsButton, SidebarBottomButtons, SidebarFooterNav } from "./SidebarFooterNav";
-import { applyAppTriggerSnapshot, type AppTrigger } from "@/lib/app-triggers";
-
-const trigger = (overrides: Partial<AppTrigger> = {}): AppTrigger => ({
-  id: "acme", name: "Acme replies", prompt: "Draft a reply.", botId: "scout", runOn: "maus", enabled: true,
-  app: "gmail", appName: "Gmail", event: "GMAIL_NEW_GMAIL_MESSAGE", eventName: "New Gmail message", delivery: "poll", accountId: "ca_1",
-  config: {}, remote: { triggerId: "ti_1", state: "active" }, received: 0, filtered: 0, createdAt: 0, updatedAt: 0, ...overrides,
-});
 
 type Props = { children?: ReactNode; [key: string]: unknown };
 function nodes(value: ReactNode): ReactElement<Props>[] {
@@ -47,7 +40,6 @@ beforeEach(() => {
   fixture.advanced = false;
   fixture.dispatch.mockReset();
   fixture.state = { activeView: "chat", bots: [{ id: "scout" }], pluginsOpen: false };
-  applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
   fixture.toolsLayout = "rows";
   fixture.panels = [];
   vi.stubGlobal("window", {});
@@ -55,44 +47,30 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sidebar footer places", () => {
-  it("leads Advanced mode's places with Automations, then Team map, with Apps beside the profile instead", () => {
+  it("leads Advanced mode's places with Team map, with Apps beside the profile instead", () => {
     fixture.advanced = true;
     const { html } = render("comfortable");
-    const order = ["automations", "team-map"].map((id) => html.indexOf(`data-sidebar-nav="${id}"`));
-    expect(order.every((index) => index >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((a, b) => a - b));
-    expect(html).toContain(">Automations</span>");
+    expect(html).toContain(">Team map</span>");
     expect(html).not.toContain('data-sidebar-nav="triggers"');
     expect(html).not.toContain('data-sidebar-nav="apps"');
   });
 
-  it("leaves no places in Simple mode's sidebar while Files is off: Automations and Team map are in the bottom bar", () => {
+  it("leaves no places in Simple mode's sidebar while Files is off: Team map is in the bottom bar", () => {
     expect(render("comfortable").html).toBe("");
   });
 
-  it.each([false, true])("puts Automations on the avatars-only density ahead of Apps, with Team map (advanced: %s)", (advanced) => {
+  it.each([false, true])("puts Apps on the avatars-only density ahead of Team map (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     const html = render("icons").html;
-    expect(html).toContain('aria-label="Automations" title="Automations"');
     expect(html).toContain('aria-label="Team map" title="Team map"');
-    expect(html.indexOf('data-sidebar-nav="automations"')).toBeLessThan(html.indexOf('data-sidebar-nav="apps"'));
+    expect(html.indexOf('data-sidebar-nav="apps"')).toBeLessThan(html.indexOf('data-sidebar-nav="team-map"'));
   });
 
-  it("keeps only Apps on Simple mode's rail: Automations and Team map are in its account menu", () => {
+  it("keeps only Apps on Simple mode's rail: Team map is in its account menu", () => {
     const html = renderToStaticMarkup(createElement(() => SidebarFooterNav({ density: "icons", rail: true })));
     expect(html).toContain('aria-label="Apps" title="Apps"');
     expect(html).toContain('data-tour="tools"');
-    expect(html).not.toContain('data-sidebar-nav="automations"');
     expect(html).not.toContain('data-sidebar-nav="team-map"');
-  });
-
-  it("opens the Automations page through the store, and marks it current while open", () => {
-    fixture.advanced = true;
-    const { nodes: tree } = render("comfortable");
-    (tree.find((node) => node.props.id === "automations" && typeof node.props.onClick === "function")!.props.onClick as () => void)();
-    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "showAutomations" });
-    fixture.state.activeView = "automations";
-    expect(render("comfortable").html).toMatch(/data-sidebar-nav="automations"[^>]*aria-current="page"/);
   });
 
   it("adds a row per pinned web panel after Team map, in Advanced mode only", () => {
@@ -122,16 +100,7 @@ describe("sidebar footer places", () => {
     fixture.advanced = true;
     const { html } = render("comfortable");
     expect(html).toContain('data-tour="tools"');
-    expect(html).toMatch(/data-tour="nav-automations" data-sidebar-nav="automations"/);
-  });
-
-  it("carries the dot for an app trigger in trouble on Automations", () => {
-    fixture.advanced = true;
-    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
-    const html = render("comfortable").html;
-    expect(html.indexOf('data-testid="automations-attention"')).toBeGreaterThan(html.indexOf('data-sidebar-nav="automations"'));
-    applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
-    expect(render("comfortable").html).not.toContain('data-testid="automations-attention"');
+    expect(html).toMatch(/data-tour="team-tools" data-sidebar-nav="team-map"/);
   });
 
   it("shows Team map as its own row in Advanced mode, with no Tools menu", () => {
@@ -147,7 +116,7 @@ describe("sidebar footer places", () => {
   it("draws icons with tooltips in the avatars-only density", () => {
     fixture.advanced = true;
     const { html } = render("icons");
-    for (const label of ["Automations", "Team map"]) {
+    for (const label of ["Team map"]) {
       expect(html).toContain(`aria-label="${label}" title="${label}"`);
       expect(html).not.toContain(`>${label}</span>`);
     }
@@ -160,8 +129,8 @@ describe("Tools header", () => {
     const { html } = render("comfortable");
     expect(html).toContain(">Tools<");
     expect(html).toContain('aria-expanded="true"');
-    expect(html.indexOf(">Tools<")).toBeLessThan(html.indexOf('data-sidebar-nav="automations"'));
-    for (const id of ["automations", "team-map"]) expect(html).toContain(`data-sidebar-nav="${id}"`);
+    expect(html.indexOf(">Tools<")).toBeLessThan(html.indexOf('data-sidebar-nav="team-map"'));
+    for (const id of ["team-map"]) expect(html).toContain(`data-sidebar-nav="${id}"`);
   });
 
   it("keeps the Tools label and hides the rows when collapsed", () => {
@@ -169,7 +138,7 @@ describe("Tools header", () => {
     const { html } = render("comfortable", { collapsed: true });
     expect(html).toContain(">Tools<");
     expect(html).toContain('aria-expanded="false"');
-    for (const id of ["automations", "team-map"]) expect(html).not.toContain(`data-sidebar-nav="${id}"`);
+    for (const id of ["team-map"]) expect(html).not.toContain(`data-sidebar-nav="${id}"`);
   });
 
   it("toggles through the header", () => {
@@ -181,18 +150,7 @@ describe("Tools header", () => {
     expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the attention dot on the header only while collapsed", () => {
-    fixture.advanced = true;
-    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
-    const collapsed = render("comfortable", { collapsed: true }).html;
-    expect(collapsed).toContain('data-testid="section-alert"');
-    expect(collapsed).not.toContain('data-testid="automations-attention"');
-    const expanded = render("comfortable").html;
-    expect(expanded).not.toContain('data-testid="section-alert"');
-    expect(expanded).toContain('data-testid="automations-attention"');
-  });
-
-  it("shows no dot on a collapsed header when nothing needs you", () => {
+  it("shows no dot on a collapsed header", () => {
     fixture.advanced = true;
     expect(render("comfortable", { collapsed: true }).html).not.toContain('data-testid="section-alert"');
   });
@@ -218,10 +176,9 @@ function renderBottom() {
   return { html, nodes: nodes(tree) };
 }
 describe("the bottom bar beside the profile", () => {
-  it.each([false, true])("carries Apps alone: Automations and Team map are Tools rows in Advanced and account menu items in Simple (advanced: %s)", (advanced) => {
+  it.each([false, true])("carries Apps alone: Team map is a Tools row in Advanced and an account menu item in Simple (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     const { html } = renderBottom();
-    expect(html).not.toContain('data-sidebar-nav="automations"');
     expect(html).not.toContain('data-sidebar-nav="team-map"');
     expect(html).toContain('data-sidebar-nav="apps"');
   });
@@ -246,7 +203,7 @@ describe("toolbar tools layout", () => {
     const { html } = render("comfortable", { toolsLayout: "toolbar" });
     expect(html).toContain('class="flex flex-row gap-1"');
     expect(html).not.toContain("flex-col");
-    for (const label of ["Automations", "Team map"]) {
+    for (const label of ["Team map"]) {
       expect(html).toContain(`aria-label="${label}" title="${label}"`);
       expect(html).not.toContain(`>${label}</span>`);
     }
@@ -254,10 +211,9 @@ describe("toolbar tools layout", () => {
 
   it("toolbar keeps tour anchors and aria-current", () => {
     fixture.advanced = true;
-    fixture.state.activeView = "automations";
+    fixture.state.activeView = "team-map";
     const { html } = render("comfortable", { toolsLayout: "toolbar" });
     expect(html).toContain('data-tour="tools"');
-    expect(html).toMatch(/data-tour="nav-automations" data-sidebar-nav="automations"/);
     expect(html).toMatch(/data-tour="team-tools" data-sidebar-nav="team-map"/);
     expect(html).toContain('data-sidebar-nav="published-apps"');
     expect(html.indexOf('data-sidebar-nav="published-apps"')).toBeGreaterThan(html.indexOf('data-sidebar-nav="team-map"'));
@@ -266,21 +222,12 @@ describe("toolbar tools layout", () => {
       const next = html.indexOf("data-sidebar-nav=", at + 1);
       return html.slice(at, next === -1 ? undefined : next);
     };
-    expect(place("automations")).toContain('aria-current="page"');
-    expect(place("team-map")).not.toContain('aria-current="page"');
+    expect(place("team-map")).toContain('aria-current="page"');
   });
 
-  it("toolbar shows the attention dot for an app trigger in trouble", () => {
+  it("toolbar applies to Advanced mode's two places; Simple mode keeps them in the bottom bar instead", () => {
     fixture.advanced = true;
-    applyAppTriggerSnapshot({ triggers: [trigger({ problem: { kind: "reconnect", at: 1 } })], attempts: [], service: { available: true } });
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html).toContain('data-testid="automations-attention"');
-    applyAppTriggerSnapshot({ triggers: [trigger()], attempts: [], service: { available: true } });
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html).not.toContain('data-testid="automations-attention"');
-  });
-
-  it("toolbar applies to Advanced mode's three places; Simple mode keeps them in the bottom bar instead", () => {
-    fixture.advanced = true;
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html.match(/data-sidebar-nav="/g)).toHaveLength(3);
+    expect(render("comfortable", { toolsLayout: "toolbar" }).html.match(/data-sidebar-nav="/g)).toHaveLength(2);
     fixture.advanced = false;
     expect(render("comfortable", { toolsLayout: "toolbar" }).html).toBe("");
   });
@@ -299,7 +246,7 @@ describe("toolbar tools layout", () => {
     expect(unset).toContain('<div data-tour="tools">');
     expect(unset).toContain('<nav aria-label="Tools" class="flex flex-col gap-0.5">');
     expect(unset).not.toContain("flex-row");
-    for (const label of ["Automations", "Team map"]) {
+    for (const label of ["Team map"]) {
       expect(unset).toContain(`>${label}</span>`);
       expect(unset).not.toContain(`title="${label}"`);
       expect(unset).not.toContain(`aria-label="${label}"`);

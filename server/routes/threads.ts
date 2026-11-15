@@ -68,7 +68,7 @@ export interface ThreadRouteDeps {
   /** Who uploaded each file: only its uploader discards it, and only while nothing uses it. */
   uploads: { note(auth: RequestAuth, name: string): void; owns(auth: RequestAuth, name: string): boolean };
   attachmentInUse(name: string): boolean;
-  /** The stored files a Settings clear must leave (pictures, banner, routine and calendar-call files), null until those load; absent on a Team Cloud, which has no clear. */
+  /** The stored files a Settings clear must leave (pictures, banner and calendar-call files), null until those load; absent on a Team Cloud, which has no clear. */
   keptAttachments?(): ReadonlySet<string> | null;
 }
 
@@ -232,9 +232,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         if (!senderId) {
           return json(res, 403, { error: "the file's bot author could not be verified" });
         }
-        const runThread = message.automation?.executionThreadId;
-        const fromRun = runThread && store.botByThread(runThread)?.id === senderId ? messageFileRootsForThread(senderId, runThread) : [];
-        roots = [...new Set([...messageFileRootsForThread(senderId, threadId), ...fromRun])];
+        roots = messageFileRootsForThread(senderId, threadId);
       }
 
       const folderEntry = method === "POST" && body.entry !== undefined
@@ -404,7 +402,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
     if (path === "/api/attachment-storage" && deps.keptAttachments) {
       if (method === "GET") return json(res, 200, attachmentStorageUsage());
       if (method === "POST") {
-        // Until routines load their files are unknown, and a clear could take them.
+        // Until the files to keep are known, a clear could take them.
         const kept = deps.keptAttachments();
         if (!kept) return json(res, 503, { error: "Routines are still loading. Try again in a moment." });
         return json(res, 200, { ...clearAttachments(kept), ...attachmentStorageUsage() });

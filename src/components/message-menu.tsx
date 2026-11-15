@@ -35,7 +35,6 @@ function idItem(messageId: string): MessageMenuItem {
 export function useBotMessageMenu({
   text,
   botId,
-  threadId,
   messageId,
   voiceId,
   tts,
@@ -48,8 +47,6 @@ export function useBotMessageMenu({
 }: {
   text: string;
   botId?: string;
-  /** The bot's conversation the message is in; a group chat names none. */
-  threadId?: string;
   messageId: string;
   voiceId?: string;
   tts: ConfigStatus["tts"];

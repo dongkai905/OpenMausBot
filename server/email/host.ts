@@ -25,7 +25,7 @@ export interface EmailBot {
   id: string;
   name: string;
   color?: string;
-  composio?: boolean;
+  apps?: boolean;
   connectorTools?: Record<string, ConnectorToolGrant>;
   connectorScopes?: ConnectorScopes;
 }
@@ -46,9 +46,9 @@ export interface EmailHostDeps {
   run?: Partial<{ listMailboxes: typeof listMailboxes; listMessages: typeof listMessages; searchMessages: typeof searchMessages; readMessage: typeof readMessage; sendMessage: typeof sendMessage }>;
 }
 
-/** Whether this bot gets the Email tools at all: off with connected apps off, or with a scope or grant record that leaves it out. */
-export function emailAllowedFor(bot: Pick<EmailBot, "composio" | "connectorScopes" | "connectorTools">): boolean {
-  if (bot.composio === false) return false;
+/** Whether this bot gets the Email tools at all: off with apps off, or with a scope or grant record that leaves it out. */
+export function emailAllowedFor(bot: Pick<EmailBot, "apps" | "connectorScopes" | "connectorTools">): boolean {
+  if (bot.apps === false) return false;
   if (bot.connectorScopes && !Object.hasOwn(bot.connectorScopes.apps, EMAIL_SLUG)) return false;
   if (bot.connectorTools !== undefined && !Object.hasOwn(bot.connectorTools, EMAIL_SLUG)) return false;
   return true;

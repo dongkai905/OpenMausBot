@@ -6,7 +6,6 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it } from "vitest";
 import { failedTurnTool } from "../shared/failed-turn.ts";
 import type { PlaceRow } from "../shared/place-view.ts";
-import { TRIAL_CREDIT_REFUSED } from "../shared/trial-credit.ts";
 import { CLOUD_HEALTH_PATH, CLOUD_PAIRING_PATH, CLOUD_PAIRING_SKEW_S, cloudPairingSignature, cloudRequestSignature } from "./cloud-home.ts";
 import { CLOUD_HEALTH_MAX_BYTES, HEALTH_BUCKET_CAP, createCloudHealth, createCloudHealthLedger, type CloudHealthDeps } from "./cloud-health.ts";
 import { DATA_DIR, EVENTS_DIR } from "./config.ts";
@@ -83,9 +82,9 @@ describe("a new Cloud's first hour in its health report", () => {
 describe("the failure code a Cloud home reports", () => {
   it("names a place that could not be used by its state", () => {
     const w = world();
-    w.fail("Your cloud computer hours are used up.", { place: place("cc-no-hours") });
+    w.fail("The Local VM could not be started.", { place: place("vm-cannot") });
     w.fail("Tallyspoon Ops' browser stopped.", { place: place("browser-cannot") });
-    expect(incidents(w)).toEqual([{ kind: "place", code: "cc-no-hours", engine: null, count: 1 }, { kind: "place", code: "browser-cannot", engine: null, count: 1 }]);
+    expect(incidents(w)).toEqual([{ kind: "place", code: "vm-cannot", engine: null, count: 1 }, { kind: "place", code: "browser-cannot", engine: null, count: 1 }]);
   });
 
   it("takes the engine's stop reason, unless it is generic and the cause says more", () => {
@@ -133,13 +132,12 @@ describe("the failure code a Cloud home reports", () => {
     expect(incidents(w)).toEqual([{ kind: "turn", code: "auth", engine: "codex", count: 1 }]);
   });
 
-  it("names the failures the server writes itself, and a trial credit's refusal", () => {
+  it("names the failures the server writes itself", () => {
     const w = world();
     w.fail("no activity for 20 minutes — the turn was stopped");
     w.fail("turn interrupted — OpenMausBot restarted");
     w.fail("this thread could not start — the engine is not installed");
     w.fail("queued message could not start — the engine is not installed");
-    w.fail(TRIAL_CREDIT_REFUSED.used_up);
     w.fail(`${memoryStopText(false)} (opencodeGo exited null before the prompt result)`);
     w.fail(memoryStallText("no activity for 20 minutes — the turn was stopped", 1));
     w.fail(memoryStopText(true));
@@ -147,7 +145,6 @@ describe("the failure code a Cloud home reports", () => {
       { kind: "turn", code: "stalled", engine: null, count: 1 },
       { kind: "turn", code: "restart", engine: null, count: 1 },
       { kind: "turn", code: "could_not_start", engine: null, count: 2 },
-      { kind: "turn", code: "trial_used_up", engine: null, count: 1 },
       { kind: "turn", code: "out_of_memory", engine: null, count: 3 },
     ]);
   });
@@ -235,13 +232,13 @@ describe("the report", () => {
     w.emit(task.threadId, { type: "turn.started" });
     w.fail("Quarterly numbers for ACME failed for ada.lovelace@example.test at https://intranet.acme.test/q3 (sk-ant-api03-planted)", {}, task.threadId);
     w.emit(task.threadId, { type: "turn.completed", ok: false, stopReason: "Quarterly numbers for ACME" });
-    w.fail("Boat said: quota exceeded", { place: place("cc-provider") }, task.threadId);
+    w.fail("Boat said: quota exceeded", { place: place("place-failed") }, task.threadId);
     w.health.report(null);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = JSON.stringify(w.health.report(null));
     for (const words of planted) expect(body, words).not.toContain(words);
     const report = JSON.parse(body);
-    expect(report.incidents.map((incident: { code: string }) => incident.code)).toEqual(["unknown", "cc-provider"]);
+    expect(report.incidents.map((incident: { code: string }) => incident.code)).toEqual(["unknown", "place-failed"]);
     expect(report.engines).toEqual([{ kind: "claudeAgent", used: true, available: true, authenticated: false, version: "2.1.300" }]);
     expect(report.connectors.items).toEqual([{ slug: "gmail", connected: true }, { slug: "notion", connected: false }]);
   });
@@ -273,7 +270,7 @@ describe("the report", () => {
     for (let i = 0; i < HEALTH_BUCKET_CAP; i++) {
       const thread = `t${String(i).padStart(63, "0")}`;
       ledger.noteEvent({ eventId: "e", provider: `e${String(i).padStart(63, "0")}`, threadId: thread, createdAt: "", type: "turn.started" });
-      ledger.noteMessage(thread, { at: clock, tool: failedTurnTool("cut off", { place: place("cc-on-my-cloud") }), from: { botId: `b${"0".repeat(63)}`, name: "x", color: "x" } });
+      ledger.noteMessage(thread, { at: clock, tool: failedTurnTool("cut off", { place: place("local-unavailable") }), from: { botId: `b${"0".repeat(63)}`, name: "x", color: "x" } });
       clock += 1;
     }
     const first = w.health.report(null);

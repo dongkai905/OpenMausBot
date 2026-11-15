@@ -45,10 +45,9 @@ export function presetShareBody(choices: PresetShareChoices): Record<string, unk
 
 export function SharePresetContents({ preview, localSkips }: { preview: PresetShareResponse; localSkips: string[] }) {
   const preset = preview.document.package.presets?.[0];
-  const notes = Object.keys(preset?.seed?.memory ?? {}).length;
   const rows: Array<[string, string]> = [
     [t("teamShare.part.skills"), preset?.skills?.length ? `${preset.skills.length} · ${preset.skills.join(", ")}` : "0"],
-    [t("teamShare.part.notes"), notes ? String(notes) : t("teamShare.none")],
+    [t("teamShare.part.notes"), t("teamShare.none")],
     [t("teamShare.part.pictures"), preset?.bot.appearance?.avatar ? t("teamShare.yes") : t("teamShare.none")],
   ];
   const skipped = [...localSkips, ...preview.skipped.map((skip) => describeSkip(skip, preview.document))];

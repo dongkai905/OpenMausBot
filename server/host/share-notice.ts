@@ -28,7 +28,7 @@ export function createShareNotice(deps: ShareNoticeDeps) {
   return (auth: RequestAuth, bot: BotRecord, before: BotAccess, after: BotAccess): void => {
     const by = auth.kind === "session" ? auth.session.email?.trim().toLowerCase() : undefined;
     const name = by ? deps.profileName(by)?.trim() || nameFromEmail(by) : "An admin";
-    const main = deps.store().tasks(bot.id).filter((task) => !task.routineRunId).sort((a, b) => a.createdAt - b.createdAt)[0];
+    const main = deps.store().tasks(bot.id).sort((a, b) => a.createdAt - b.createdAt)[0];
     for (const email of newlyShared(before, after, deps.people())) {
       if (email === by) continue;
       deps.inbox().deliver(personKey({ id: "", email }), {

@@ -521,7 +521,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
       // The webhook's own run makes a routine: what came in from outside stays confined.
       { key: "run-lead", match: ["Draft a follow-up for the lead."], repeat: true, steps: [{ tool: "create_trigger", arguments: { when: "schedule", name: "Hourly orders", instructions: "Email the order list.", schedule: { type: "interval", every_minutes: 60 } } }], reply: "Drafted a follow-up for Ada." },
       { key: "run-summary", match: ["Send me a summary of my inbox"], repeat: true, steps: [], reply: "Inbox: 3 new emails, nothing urgent." },
-      { key: "run-orders", match: ["Email the order list."], repeat: true, steps: [], approve: { tool_name: "mcp__composio__COMPOSIO_SEARCH_TOOLS", input: { queries: [] } }, reply: "Sent." },
+      { key: "run-orders", match: ["Email the order list."], repeat: true, steps: [], approve: { tool_name: "EMAIL_SEARCH_MESSAGES", input: { text: "" } }, reply: "Sent." },
       { key: "chat", match: [""], repeat: true, steps: [], reply: "OK." },
     ];
     writeFileSync(cloud.planPath, JSON.stringify({ [scout]: { script }, [ledger]: { script } }));

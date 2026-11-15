@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { setLocale } from "./i18n";
-import { toolStepLabel } from "./tool-step-label";
+import { toolActionPhrase, toolStepLabel } from "./tool-step-label";
 
 describe("toolStepLabel", () => {
   it.each([
@@ -17,7 +17,7 @@ describe("toolStepLabel", () => {
     [{ name: "mcp__agents__create_trigger" }, "Create trigger"],
     [{ name: "agent_browser_click" }, "Use the browser"],
     [{ name: "GITHUB_GET_A_COMMIT" }, "Get a commit"],
-    [{ name: "mcp__composio__LINEAR_CREATE_LINEAR_COMMENT" }, "Create linear comment"],
+    [{ name: "mcp__linear__LINEAR_CREATE_LINEAR_COMMENT" }, "Create linear comment"],
     [{ name: "mcp__notes__query_database" }, "Query database"],
     [{ name: "NotebookRead" }, "Notebook read"],
     [{ name: "tool" }, "Use a tool"],
@@ -40,6 +40,19 @@ describe("toolStepLabel", () => {
   it("keeps a line the server already wrote in words", () => {
     expect(toolStepLabel({ name: "Messaged @Ada" })).toBe("Messaged @Ada");
     expect(toolStepLabel({ name: "Send failed — the sending bot no longer exists" })).toBe("Send failed — the sending bot no longer exists");
+  });
+});
+
+describe("toolActionPhrase", () => {
+  it("turns an upper-snake tool name into a verb phrase", () => {
+    expect(toolActionPhrase("LINEAR_CREATE_LINEAR_COMMENT")).toBe("create linear comment");
+    expect(toolActionPhrase("GMAIL_SEND_EMAIL")).toBe("send email");
+  });
+
+  it("leaves other tool names alone", () => {
+    expect(toolActionPhrase("Bash")).toBeUndefined();
+    expect(toolActionPhrase("computer_batch")).toBeUndefined();
+    expect(toolActionPhrase("LINEAR")).toBeUndefined();
   });
 });
 

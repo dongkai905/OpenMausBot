@@ -9,7 +9,7 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { mcpServersForBot, mcpServersOfBot, mcpSwitch, useMcpServers } from "@/lib/mcp-servers";
 import { instanceSupportsLocalComputer, localComputerDisabledReason, localComputerSelectable } from "@/lib/local-computer";
-import { placeBlocked, placeFacts, placeHasIssue, placeViewFor, usePlaceSeat, type PlaceSeat } from "@/lib/place-view";
+import { placeBlocked, placeFacts, placeViewFor, usePlaceSeat, type PlaceSeat } from "@/lib/place-view";
 import { shortPath } from "@/lib/short-path";
 import { isOwnThreadFolder } from "../../../shared/thread-folder";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
@@ -29,7 +29,7 @@ import {
   connectorServiceAccess,
   withServiceGrant,
   type ConnectorVerb,
-} from "@/lib/connector-grants";
+} from "@/lib/bot-apps";
 import { inputCls } from "./field";
 import { openKeySettings } from "../keys/key-focus";
 import { KeysLink } from "../keys/KeysLink";
@@ -608,7 +608,7 @@ export function CloudPreference({ bot, patch }: { bot: Bot; patch: ReturnType<ty
         </div>
       )}
       <CloudBackendPicker
-        value={bot.cloudBackend ?? "box"}
+        value={bot.cloudBackend ?? "vps"}
         onChange={(backend) => patch({ cloudBackend: backend })}
       />
       {/* A saved bot only: a new bot starts on the default server, and new-bot defaults never name one. */}
@@ -646,13 +646,13 @@ function DraftWorksOn({ bot, patch, seat }: { bot: Bot; patch: ReturnType<typeof
         reason: localReason ?? t("computer.unavailableLocal"),
       },
     }));
-    const managedBy = placeManagedBy(mode, bot.cloudBackend, state.config?.managedPolicy);
+    const managedBy = placeManagedBy(mode, state.config?.managedPolicy);
     return {
       mode, labelKey, descriptionKey, Icon, view, managedBy,
       selected: worksOnSelected(mode, bot.computer, capabilities),
       disabled: Boolean(managedBy) || placeBlocked(view),
-      issue: !managedBy && placeHasIssue(view),
-      note: placeHasIssue(view) ? view.line : mode === "local" ? localReason ?? undefined : undefined,
+      issue: !managedBy && placeBlocked(view),
+      note: placeBlocked(view) ? view.line : mode === "local" ? localReason ?? undefined : undefined,
     };
   });
   const choose = (mode: WorksOnMode) => patch(mode === "browser" ? { computer: mode, browser: true } : { computer: mode });
@@ -679,7 +679,6 @@ export function AccessSection({
   const {
     patch,
     canUseConnectedApps,
-    connectedAppsConfigured,
     connectedAppsEnabled,
     connectorGrantState,
     canUseBrowser,
@@ -695,7 +694,7 @@ export function AccessSection({
   const worksOn = placeViewFor(placeFacts({
     bot, place: bot.computer ?? "auto", seat: placeSeat, config: state.config, instances: state.instances,
   }));
-  // The same list the Vault tab shows: Composio's connected accounts plus the native Email connection.
+  // The apps this bot may use: the workspace's own app connections, one row each.
   const apps = useBotApps(bot);
   const inventoryReady = apps.phase === "ready";
   const connectedSlugs = apps.connectedSlugs;
@@ -731,34 +730,24 @@ export function AccessSection({
           <div>
             <div className="text-[15px] font-medium text-ink">{t("botAccess.apps.title")}</div>
             <div className="mt-0.5 text-[13px] text-ink-secondary">
-              {!connectedAppsConfigured
-                ? t("botAccess.apps.connectInSettings")
-                : !canUseConnectedApps
-                  ? t("botAccess.apps.modelUnsupported")
-                  : connectedAppsEnabled
-                    ? connectorGrantState === "partial"
-                      ? t("botAccess.apps.partial")
-                      : connectorGrantState === "none"
-                        ? t("botAccess.apps.none")
-                        : t("botAccess.apps.enabled")
-                    : t("botAccess.apps.disabled")}
+              {!canUseConnectedApps
+                ? t("botAccess.apps.modelUnsupported")
+                : connectedAppsEnabled
+                  ? connectorGrantState === "partial"
+                    ? t("botAccess.apps.partial")
+                    : connectorGrantState === "none"
+                      ? t("botAccess.apps.none")
+                      : t("botAccess.apps.enabled")
+                  : t("botAccess.apps.disabled")}
             </div>
             <ProposalStatus bot={bot} kind="owner" />
           </div>
           <Switch
             checked={connectedAppsEnabled}
             aria-label={t("botAccess.apps.allow")}
-            disabled={
-              !connectedAppsEnabled && (!connectedAppsConfigured || !canUseConnectedApps)
-            }
-            onClick={() => patch({ composio: !connectedAppsEnabled })}
-            title={
-              !connectedAppsEnabled && !connectedAppsConfigured
-                ? t("botAccess.apps.connectFirst")
-                : !connectedAppsEnabled && !canUseConnectedApps
-                  ? t("botAccess.apps.modelUnsupportedShort")
-                  : undefined
-            }
+            disabled={!canUseConnectedApps}
+            onClick={() => patch({ apps: !connectedAppsEnabled })}
+            title={!canUseConnectedApps ? t("botAccess.apps.modelUnsupportedShort") : undefined}
             className="disabled:cursor-not-allowed"
           />
         </div>
@@ -768,7 +757,7 @@ export function AccessSection({
             <ConnectorToolsGrants bot={bot} patch={patch} slugs={connectedSlugs} />
           </>
         )}
-        {connectedAppsEnabled && connectedAppsConfigured && (
+        {connectedAppsEnabled && (
           <button
             type="button"
             onClick={() => {

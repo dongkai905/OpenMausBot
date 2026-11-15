@@ -940,7 +940,7 @@ describe("notification routing", () => {
       expect(opened({ ...bot, threadId: "later-chat" }, false)).toEqual([{ type: "select", id: "bot-1" }]);
       expect(opened({ ...bot, tasks: undefined }, false)).toEqual([{ type: "select", id: "bot-1" }]);
       expect(opened({ ...bot, mainThreadId: undefined }, false)).toEqual([{ type: "select", id: "bot-1" }]);
-      const switched = reducer({ ...initialState, bots: [bot], selectedId: "other", activeView: "automations" }, opened(bot, false)[0] as Action);
+      const switched = reducer({ ...initialState, bots: [bot], selectedId: "other", activeView: "team-map" }, opened(bot, false)[0] as Action);
       expect(switched).toMatchObject({ selectedId: "bot-1", activeView: "chat" });
       expect(switched.bots[0]!.tasks!.find((task) => task.threadId === "routine-report")!.unread).toBe(true);
     });
@@ -1007,7 +1007,7 @@ describe("notification routing", () => {
       groups,
     })).toBe("room-thread");
     expect(visibleNotificationThread({
-      activeView: "automations",
+      activeView: "team-map",
       selectedId: "bot-1",
       bots,
       groups,
@@ -1030,11 +1030,11 @@ describe("config status frames", () => {
   it("keeps every saved key's hint through a live config update, so a masked key never empties", () => {
     const status = configStatusFromFrame({
       openai: { configured: true, last4: "a1b2" },
-      box: { configured: true, last4: "c3d4" },
+      openrouter: { configured: true, last4: "c3d4" },
       savedKeys: { ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } },
     } as ConfigStatusFrame);
     expect(status.openai).toEqual({ configured: true, last4: "a1b2" });
-    expect(status.box).toEqual({ configured: true, last4: "c3d4" });
+    expect(status.openrouter).toEqual({ configured: true, last4: "c3d4" });
     expect(status.savedKeys).toEqual({ ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } });
   });
 
@@ -1042,8 +1042,6 @@ describe("config status frames", () => {
     expect(
       configStatusFromFrame({
         meta: { configured: true },
-        composio: { configured: true, mode: "managed" },
-        box: { configured: false },
         vps: { configured: true, sshAlias: "homelab" },
         rooms: { turnTimeoutMinutes: 20 },
         mcp: { callTimeoutMinutes: 30 },
@@ -1056,8 +1054,6 @@ describe("config status frames", () => {
       }),
     ).toEqual({
       meta: { configured: true },
-      composio: { configured: true, mode: "managed" },
-      box: { configured: false },
       vps: { configured: true, sshAlias: "homelab" },
       rooms: { turnTimeoutMinutes: 20 },
       mcp: { callTimeoutMinutes: 30 },
@@ -1135,8 +1131,6 @@ describe("task rename", () => {
 
 describe("config status", () => {
   const config = configStatusFromFrame({
-    composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 5 },
     mcp: { callTimeoutMinutes: 10 },
@@ -1145,14 +1139,14 @@ describe("config status", () => {
   });
 
   it("replaces the config without moving the person off their current view", () => {
-    const onAutomations = reducer(initialState, { type: "showAutomations" });
-    expect(onAutomations.activeView).toBe("automations");
+    const onTeamMap = reducer(initialState, { type: "showTeamMap" });
+    expect(onTeamMap.activeView).toBe("team-map");
 
-    const next = reducer(onAutomations, {
+    const next = reducer(onTeamMap, {
       type: "configStatus",
       config: { ...config, features: { skillAuthoring: false } },
     });
-    expect(next.activeView).toBe("automations");
+    expect(next.activeView).toBe("team-map");
     expect(next.config?.features).toEqual({ skillAuthoring: false });
   });
 });
@@ -1417,16 +1411,6 @@ describe("cross-client bot creation", () => {
     });
 
     expect(greeted.bots[0]?.messages).toEqual([greeting]);
-  });
-});
-
-describe("the automations view", () => {
-  it("opens one automation without retaining a stale focus on a later global visit", () => {
-    const focused = reducer(initialState, { type: "showAutomations", botId: "echo", id: "automation-1" });
-    expect(focused.activeView).toBe("automations");
-    expect(focused.automationsFocus).toEqual({ botId: "echo", id: "automation-1", nonce: 1 });
-    const all = reducer(focused, { type: "showAutomations" });
-    expect(all.automationsFocus).toEqual({ botId: undefined, id: undefined, nonce: 2 });
   });
 });
 
@@ -2462,9 +2446,8 @@ describe("activity panel", () => {
     expect(next.computerOpen).toBe(true);
   });
 
-  it("switching to automations or the team map closes the activity panel", () => {
+  it("switching to the team map closes the activity panel", () => {
     const open = { ...initialState, activityOpen: true };
-    expect(reducer(open, { type: "showAutomations" }).activityOpen).toBe(false);
     expect(reducer(open, { type: "showTeamMap" }).activityOpen).toBe(false);
   });
 
@@ -2488,8 +2471,6 @@ describe("activity panel", () => {
 
 describe("live config frames", () => {
   const baseFrame: ConfigStatusFrame = {
-    composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 10 },
     mcp: { callTimeoutMinutes: 10 },
@@ -3031,11 +3012,6 @@ describe("notifications feed", () => {
     state = reducer(state, { type: "notificationRead", id: "n1" });
     state = reducer(state, { type: "notificationsHydrated", notifications: [entry("n1", 1)] });
     expect(state.notifications[0].read).toBe(false);
-  });
-
-  it("showAutomations closes the feed so its rail is reachable again", () => {
-    const open = reducer(initialState, { type: "toggleNotifications", open: true });
-    expect(reducer(open, { type: "showAutomations" }).notificationsOpen).toBe(false);
   });
 
   it("marks one or all read without touching the rest", () => {

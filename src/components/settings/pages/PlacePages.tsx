@@ -14,7 +14,6 @@ import { TeamPeopleCard } from "../../CloudAccountSettings";
 import { CloudKeepHere } from "../../CloudKeepHere";
 import { CustomDomainSettings } from "../../CustomDomainSettings";
 import { WorkspaceBackupSettings } from "../../WorkspaceBackupSettings";
-import { preloadConnectedApps } from "@/lib/connected-apps";
 import { DecisionModelSettings } from "../../DecisionModelSettings";
 import { DefaultBotSidebarRow } from "../../DefaultBotControls";
 import { EnginesSettings } from "../../EnginesSettings";
@@ -72,7 +71,6 @@ export function OverviewPage() {
   const phoneValue = phone.kind === "paired" || phone.kind === "attention" ? t("settings.glance.phonePaired", { count: phone.count })
     : phone.kind === "none" ? t("settings.glance.notSetUp") : undefined;
   const engines = state.instances.filter((instance) => instance.snapshot.state === "available").length;
-  const apps = useConnectedAppCount();
   return <>
     {note && (
       <SettingsRows>
@@ -90,7 +88,7 @@ export function OverviewPage() {
           value={ctx.admin ? engines > 0 ? t("settings.glance.aiReady", { count: engines }) : t("settings.glance.aiStart") : t("settings.glance.aiAdmin")} />}
         {/* Simple's sidebar footer has Connect apps right beside the avatar, so Simple's Overview leaves the jump out and
             stays one window tall at 900 px even while the grouped note shows. */}
-        {ctx.advanced && <SettingsLinkRow title={t("settings.glance.apps")} external value={apps === null ? undefined : apps > 0 ? t("settings.glance.appsConnected", { count: apps }) : t("settings.glance.appsNone")}
+        {ctx.advanced && <SettingsLinkRow title={t("settings.glance.apps")} external
           onClick={() => { dispatch({ type: "toggleAppSettings", open: false }); dispatch({ type: "togglePlugins", open: true }); }} data={{ "data-glance": "apps" }} />}
       </SettingsRows>
     </SettingsGroup>
@@ -108,17 +106,6 @@ export function OverviewPage() {
         has none here (no administrator or proxy steps for a person who has no server to set up). */}
     {place.kind === "server" && !ctx.client && ctx.advanced && <CustomDomainSettings />}
   </>;
-}
-
-/** How many apps this place has connected, for At a glance; null until it is known. */
-function useConnectedAppCount(): number | null {
-  const [count, setCount] = useState<number | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void preloadConnectedApps().then((inventory) => { if (alive) setCount(Object.values(inventory.services).filter((status) => status.connected).length); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  return count;
 }
 
 export function AiPage() {

@@ -765,7 +765,7 @@ describe("agents-proxy MCP surface", () => {
     expect(create.inputSchema.required).toEqual(["action"]);
     expect(create.inputSchema.properties.action.enum).toEqual(["create", "update", "pause", "resume", "run_now"]);
     expect(Object.keys(create.inputSchema.properties)).not.toContain("changes");
-    expect(create.inputSchema.properties.when.enum).toEqual(["schedule", "app_event", "webhook", "limit_reset"]);
+    expect(create.inputSchema.properties.when.enum).toEqual(["schedule", "webhook", "limit_reset"]);
     expect(create.inputSchema.properties.repeat.enum).toEqual(["once", "every_reset"]);
     const schedule = create.inputSchema.properties.schedule;
     expect(JSON.stringify(create.inputSchema)).not.toMatch(/"oneOf"|"anyOf"|"allOf"|"const"/);
@@ -1543,38 +1543,38 @@ describe("agents-proxy MCP surface", () => {
     expect(res.result.isError).toBeFalsy();
   });
 
-  it.each(["box", "cloud"])("maps %s execution to the explicit Boat runner without changing stored wire values", async (run_on) => {
+  it("runs a routine on the bot's own model and configured computer, the one destination it has", async () => {
     const res = await callTool("create_trigger", { when: "schedule",
-      name: "Boat check", instructions: "Check explicitly on Boat.",
-      schedule: { type: "daily", time: "09:00" }, run_on,
+      name: "Queue check", instructions: "Check the queue.",
+      schedule: { type: "daily", time: "09:00" }, run_on: "maus",
     });
     expect(res.result.isError).toBeFalsy();
-    expect(lastRoutineRequestBody.routine.runOn).toBe("cloud");
+    expect(lastRoutineRequestBody.routine.runOn).toBe("maus");
     const update = await callTool("manage_trigger", {
-      action: "update", trigger_id: "routine-morning", changes: { run_on, runOn: "cloud" },
+      action: "update", trigger_id: "routine-morning", changes: { run_on: "maus", runOn: "maus" },
     });
     expect(update.result.isError).toBeFalsy();
-    expect(lastRoutineRequestBody.changes.runOn).toBe("cloud");
+    expect(lastRoutineRequestBody.changes.runOn).toBe("maus");
   });
 
-  it("advertises VPS-compatible default execution separately from the Boat runner", async () => {
+  it("advertises one execution destination, the bot's own model and configured computer", async () => {
     const list = await rpc("tools/list");
     const routine = list.result.tools.find((entry: { name: string }) => entry.name === "trigger");
-    expect(routine.inputSchema.properties.run_on.enum).toEqual(["maus", "box"]);
+    expect(routine.inputSchema.properties.run_on.enum).toEqual(["maus"]);
     expect(routine.inputSchema.properties.run_on.description).toContain("INCLUDING a self-hosted VPS");
   });
 
   it("preserves execution settings copied from list_triggers", async () => {
     const res = await callTool("create_trigger", { when: "schedule",
-      name: "Cloud check",
+      name: "Queue check",
       instructions: "Check the queue.",
       schedule: { type: "interval", everyMinutes: 15, anchorAt: "2026-09-01T09:00:00+05:30" },
-      runOn: "cloud",
+      runOn: "maus",
       timeoutMinutes: 20,
     });
     expect(res.result.isError).toBeFalsy();
     expect(lastRoutineRequestBody.routine).toMatchObject({
-      runOn: "cloud",
+      runOn: "maus",
       timeoutMinutes: 20,
       schedule: { type: "interval", everyMinutes: 15, anchorAt: "2026-09-01T09:00:00+05:30" },
     });
@@ -1582,7 +1582,8 @@ describe("agents-proxy MCP surface", () => {
 
   it.each([
     { run_on: 7 },
-    { run_on: "maus", runOn: "cloud" },
+    { run_on: "maus", runOn: 7 },
+    { run_on: "elsewhere" },
     { timeout_minutes: "20" },
     { timeout_minutes: 10, timeoutMinutes: 20 },
     { clear_timeout: true, timeoutMinutes: 10 },

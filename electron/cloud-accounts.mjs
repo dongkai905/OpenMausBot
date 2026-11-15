@@ -7,7 +7,7 @@
 //
 // Security: tokens are read and written here and in cloud-account.mjs only, both files encrypted by the OS. What leaves this
 // module for a page is an id and an address.
-import { unreadableRecord } from "./managed-desktop.mjs";
+import { unreadableRecord } from "./record-read.mjs";
 
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
 const VERSION = 1;

@@ -38,7 +38,7 @@ export function parseConnectorTools(value: unknown): { ok: true; grants: Record<
     const names: string[] = [];
     for (const tool of tools) {
       if (typeof tool !== "string" || !CONNECTOR_TOOL_NAME_PATTERN.test(tool)) {
-        return { ok: false, error: `connectorTools.${slug}.tools names must be Composio tool names like GMAIL_SEND_EMAIL` };
+        return { ok: false, error: `connectorTools.${slug}.tools names must be app tool names like EMAIL_SEND_MESSAGE` };
       }
       if (!names.includes(tool)) names.push(tool);
     }

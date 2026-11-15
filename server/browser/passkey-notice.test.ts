@@ -8,15 +8,14 @@ const PASSKEY_PAGE = 'heading "Google"\nheading "Verifying it’s you"\ntext "Co
 const texts = (result: unknown) => (result as { content: Array<{ text: string }> }).content.map((part) => part.text);
 
 describe("the passkey notice a bot gets", () => {
-  it("orders what works: connected apps, another way with a code, then the lent PC on My Cloud only", () => {
+  it("orders what works: another way with a code, then the lent PC on My Cloud only", () => {
     const cloud = passkeyNotice("google", "cloud");
     const works = cloud.slice(cloud.indexOf("What works, best first"));
-    expect(works.indexOf("connected apps")).toBeLessThan(works.indexOf("Try another way"));
-    expect(cloud).toContain("COMPOSIO_MANAGE_CONNECTIONS");
+    expect(works.indexOf("fill_login")).toBeLessThan(works.indexOf("list_shared_computers"));
     expect(cloud).toContain("request_sign_in");
     expect(cloud).toContain("do not retry, wait, or press Continue or Try again");
     expect(cloud).toContain("this Google account wants a passkey");
-    expect(cloud.indexOf("Choose \"Try another way\" on this page")).toBeLessThan(cloud.indexOf("connected apps"));
+    expect(cloud.indexOf("Choose \"Try another way\" on this page")).toBeLessThan(works.indexOf("fill_login"));
     expect(cloud).toContain("take a snapshot to see them), or use the person's own computer's browser");
     expect(cloud).toContain("list_shared_computers");
     expect(passkeyNotice("google", "desktop")).not.toContain("list_shared_computers");
@@ -67,7 +66,6 @@ describe("Google's refusal page hands the sign-in to the person", () => {
   it("tells the bot to stop retrying and hand the step to the person", () => {
     const notice = googleRefusalNotice("cloud");
     expect(notice).toContain("do not retry");
-    expect(notice).toContain("COMPOSIO_MANAGE_CONNECTIONS");
     expect(notice).toContain("tell the person in plain words");
     expect(notice).toContain("list_shared_computers");
     expect(googleRefusalNotice("desktop")).not.toContain("list_shared_computers");

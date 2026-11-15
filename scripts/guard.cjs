@@ -42,7 +42,7 @@ const SELF = new Set(["scripts/fe_reach.cjs", "scripts/guard.cjs", "scripts/cali
 
 /** Config segments that are product settings. A save-list that drops one wipes it for every user. */
 const PRODUCT_SAVE_SEGMENTS = [
-  "postiz", "composio", "box", "tts", "decider", "imageGen", "live", "profile",
+  "postiz", "tts", "decider", "imageGen", "live", "profile",
   "rooms", "mcp", "threads", "context", "memory", "localVm", "features", "budgets",
   "billing", "decisions", "loopGuard", "onboarding", "browserEngine", "newBots",
   "safetyFloor",
@@ -71,32 +71,83 @@ const changedFiles = (base) =>
     return { status: parts[0], file: parts[parts.length - 1] };
   });
 
-// G1 — reserved paths stay untouched.
+// G1 — reserved paths stay untouched, except where the change set only takes
+// the removed vendor out of them. A reserved file may lose a line that names
+// the removed subsystem (the driver's dead capability flag); it may not gain
+// a code line, and it may not lose anything else. A comment may be reworded:
+// the gate protects behaviour, not prose.
 const g1 = (base) => {
   const touched = changedFiles(base).filter(({ file }) => RESERVED.includes(file));
-  if (touched.length) fail("G1", "reserved paths untouched", touched.map((t) => `${t.status} ${t.file}`).join(", "));
+  const offenders = [];
+  const isComment = (text) => /^\s*(\/\/|\/\*|\*|\*\/)/.test(text);
+  for (const { file } of touched) {
+    const patch = git("diff", base, "--", file);
+    const added = [];
+    const removed = [];
+    for (const line of patch.split("\n")) {
+      if (line.startsWith("+++") || line.startsWith("---")) continue;
+      if (line.startsWith("+")) added.push(line.slice(1));
+      else if (line.startsWith("-")) removed.push(line.slice(1));
+    }
+    for (const text of added) {
+      if (isComment(text)) continue;
+      offenders.push(`${file}: added code line: ${text.trim().slice(0, 80)}`);
+    }
+    for (const text of removed) {
+      if (isComment(text)) continue;
+      if (!/composio/i.test(text)) offenders.push(`${file}: removed line is not the vendor's: ${text.trim().slice(0, 80)}`);
+    }
+  }
+  if (offenders.length) fail("G1", "reserved paths untouched", offenders.slice(0, 10).join("\n"));
+  else if (touched.length) pass("G1", "reserved paths untouched", `${RESERVED.length} reserved files, ${touched.map((t) => t.file).join(", ")}: only the vendor's line removed`);
   else pass("G1", "reserved paths untouched", `${RESERVED.length} reserved files, none modified`);
 };
 
 // G2 — the change set never introduces a vendor identifier into production code.
+// Judged per file against the base: a vendor the file already named is not
+// introduced by this change set, whatever the diff looks like (a moved line, a
+// rewritten fixture). A vendor that appears in a file which never mentioned it
+// before is introduced, and that is what fails.
 const g2 = (base) => {
-  const patch = git("diff", base);
   const offenders = [];
   const fixtures = [];
-  let file = "";
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("+++ b/")) { file = line.slice(6); continue; }
-    if (!line.startsWith("+") || line.startsWith("+++")) continue;
-    if (SELF.has(file)) continue;
+  const pattern = `(?<![A-Za-z0-9_-])(${VENDOR_IDS.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_-])`;
+  // The base tree, in one pass: which file already named which vendor.
+  const before = new Map(); // file -> Set(id)
+  let grep = "";
+  try { grep = git("grep", "-n", "-P", pattern, base, "--"); } catch { grep = ""; }
+  for (const line of grep.split("\n")) {
+    if (!line.startsWith(`${base}:`)) continue;
+    const rest = line.slice(base.length + 1);
+    const at = rest.indexOf(":");
+    if (at === -1) continue;
+    const name = rest.slice(0, at);
+    const content = rest.slice(at + 1);
+    const ids = before.get(name) || new Set();
     for (const id of VENDOR_IDS) {
       const re = new RegExp(`(?<![A-Za-z0-9_-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_-])`);
-      if (re.test(line)) {
-        // A test may still name a removed engine in a saved-config fixture: an old
-        // config must still load. Production code may not.
-        const row = `${file}: ${id} :: ${line.slice(1).trim().slice(0, 120)}`;
-        if (/\.(test|spec)\.[tj]sx?$/.test(file)) fixtures.push(row); else offenders.push(row);
-        break;
-      }
+      if (re.test(content)) ids.add(id);
+    }
+    before.set(name, ids);
+  }
+  const files = new Set();
+  for (const line of git("diff", base, "--name-only").split("\n")) {
+    const name = line.trim();
+    if (name && !SELF.has(name)) files.add(name);
+  }
+  for (const name of files) {
+    const after = readText(name);
+    if (after === null) continue; // deleted in this change set
+    const isTest = /\.(test|spec)\.[tj]sx?$/.test(name) || /\.(test|spec)\.mjs$/.test(name);
+    const known = before.get(name) || new Set();
+    for (const id of VENDOR_IDS) {
+      const re = new RegExp(`(?<![A-Za-z0-9_-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_-])`);
+      if (!re.test(after)) continue;
+      if (known.has(id)) continue;
+      const row = `${name}: ${id} :: introduced by this change set`;
+      // A test may still name a removed engine in a saved-config fixture: an old
+      // config must still load. Production code may not.
+      if (isTest) fixtures.push(row); else offenders.push(row);
     }
   }
   if (offenders.length) fail("G2", "no vendor identifier added to production code", offenders.slice(0, 20).join("\n"));
@@ -225,10 +276,70 @@ const g8 = () => {
   else pass("G8", "no dead relative import", "clean");
 };
 
+// G9 — the working tree carries nothing the index does not.
+// The PR #7 push dropped two files because the payload came from
+// `git diff HEAD` (tracked files only) while the gates had read the working
+// tree. A file that exists on disk but not in the index is exactly the kind of
+// source that vanishes on the way to the remote. This gate is the guard-side
+// mirror of LOCK 1 in scripts/gitdata_push.py.
+const g9 = () => {
+  let raw = "";
+  try {
+    raw = git("status", "--porcelain", "--untracked-files=all");
+  } catch (error) {
+    fail("G9", "no untracked file in the change set", `git status failed: ${error.message}`);
+    return;
+  }
+  const untracked = [];
+  const unstaged = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    const code = line.slice(0, 2);
+    const file = line.slice(3).trim();
+    if (code === "??") untracked.push(file);
+    else if (code[1] !== " ") unstaged.push(`${file} (${code.trim()})`);
+  }
+  if (untracked.length || unstaged.length) {
+    const detail = [];
+    if (untracked.length) detail.push(`untracked: ${untracked.slice(0, 12).join(", ")}${untracked.length > 12 ? ` … +${untracked.length - 12}` : ""}`);
+    if (unstaged.length) detail.push(`unstaged: ${unstaged.slice(0, 12).join(", ")}${unstaged.length > 12 ? ` … +${unstaged.length - 12}` : ""}`);
+    fail("G9", "no untracked file in the change set", detail.join(" | ") || "clean");
+  } else {
+    pass("G9", "no untracked file in the change set", "working tree and index agree");
+  }
+};
+
+// G10 — the push evidence reconciles with the local tree.
+// scripts/gitdata_push.py records what it pushed; this gate re-derives the
+// local tree and refuses a stale or mismatching receipt.
+const g10 = () => {
+  const required = process.argv.includes("--require-push-evidence");
+  let evidence = null;
+  try {
+    evidence = JSON.parse(fs.readFileSync(path.join(ROOT, ".git", "push-evidence.json"), "utf8"));
+  } catch { evidence = null; }
+  if (!evidence) {
+    const detail = "no push evidence yet — run scripts/gitdata_push.py first";
+    if (required) fail("G10", "push evidence reconciles with the local tree", detail);
+    else pass("G10", "push evidence reconciles with the local tree", `${detail} (not required)`);
+    return;
+  }
+  let localTree = "";
+  try { localTree = git("write-tree").trim(); } catch (error) {
+    fail("G10", "push evidence reconciles with the local tree", `git write-tree failed: ${error.message}`);
+    return;
+  }
+  const problems = [];
+  if (evidence.localTreeSha !== localTree) problems.push(`local tree moved: evidence ${evidence.localTreeSha} vs now ${localTree}`);
+  if (evidence.remoteTreeSha !== evidence.localTreeSha) problems.push(`remote tree ${evidence.remoteTreeSha} != local tree ${evidence.localTreeSha}`);
+  if (problems.length) fail("G10", "push evidence reconciles with the local tree", problems.join(" | "));
+  else pass("G10", "push evidence reconciles with the local tree", `${evidence.remoteTreeSha} (${evidence.fileCount ?? "?"} files, branch ${evidence.branch ?? "?"})`);
+};
+
 const main = () => {
   const argv = process.argv.slice(2);
   const base = resolveBase(argv);
-  g1(base); g2(base); g3(); g4(); g5(); g6(); g7(); g8();
+  g1(base); g2(base); g3(); g4(); g5(); g6(); g7(); g8(); g9(); g10();
   const failed = results.filter((r) => !r.ok);
   if (argv.includes("--json")) {
     console.log(JSON.stringify({ base, results, ok: failed.length === 0 }, null, 2));

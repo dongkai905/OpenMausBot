@@ -1,35 +1,21 @@
-import { useEffect, useState } from "react";
-import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
-import { cloudPlanView } from "@/lib/cloud-plan";
-import { engineSignedOut } from "@/lib/failed-turn";
 import { browserAvailable, builtInBrowserEnabled, type FeatureFlagConfig } from "@/lib/feature-flags";
 import { writeComputerPanelView } from "@/lib/computer-panel-view";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { pageOnRemoteServer } from "@/lib/local-computer";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { openBotSettings } from "@/components/bot-panel/panel-link";
-import { openKeySettings } from "@/components/keys/key-focus";
 import type { Action, Bot, ConfigStatus, InstanceInfo } from "@/state/store";
 import type { LocaleKey } from "@/locales";
 import {
-  cloudLimitFromBody, cloudRefusal, placeRowView, placeView, type Place, type PlaceActionId, type PlaceFacts, type PlaceRow, type PlaceTranslate, type PlaceView,
+  placeRowView, placeView, type Place, type PlaceActionId, type PlaceFacts, type PlaceRow, type PlaceTranslate, type PlaceView,
   type ServerKind,
 } from "../../shared/place-view";
-import { canUseMcpServer } from "../../shared/tool-scope";
 
 export const placeTranslate: PlaceTranslate = (key, params) => t(key as LocaleKey, params);
 
-/** A cloud desktop's failed start, read from the server's error: its words, its status and the Admin's limit. */
-export function panelCloudRefusal(error: unknown, message: string, included: boolean): NonNullable<PlaceFacts["refusal"]> {
-  const { status, body } = Object(error) as { status?: unknown; body?: { cloudLimit?: unknown } };
-  const limit = cloudLimitFromBody(body?.cloudLimit);
-  return cloudRefusal({ message, status: Number(status ?? 0) || undefined, ...(limit ? { limit } : {}) }, included);
-}
-
 export interface PlaceSeat {
   server: ServerKind;
-  plan: boolean;
   role: "admin" | "user";
   mode: "simple" | "advanced";
 }
@@ -48,7 +34,6 @@ function engineFacts(instance: InstanceInfo | undefined, model: string | undefin
     model: label || model || instance?.displayName || "",
     computer: instance?.capabilities?.computerMcp === true,
     browser: instance?.capabilities?.browserMcp === true,
-    signedIn: !engineSignedOut(instance),
   };
 }
 
@@ -56,10 +41,9 @@ export function placeFacts(input: {
   bot: Pick<Bot, "name" | "modelSelection" | "toolScope" | "cloudBackend">;
   place: PlaceFacts["place"];
   seat: PlaceSeat;
-  config: (FeatureFlagConfig & Pick<ConfigStatus, "box">) | null | undefined;
+  config: FeatureFlagConfig | null | undefined;
   instances: InstanceInfo[];
   local?: PlaceFacts["local"];
-  computer?: PlaceFacts["computer"];
   teamComputer?: string;
 }): PlaceFacts {
   const { bot, config, seat } = input;
@@ -68,16 +52,11 @@ export function placeFacts(input: {
     place: input.place,
     server: seat.server,
     bot: bot.name,
-    plan: seat.plan,
-    boat: config?.box?.configured ? (config.box.included ? "included" : "own-key") : "none",
-    backend: bot.cloudBackend === "vps" ? "vps" : "box",
     engine: engineFacts(instance, bot.modelSelection.model),
-    toolsAllowComputer: canUseMcpServer(bot.toolScope, "computer"),
     browserOn: builtInBrowserEnabled(config) && browserAvailable(config),
     role: seat.role,
     mode: seat.mode,
     ...(input.local ? { local: input.local } : {}),
-    ...(input.computer ? { computer: input.computer } : {}),
     ...(input.teamComputer ? { teamComputer: input.teamComputer } : {}),
   };
 }
@@ -87,38 +66,18 @@ export function placeViewFor(facts: PlaceFacts): PlaceView {
 }
 
 export function placeRowViewFor(row: PlaceRow, seat: PlaceSeat, worksOnLabel?: string): PlaceView {
-  const read = row.state === "cc-needs-key" && seat.plan && seat.server !== "my-cloud" ? { ...row, state: "cc-on-my-cloud" as const } : row;
-  return placeRowView(read, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() });
+  return placeRowView(row, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() });
 }
 
 export function placeBlocked(view: PlaceView): boolean {
-  return view.state === "cc-cannot" || view.state === "cc-on-my-cloud" || view.state === "browser-off" || view.state === "browser-cannot"
+  return view.state === "browser-off" || view.state === "browser-cannot"
     || view.state === "vm-cannot" || view.state === "local-unavailable";
 }
 
-export function placeHasIssue(view: PlaceView): boolean {
-  return placeBlocked(view) || view.state === "cc-tools-off" || view.state === "cc-sign-in" || view.state === "cc-needs-key"
-    || view.state === "cc-unavailable";
-}
-
-export function useCloudPlanPaid(): boolean {
-  const bridge = typeof window === "undefined" || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
-  const [account, setAccount] = useState<CloudAccountState | null>(null);
-  useEffect(() => {
-    if (!bridge) return;
-    let active = true, updated = false;
-    const unsubscribe = bridge.onState((next) => { updated = true; if (active) setAccount(next); });
-    void bridge.state().then((next) => { if (active && !updated) setAccount(next); }).catch(() => {});
-    return () => { active = false; unsubscribe(); };
-  }, [bridge]);
-  return Boolean(bridge) && cloudPlanView(account).kind === "paid";
-}
-
 export function usePlaceSeat(config: Pick<ConfigStatus, "cloudHome"> | null | undefined, capabilities: DesktopCapabilities): PlaceSeat {
-  const plan = useCloudPlanPaid();
   const ownerOrAdmin = useOwnerOrAdmin();
   const advanced = useAdvancedMode();
-  return { server: serverKind(config, capabilities), plan, role: ownerOrAdmin === false ? "user" : "admin", mode: advanced ? "advanced" : "simple" };
+  return { server: serverKind(config, capabilities), role: ownerOrAdmin === false ? "user" : "admin", mode: advanced ? "advanced" : "simple" };
 }
 
 export function openPlaceAction(
@@ -133,7 +92,6 @@ export function openPlaceAction(
     case "open-tools": openBotSettings(dispatch, "access", { botId: target.botId, page: "tools" }); return true;
     case "sign-in": appSettings("engines"); return true;
     case "manage-computers": appSettings("computer"); return true;
-    case "add-boat-key": dispatch(openKeySettings("box")); return true;
     case "open-vm-settings":
       window.sessionStorage?.setItem("openmausbot.settings.section", "computer");
       appSettings("computer");

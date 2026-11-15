@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { appsFromCreator, type AppGrants } from "./inherited-apps.ts";
 
 const ADA = "ada@acme.test";
-const OFF = { composio: false, connectorTools: {}, mcpServers: [] };
+const OFF = { apps: false, connectorTools: {}, mcpServers: [] };
 const chief = {
   createdBy: ADA, visibility: { people: [ADA] },
-  composio: true, connectorTools: { gmail: { tools: ["GMAIL_FETCH_EMAILS"] } }, connectorScopes: { apps: { gmail: "read" as const } }, mcpServers: ["notes"],
+  apps: true, connectorTools: { gmail: { tools: ["GMAIL_FETCH_EMAILS"] } }, connectorScopes: { apps: { gmail: "read" as const } }, mcpServers: ["notes"],
 };
-const grants = ({ composio, connectorTools, connectorScopes, mcpServers }: AppGrants) => ({ composio, connectorTools, connectorScopes, mcpServers });
+const grants = ({ apps, connectorTools, connectorScopes, mcpServers }: AppGrants) => ({ apps, connectorTools, connectorScopes, mcpServers });
 
 describe("the connected apps a bot a Chief creates starts with", () => {
   it("are the Chief's own, level for level", () => {

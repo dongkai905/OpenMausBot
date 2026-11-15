@@ -4,8 +4,6 @@
 // handshake of a plan that sleeps (server/cloud-power.ts); the Admin calls them for no other plan.
 import { CLOUD_TIER } from "../host/cloud-plan-tier.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { BoxReport } from "../bot-box/box.ts";
-import { boxSummary } from "../cloud-health.ts";
 import { CLOUD_HEALTH_PATH, CLOUD_PAIRING_PATH, createCloudPairing, createCloudRequestVerifier, readSignedBody } from "../cloud-home.ts";
 import { teamMemberEmail, type CloudTeam } from "../cloud-team.ts";
 import { CLOUD_TEAM_ADMIN_PATH, type TeamAdminSummary } from "../cloud-team-admin.ts";
@@ -19,7 +17,6 @@ import type { SessionRegistry } from "../sessions.ts";
 export interface CloudSignedRequest { req: IncomingMessage; res: ServerResponse; url: URL; path: string; method: string }
 
 /** The bot box's self-report (server/bot-box): `{ box: "bwrap" | "off" | …, checks: "n/n" }`, read like health. */
-export const CLOUD_BOX_PATH = "/api/cloud/box";
 
 /** A Team Cloud's member left (removed, or they left): `{ email }`, signed with the body like the sleep request. What was
  * theirs alone is deleted here (host/team-member-left.ts). */
@@ -41,8 +38,6 @@ export function createCloudSignedRoutes(deps: {
   health: Pick<CloudHealth, "report">;
   /** The home's power once the server listens (null before, and on a server that is not a Cloud home). */
   power?: () => Pick<CloudPower, "report" | "prepareSleep"> | null;
-  /** The bot box's report; absent on a server without one. */
-  box?: () => BoxReport;
   /** A Team Cloud's shared connections and AI for its admins on the Admin; absent on a My Cloud. */
   teamAdmin?: { summary(): Promise<TeamAdminSummary> } | null;
   /** A Team Cloud's member left: delete what was theirs alone; absent on a My Cloud. */
@@ -59,7 +54,6 @@ export function createCloudSignedRoutes(deps: {
   const healthRequests = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
   const powerReads = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
   const sleepRequests = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
-  const boxReads = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
   const teamAdminReads = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
   const memberLeftRequests = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
   const planRequests = createCloudRequestVerifier({ secret: deps.secret, now: deps.now });
@@ -71,7 +65,7 @@ export function createCloudSignedRoutes(deps: {
     const memberLeft = path === CLOUD_TEAM_MEMBER_LEFT_PATH && deps.team ? deps.memberLeft ?? null : null;
     const plan = path === CLOUD_PLAN_PATH && (deps.plan || deps.planTier) ? true : null;
     const policyChanged = path === CLOUD_TEAM_POLICY_CHANGED_PATH && deps.team ? deps.policyChanged ?? null : null;
-    if (path !== CLOUD_PAIRING_PATH && path !== CLOUD_HEALTH_PATH && path !== CLOUD_BOX_PATH && !power && !teamAdmin && !memberLeft && !plan && !policyChanged) return false;
+    if (path !== CLOUD_PAIRING_PATH && path !== CLOUD_HEALTH_PATH && !power && !teamAdmin && !memberLeft && !plan && !policyChanged) return false;
     res.setHeader("cache-control", "no-store");
     const source = requestSource(req);
     const header = (name: string) => { const value = req.headers[name]; return typeof value === "string" ? value : undefined; };
@@ -141,13 +135,6 @@ export function createCloudSignedRoutes(deps: {
       if (saysCancelled) deps.plan?.(cancelled);
       if (saysTier) deps.planTier?.(tier);
       json(res, 200, { ok: true });
-      return true;
-    }
-    if (path === CLOUD_BOX_PATH) {
-      if (method !== "GET") { json(res, 405, { error: "method_not_allowed" }); return true; }
-      const verdict = boxReads.verify({ ...signed, method, target: `${path}${url.search}`, body: "" });
-      if (!verdict.ok) { console.warn(`bot box report read refused from ${source}: ${verdict.error}`); json(res, verdict.status, { error: verdict.error }); return true; }
-      json(res, 200, { v: 1, at: (deps.now ?? Date.now)(), ...(boxSummary(deps.box?.()) ?? { box: "off", reason: "not-cloud", checks: null, failed: [], boxed: 0, refused: { egress: 0, harness: 0 }, broker: { on: false, tokens: 0, forwarded: 0, refused: 0, unbrokered: [] }, hardening: { seccomp: "off", denied: 0, hidepid: false, flyApiPrivate: true } }) });
       return true;
     }
     if (path === CLOUD_HEALTH_PATH) {

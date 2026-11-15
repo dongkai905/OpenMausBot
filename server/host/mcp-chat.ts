@@ -7,7 +7,7 @@ import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { DATA_DIR, type AppConfig } from "../config.ts";
 import { appendDecision } from "../decision-log.ts";
 import { json } from "../harness/http.ts";
-import type { ManagedDesktopPolicy } from "../managed-policy.ts";
+import type { ManagedPolicyEngine } from "../managed-policy.ts";
 import { mcpOAuthRedirectUri, type McpOAuthManager } from "../mcp-oauth.ts";
 import type { LentMcp } from "../lent-mcp.ts";
 import { listMcpServers } from "../mcp-registry.ts";
@@ -28,7 +28,7 @@ export interface McpChatDeps {
   mcpOAuth: McpOAuthManager;
   teamConnections: TeamConnectionsHost;
   mcpServersHost: McpServersHost;
-  managedPolicy: ManagedDesktopPolicy;
+  managedPolicy: ManagedPolicyEngine;
   /** Built after this module, so read when used. */
   secretCards(): SecretCards;
   /** Built after this module, so read when used. */

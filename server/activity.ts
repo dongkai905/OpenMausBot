@@ -9,7 +9,7 @@ import type { ActivityOutcome, ActivityRow } from "../shared/activity.ts";
 
 export type { ActivityOutcome, ActivityRow };
 
-/** Composio toolkit slugs whose display name is not just a capitalised word. */
+/** App slugs whose display name is not just a capitalised word. */
 const TOOLKIT_NAMES: Record<string, string> = {
   GMAIL: "Gmail",
   GITHUB: "GitHub",
@@ -57,8 +57,8 @@ export function toolkitName(slug: string): string {
   return TOOLKIT_NAMES[slug] ?? slug[0] + slug.slice(1).toLowerCase();
 }
 
-/** Composio names its tools TOOLKIT_ACTION_WORDS, all upper case. */
-const COMPOSIO_TOOL = /^([A-Z][A-Z0-9]+)_([A-Z0-9_]+)$/;
+/** An app names its tools TOOLKIT_ACTION_WORDS, all upper case. */
+const APP_TOOL = /^([A-Z][A-Z0-9]+)_([A-Z0-9_]+)$/;
 
 type Described = { app: string | null; label: string; labelKey?: string; appKey?: string };
 
@@ -102,7 +102,6 @@ const TEAM_ACTION_KEYS: Record<string, string> = {
   list_models: "activity.tool.team.listModels",
   list_team_setup: "activity.tool.team.listTeamSetup",
   list_threads: "activity.tool.team.listThreads",
-  list_trigger_events: "activity.tool.team.listTriggerEvents",
   list_triggers: "activity.tool.team.listTriggers",
   manage_room: "activity.tool.team.manageRoom",
   manage_trigger: "activity.tool.team.manageTrigger",
@@ -207,7 +206,6 @@ export function describedTool(name: string, input?: unknown): Described {
   if (name.startsWith("mcp__")) {
     const [, server = "", ...rest] = name.split("__");
     const action = rest.join("__");
-    if (server === "composio") return describeTool(action);
     if (server === "computer") return ownAction("Computer", action, COMPUTER_ACTION_KEYS);
     if (server === "agents") {
       if (action === "research_call") {
@@ -225,8 +223,8 @@ export function describedTool(name: string, input?: unknown): Described {
     return { app: humanize(server), label: humanize(action) };
   }
 
-  const composio = COMPOSIO_TOOL.exec(name);
-  if (composio) return { app: toolkitName(composio[1]), label: humanize(composio[2]) };
+  const app = APP_TOOL.exec(name);
+  if (app) return { app: toolkitName(app[1]), label: humanize(app[2]) };
 
   return { app: null, label: humanize(name) };
 }

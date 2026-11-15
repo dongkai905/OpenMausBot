@@ -4,11 +4,10 @@ import type { CloudAccountState, CloudPlanSnapshot } from "../../electron/cloud-
 import { engineReady } from "@/components/EngineLibrary";
 import { analyticsEnabled, track } from "@/lib/analytics";
 import {
-  allow, APP, CLOUD_TIER, CONNECTORS_MODE, DECIDER, EDITION, engineForDriver, LOCAL_VM_MODE, TRIAL_CREDIT, VOICE,
+  allow, CLOUD_TIER, DECIDER, EDITION, engineForDriver, LOCAL_VM_MODE, VOICE,
   type EventProps, type KeyProvider, type PropValue,
 } from "@/lib/analytics-allowlist";
 import { trialRunning } from "@/lib/cloud-plan";
-import { hasActiveConnection, type ConnectorStatus } from "@/lib/connector-status";
 import type { AppState, Bot, ConfigStatus, Group, InstanceInfo } from "@/state/store";
 
 export const SNAPSHOT_CHECK_MS = 60 * 60 * 1_000;
@@ -23,11 +22,9 @@ export interface UsageInput {
   bots: ReadonlyArray<Pick<Bot, "computer" | "cloudBackend" | "hidden">>;
   groups: ReadonlyArray<Pick<Group, "dm">>;
   sections?: readonly string[];
-  apps: { services: Record<string, ConnectorStatus>; authoritative: boolean } | null;
   sessions: { sessions: ReadonlyArray<{ id?: unknown; email?: unknown }>; current: unknown } | null;
   companionDevices: number | null;
   cloud: CloudPlanFacts | null;
-  computers: { cloudComputers: unknown; teamComputers: unknown } | null;
   platform: "desktop" | "browser";
   remoteClient: boolean;
 }
@@ -43,8 +40,6 @@ function keyProviders(config: ConfigStatus): KeyProvider[] {
     [config.openai?.configured, "openai"],
     [config.openrouter?.configured, "openrouter"],
     [config.meta?.configured, "meta"],
-    [config.box?.configured && config.box.included !== true, "boat"],
-    [config.composio?.configured && config.composio.mode === "self-hosted", "composio"],
     [ownVoice && config.tts?.provider === "elevenlabs", "elevenlabs"],
     [ownVoice && config.tts?.provider === "fish", "fish_audio"],
     [ownDecider && config.decider?.provider === "jev", "jev"],
@@ -55,12 +50,6 @@ function keyProviders(config: ConfigStatus): KeyProvider[] {
     [config.treg?.configured, "treg"],
   ];
   return configured.flatMap(([on, provider]) => on === true ? [provider] : []);
-}
-
-function appFacts(apps: UsageInput["apps"]): Record<string, PropValue> {
-  if (apps?.authoritative !== true) return {};
-  const active = Object.entries(apps.services).filter(([, status]) => hasActiveConnection(status));
-  return { apps: [...new Set(active.map(([slug]) => allow(slug, APP)))].sort(), apps_connected: active.length };
 }
 
 const emailOf = (session: { email?: unknown }) => typeof session.email === "string" && session.email ? session.email.toLowerCase() : null;
@@ -87,12 +76,7 @@ export function buildUsageSnapshot(input: UsageInput): EventProps {
   const props: Record<string, PropValue | undefined> = {
     key_providers: keys,
     key_count: keys.length,
-    has_boat_key: keys.includes("boat"),
-    cloud_computer_source: config.box?.configured ? config.box.included === true ? "included" : "own_key" : "none",
-    cloud_computers: count(input.computers?.cloudComputers),
-    team_computers: count(input.computers?.teamComputers),
-    bots_cloud_boat: tally(bots, (bot) => bot.computer === "cloud" && bot.cloudBackend !== "vps"),
-    bots_cloud_vps: tally(bots, (bot) => bot.computer === "cloud" && bot.cloudBackend === "vps"),
+    bots_cloud_vps: tally(bots, (bot) => bot.computer === "cloud"),
     bots: bots.length,
     bots_local_vm: place("vm"),
     bots_this_computer: place("local"),
@@ -104,9 +88,6 @@ export function buildUsageSnapshot(input: UsageInput): EventProps {
     teams: input.sections?.length ?? 0,
     engines: [...new Set(ready.map((instance) => engineForDriver(instance.driverKind)))].sort(),
     engine_count: ready.length,
-    trial_credit: allow(instances.find((instance) => instance.trialCredit !== undefined)?.trialCredit ?? "none", TRIAL_CREDIT),
-    ...appFacts(input.apps),
-    connectors_mode: allow(config.composio?.mode?.replace("-", "_"), CONNECTORS_MODE),
     local_vm_mode: allow(config.localVm?.mode?.replace("-", "_"), LOCAL_VM_MODE),
     vps_configured: config.vps?.configured === true,
     voice: config.tts?.configured ? allow(config.tts.provider, VOICE) : "none",
@@ -151,7 +132,6 @@ export function snapshotReady(
 
 export interface UsageSources {
   request<T>(path: string): Promise<T>;
-  connectedApps(): Promise<{ services: Record<string, ConnectorStatus>; authoritative: boolean }>;
   companion: { state(): Promise<{ devices?: unknown }> } | null;
   cloudAccount: { state(): Promise<CloudAccountState> } | null;
   cloudPlan: { state(): Promise<CloudPlanSnapshot> } | null;
@@ -194,16 +174,12 @@ export async function sendDailySnapshot(state: SnapshotState, sources: UsageSour
   try {
     const config = state.config;
     const { companion, cloudAccount, cloudPlan } = sources;
-    const [apps, sessions, companionDevices, cloud, computers] = await Promise.all([
-      settle(() => sources.connectedApps()),
+    const [sessions, companionDevices, cloud] = await Promise.all([
       settle(() => sources.request<{ sessions?: unknown; current?: unknown }>("/api/auth/sessions")),
       companion ? settle(() => companion.state()) : null,
       cloudAccount ? settle(() => cloudAccount.state()).then(cloudPlanFromAccount)
         : cloudPlan ? settle(() => cloudPlan.state()).then(cloudPlanFromSnapshot)
         : null,
-      config.box?.configured
-        ? settle(() => sources.request<{ cloudComputers?: unknown; teamComputers?: unknown }>("/api/computers/usage"))
-        : { cloudComputers: 0, teamComputers: 0 },
     ]);
     track("app_snapshot", buildUsageSnapshot({
       config,
@@ -211,13 +187,11 @@ export async function sendDailySnapshot(state: SnapshotState, sources: UsageSour
       bots: state.bots,
       groups: state.groups,
       sections: state.sections,
-      apps,
       sessions: Array.isArray(sessions?.sessions)
         ? { sessions: sessions.sessions.filter((session) => session !== null && typeof session === "object"), current: sessions.current }
         : null,
       companionDevices: Array.isArray(companionDevices?.devices) ? companionDevices.devices.length : null,
       cloud,
-      computers: computers ? { cloudComputers: computers.cloudComputers, teamComputers: computers.teamComputers } : null,
       platform: sources.platform,
       remoteClient: sources.remoteClient,
     }));

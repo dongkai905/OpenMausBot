@@ -19,7 +19,7 @@ vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config ?? original.initialState.config, instances: fixture.instances as typeof original.initialState.instances }, dispatch: fixture.dispatch }) };
 });
-// The connected-apps list (Composio accounts plus the native Email connection) is seeded per test.
+// The apps this bot may use (the workspace's own connections) are seeded per test.
 vi.mock("./useBotApps", async (importOriginal) => ({
   ...await importOriginal<typeof import("./useBotApps")>(),
   useBotApps: () => fixture.apps,
@@ -72,8 +72,8 @@ function makeDerived(overrides: Partial<ReturnType<typeof useBotSettingsDerived>
     engine: undefined,
     canCoordinate: false,
     canUseConnectedApps: true,
-    connectedAppsConfigured: true,
     connectedAppsEnabled: true,
+    connectorGrantState: "full",
     canUseBrowser: false,
     desktopBrowser: false,
     browserBlockedOnWindows: false,
@@ -251,7 +251,7 @@ describe("AccessSection Works on", () => {
   });
 
   it("says on a selectable tile of a bot not made yet what stands in its way, with no name to borrow", () => {
-    fixture.config = { box: { configured: true } } as Partial<ConfigStatus>;
+    fixture.config = {} as Partial<ConfigStatus>;
     fixture.instances = [{ instanceId: "local", capabilities: { computerMcp: true } }];
     fixture.capabilities.host = { homeDir: undefined, platform: "darwin" };
     let tree!: ReturnType<typeof AccessSection>;
@@ -265,12 +265,12 @@ describe("AccessSection Works on", () => {
     const grid = nodes(rendered).find((node) => (node.type as { name?: string }).name === "WorksOnGrid")!;
     const options = grid.props.options as Array<{ mode: string | null; disabled: boolean; note?: string }>;
     const of = (mode: string) => options.find((option) => option.mode === mode)!;
-    expect(of("cloud")).toMatchObject({ disabled: false, note: "What New bot can use doesn't include a desktop." });
+    expect(of("cloud")).toMatchObject({ disabled: false });
+    expect(of("cloud").note).toBeUndefined();
     expect(of("local").disabled).toBe(false);
     expect(of("local").note).toBeTruthy();
     const html = renderToStaticMarkup(grid).replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
-    expect(html).toContain(of("cloud").note);
-    expect(html).toContain(of("local").note);
+    expect(html).toContain(of("local").note!);
   });
 
 
@@ -283,7 +283,7 @@ describe("AccessSection Works on", () => {
     expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>(?:(?!<\/button>).)*?Auto/);
   });
 
-  it("hides the Boat or VPS choice on My Cloud, whose cloud computers are the plan's", () => {
+  it("hides the cloud or VPS choice on My Cloud, whose computers are the plan's", () => {
     expect(render(makeBot())).toContain("Cloud backend");
     fixture.config = { cloudHome: true } as Partial<ConfigStatus>;
     expect(render(makeBot())).not.toContain("Cloud backend");
@@ -361,7 +361,7 @@ describe("a VPS bot's own server", () => {
     expect(saved).toContain("Server (SSH alias)");
     expect(saved).toContain("Leave empty to use production-vps from Settings → API keys.");
     expect(saved).toContain('value="alpha-vps"');
-    expect(render(makeBot({ computer: "cloud", cloudBackend: "box" }))).not.toContain("Server (SSH alias)");
+    expect(render(makeBot({ computer: "cloud" }))).not.toContain("Server (SSH alias)");
     const { BotEditorContext } = await import("./BotEditorContext");
     const { api } = await import("@/state/store");
     const drafted = renderToStaticMarkup(createElement(StoreProvider, null,
@@ -409,7 +409,7 @@ describe("AccessSection Record browser steps", () => {
 describe("AccessSection per-app scopes", () => {
   const app = (slug: string, label: string) => ({ slug, label, blurb: "", card: { logo: null, domain: null, label }, scope: "write" as const });
 
-  it("lists Email by name next to the Composio apps once the server reports a mailbox connected", () => {
+  it("lists Email by name next to the other apps once the server reports them connected", () => {
     fixture.apps = { phase: "ready", connectedSlugs: ["email", "gmail"], apps: [app("email", "Email"), app("gmail", "Gmail")] };
     const html = render(makeBot({ connectorScopes: { apps: { gmail: "write" } } }));
     expect(html).toContain('aria-label="email access"');

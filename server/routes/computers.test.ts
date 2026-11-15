@@ -28,7 +28,7 @@ function fixture(bots: BotRecord[], cfg: AppConfig) {
     store: { bot: () => null, bots, sections: [] },
     cfg,
     computerProviderConfigTransitions: new Set(),
-    managedBoatOwners: () => [],
+    managedComputerOwners: () => [],
     claimManagedVpsMutation: () => () => {},
     teamComputers: { list: () => [] },
     routines: () => null,

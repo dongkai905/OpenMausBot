@@ -1,6 +1,6 @@
 // What a turn already running keeps when the team's rules change under it, and what it loses at once. A stand-in Admin
 // holds the document; the synthetic Claude CLI waits inside its turn while the rule lands, then calls what it was launched
-// with. Disposable homes, fake connected-apps service and MCP server; nothing leaves this machine.
+// with. Disposable homes, a fake MCP server; nothing leaves this machine.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,7 +9,6 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { TEAM_POLICY_ADMIN_PATH, teamPolicyFingerprint } from "./cloud-team-policy.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { startFakeHttpMcp, type FakeHttpMcp } from "./testing/fake-http-mcp-server.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
@@ -20,10 +19,9 @@ process.env.FAKE_CLAUDE_REPLY_FILE = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/rep
 const FINISHED = "Finished with what it had.";
 const WAIT = { name: "Read", input: { file_path: "notes.txt" }, hold: true, output: "the notes" };
 const ORDERS = { name: "lookup_order", server: "orders", input: {} };
-const GMAIL = { name: "COMPOSIO_MULTI_EXECUTE_TOOL", server: "composio", input: { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS", arguments: { max_results: 1 } }] } };
 
-let adminServer: Server, relay: Server, gateway: FakeHttpMcp, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
-let owner = "", botId = "", teamUser = "";
+let adminServer: Server, relay: Server, gateway: FakeHttpMcp, fx: CloudSendFixture, team: CloudTeamFixture;
+let owner = "", botId = "";
 let answer: unknown = { policy: null }, version = 0;
 const reports: { loaded: { fingerprint: string } | null }[] = [];
 
@@ -93,8 +91,7 @@ beforeAll(async () => {
   relay = createServer((_req, res) => { res.writeHead(404, { "content-type": "application/json" }); res.end("{}"); });
   await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
   gateway = await startFakeHttpMcp({ tools: [{ name: "lookup_order", inputSchema: { type: "object", properties: {} } }], callResult: () => ({ content: [{ type: "text", text: "order 7 shipped" }] }) });
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-running-turn", broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
+  fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-running-turn", team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
     OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
     OMB_CLOUD_BOAT_URL: `http://127.0.0.1:${(relay.address() as AddressInfo).port}/relay/api/box/v1`, OMB_CLOUD_BOAT_TOKEN: "box_omb_running",
   } } });
@@ -103,8 +100,6 @@ beforeAll(async () => {
   owner = (await team.pair({ email: "owner@acme.test", role: "owner" })).token!;
   botId = (await team.as(owner, "POST", "/api/bots", { name: "Scout" })).body.bot.id;
   expect((await team.as(owner, "POST", "/api/bots", { name: "Helper" })).status).toBe(201);
-  teamUser = broker.userFor(broker.installationIds().filter((id) => id !== fx.desktopInstallation?.id && broker.actingUser(id) === broker.userFor(id)).at(-1)!);
-  broker.account(teamUser, "gmail", "team@acme.test");
   expect((await team.as(owner, "POST", "/api/mcp/servers", { name: "orders", type: "http", url: gateway.url })).status).toBe(201);
   expect((await team.as(owner, "PATCH", "/api/mcp/servers/orders", { enabled: true })).status).toBe(200);
 }, hostTimeout(120_000));
@@ -112,7 +107,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await fx?.close();
   await gateway?.close();
-  await broker?.close();
   await new Promise((resolve) => adminServer?.close(resolve));
   await new Promise((resolve) => relay?.close(resolve));
 });
@@ -164,15 +158,6 @@ it("a hand-off it starts after the change gets the new rules", async () => {
   // it would play the next test's scripted calls, and its Gmail call would count as that test's own.
   await expect.poll(async () => existsSync(dumpPath()) && JSON.stringify(dump()).includes("own account, not verification") && await idle(),
     { timeout: 60_000, interval: 100 }).toBe(true);
-}, hostTimeout(120_000));
-
-it("a connected-app tool is refused from the moment the rule lands, mid-turn, and the turn still finishes", async () => {
-  const callsBy = () => broker.mcpCalls.filter((call) => call.method === "tools/call" && call.user === teamUser).length;
-  const before = callsBy();
-  const { launched, words } = await ruleLandsMidTurn({ allowedApps: ["slack"] }, [GMAIL, WAIT, GMAIL], "uses an app", { ready: () => callsBy() === before + 1 });
-  expect(Object.keys(launched.mcpConfig?.mcpServers ?? {})).toContain("composio");
-  expect(callsBy()).toBe(before + 1);
-  expect(words).toMatch(/Acme does not allow bots to use Gmail\. Ask a team admin\./);
 }, hostTimeout(120_000));
 
 it("a computer it has not claimed yet is refused from the moment the rule lands: the turn stops there, in the rule's words", async () => {

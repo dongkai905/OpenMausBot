@@ -10,37 +10,26 @@ describe("isolated creation draft", () => {
     expect(draft.bot.toolScope).toBeUndefined();
     expect(draft.export().profile.toolScope).toBeNull();
   });
-  it("keeps profile, memory and routine edits local until commitment", async () => {
+  it("keeps profile edits local until commitment", async () => {
     const network = vi.fn();
     const draft = new BotCreationDraft(EMPTY_BOT_DEFAULTS, vi.fn(), network as typeof api);
     draft.patch({ name: "Ada", approvalMode: "full", applyToAllThreads: true });
     expect(draft.consent).toEqual({});
-    draft.setMemory("MEMORY.md", "A synthetic preference");
-    await draft.request("/api/routines", { method: "POST", body: JSON.stringify({ botId: draft.id,
-      name: "Status", prompt: "Check status", schedule: { type: "daily", time: "09:00", weekdays: [1] } }) });
     const template = draft.export();
     expect(network).not.toHaveBeenCalled();
     expect(template.profile).toEqual({ name: "Ada", approvalMode: "full" });
-    expect(template.memory).toEqual({ "MEMORY.md": "A synthetic preference" });
-    expect(template.routines[0]).not.toHaveProperty("botId");
-    expect(template.routines[0]).not.toHaveProperty("id");
     draft.dispose();
     expect(network).not.toHaveBeenCalled();
   });
 
-  it("makes independent copies and new routine identities for every draft", () => {
-    const defaults = { ...EMPTY_BOT_DEFAULTS, profile: { name: "Default" }, routines: [{
-      name: "Status", prompt: "Check status", enabled: false, schedule: { type: "once" as const, at: 123456789 },
-    }] };
+  it("makes an independent copy of the defaults for every draft", () => {
+    const defaults = { ...EMPTY_BOT_DEFAULTS, profile: { name: "Default" } };
     const first = new BotCreationDraft(defaults, vi.fn());
     const second = new BotCreationDraft(defaults, vi.fn());
     first.patch({ name: "Changed" });
     expect(defaults.profile.name).toBe("Default");
     expect(second.bot.name).toBe("Default");
     expect(first.id).not.toBe(second.id);
-    expect(first.routines[0].id).not.toBe(second.routines[0].id);
-    expect(first.routines[0].botId).toBe(first.id);
-    expect(second.routines[0].enabled).toBe(false);
   });
 
   it("refuses unsupported and cross-bot operations rather than reaching the live API", async () => {
@@ -49,7 +38,6 @@ describe("isolated creation draft", () => {
     for (const path of ["/api/bots/real-bot", `/api/bots/${draft.id}/messages`, "/api/routines/real-id"]) {
       await expect(draft.request(path, { method: "POST" })).rejects.toThrow();
     }
-    await expect(draft.request("/api/routines", { method: "POST", body: JSON.stringify({ botId: "real-bot" }) })).rejects.toThrow("another bot");
     expect(network).not.toHaveBeenCalled();
   });
 

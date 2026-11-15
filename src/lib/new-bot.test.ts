@@ -114,7 +114,7 @@ describe("New bot", () => {
 
   it("names the bot so it never repeats one already here", async () => {
     const taken = [{ name: "Helper" }, { name: "helper 2" }] as Bot[];
-    const named = server({ defaults: { profile: { name: "Helper" }, memory: {}, skills: [], routines: [] } });
+    const named = server({ defaults: { profile: { name: "Helper" }, memory: {}, skills: [] } });
     await newBot(named.request, {}, taken);
     expect(named.created()).toMatchObject({ name: "Helper 3" });
   });
@@ -163,7 +163,7 @@ describe("New bot", () => {
   });
 
   it("starts a bot whose defaults say Auto on this computer on Ask, and says so", async () => {
-    const { calls, request } = server({ defaults: { profile: { approvalMode: "auto", computer: "local" }, memory: {}, skills: [], routines: [] } });
+    const { calls, request } = server({ defaults: { profile: { approvalMode: "auto", computer: "local" }, memory: {}, skills: [] } });
     const sent = await newBot(request);
     expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({ approvalMode: "ask" });
     expect(sent.at(-1)).toEqual({ type: "notice", notice: { kind: "note", botName: null,

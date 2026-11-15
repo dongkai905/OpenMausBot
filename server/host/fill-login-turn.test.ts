@@ -148,33 +148,20 @@ describe("fill_login and a login kept to some bots on a shared browser", () => {
 
 
 describe("fill_login and a missing mailbox", () => {
-  function browser(offer: { shown: boolean; line?: string }, outcome = { ok: false, text: "This page asks for a one-time code.", wantsMailbox: true }) {
-    const offerConnect = vi.fn(async () => offer);
+  function browser(outcome = { ok: false, text: "This page asks for a one-time code.", wantsMailbox: true }) {
     const find = vi.fn(async () => ({ kind: "skip" as const }));
     const { fill } = harness({
       at: "browser", target: async () => ({ session: "s", spec: { command: "x", env: {} }, env: {} }),
-      withSecretInput: async () => outcome, mailCodes: { find, offerConnect },
+      withSecretInput: async () => outcome, mailCodes: { find },
     });
-    return { fill, offerConnect };
+    return { fill, find };
   }
 
-  it("shows the connect card and tells the bot to end the turn instead of handing the person a code to copy", async () => {
-    const { fill, offerConnect } = browser({ shown: true });
+  it("hands the bot the line to read the code from the mailbox", async () => {
+    const { fill } = browser();
     const answer = await fill(bot, turn, undefined, undefined);
-    expect(offerConnect).toHaveBeenCalledOnce();
-    expect(answer.text).toContain("Connect card for Gmail");
-    expect(answer.text).toContain("End this turn now");
+    expect(answer.text).toContain("read it from their connected email or messages");
     expect(answer.text).not.toContain("request_sign_in");
-  });
-
-  it("falls back to today's words when no card is shown", async () => {
-    const { fill } = browser({ shown: false });
-    expect((await fill(bot, turn, undefined, undefined)).text).toContain("read it from their connected email or messages");
-  });
-
-  it("passes on the team's line for a person's own Gmail", async () => {
-    const { fill } = browser({ shown: false, line: "Connect your Gmail here: https://x" });
-    expect((await fill(bot, turn, undefined, undefined)).text).toContain("Connect your Gmail here: https://x");
   });
 
   it("moves an email-only sign-in to the browser even with no saved login", async () => {

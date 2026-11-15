@@ -7,26 +7,23 @@ import { ApiError } from "@/state/api";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { AUTHORIZATION_LINK_MS, reserveConnectionPage, reusableConnectionUrl, type PendingAuthorization } from "@/lib/connector-oauth";
-import { accountAliasTaken, requiresAccountAlias } from "@/lib/connector-status";
 import { mcpSignInLink } from "@/lib/mcp-sign-in";
 import { cn } from "@/lib/cn";
 import { askPrimary, ASK_QUIET_BUTTON, AskCard, AskSettledLine } from "./AskCard";
 import { CardHint } from "./CardHint";
-import { ConnectorAlsoUseful } from "./ConnectorAlsoUseful";
 
 const STATUS_CHECK_MS = 4_000;
-/** Composio marks an unfinished account EXPIRED shortly after its link lapses; the card keeps asking until it can say so. */
+/** A sign-in that has not finished is watched until its link can no longer finish, so an expired link is reported. */
 const STATUS_WATCH_MS = AUTHORIZATION_LINK_MS + 2 * 60 * 1_000;
 
+/** The chat card that asks for a sign-in to an MCP server. */
 export function ConnectorCard({ botId, color, threadId, message }: { botId: string; color?: Bot["color"]; threadId: string; message: Message }) {
   const connector = message.connector!;
   const gone = connector.dismissed || connector.superseded;
-  const isMcp = connector.source === "mcp";
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | { key: LocaleKey } | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [authorization, setAuthorization] = useState<(PendingAuthorization & { target: string }) | null>(null);
-  const [label, setLabel] = useState("");
   const polling = useRef(false);
   const opening = useRef<ReturnType<typeof reserveConnectionPage> | null>(null);
 
@@ -42,7 +39,6 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setLocalError(null);
     setRefusal(null);
     setAuthorization(null);
-    setLabel("");
     return () => {
       opening.current?.cancel();
       opening.current = null;
@@ -82,9 +78,10 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     };
   }, [checkStatus, gone, connector.status]);
 
-  if (gone) return null;
+  // Only an MCP server's sign-in is asked for here.
+  if (connector.source !== "mcp" || gone) return null;
 
-  const connect = async (alias?: string) => {
+  const connect = async () => {
     if (busy || opening.current) return;
     const launch = reserveConnectionPage();
     opening.current = launch;
@@ -93,11 +90,11 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setLocalError(null);
     setRefusal(null);
     try {
-      const reusableUrl = alias ? null : reusableConnectionUrl(pendingAuthorization);
+      const reusableUrl = reusableConnectionUrl(pendingAuthorization);
       const createdAt = reusableUrl ? pendingAuthorization!.createdAt : Date.now();
       const result = reusableUrl ? { url: reusableUrl } : await api(`${endpoint}/authorize`, {
           method: "POST",
-          body: JSON.stringify(alias ? { threadId, alias } : { threadId }),
+          body: JSON.stringify({ threadId }),
         });
       if (!isCurrent()) return;
       const url = mcpSignInLink(typeof result.url === "string" ? result.url : null);
@@ -108,7 +105,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       }
     } catch (error) {
       if (!isCurrent()) return;
-      if (isMcp && error instanceof ApiError && error.status === 409) setRefusal(error.message);
+      if (error instanceof ApiError && error.status === 409) setRefusal(error.message);
       else setLocalError(error instanceof Error ? error.message : String(error));
     } finally {
       launch.cancel();
@@ -143,8 +140,6 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
   const authorizing = connector.status === "authorizing";
   const error = localError ?? connector.error;
   const stopped = connector.stopped === true;
-  const errorText = typeof error === "string" ? error : "";
-  const labelNeeded = !authorizing && (requiresAccountAlias(errorText) || accountAliasTaken(errorText));
 
   if (stopped && !connected) {
     return (
@@ -181,7 +176,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       ariaLabel={connector.label}
       stays={!connector.resumeKey.startsWith(FIRST_HOUR_OFFER_KEY)}
       icon={<PlugZap size={15} />}
-      title={isMcp ? t("connectors.card.signInTo", { label: connector.label }) : connector.label}
+      title={t("connectors.card.signInTo", { label: connector.label })}
       explanation={connector.description}
       onDismiss={dismiss}
       dismissLabel={t("connectors.card.notNow")}
@@ -193,8 +188,8 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
           </span>
           <button
             type="button"
-            onClick={() => void connect(labelNeeded ? label.trim() : undefined)}
-            disabled={busy || (labelNeeded && !label.trim())}
+            onClick={() => void connect()}
+            disabled={busy}
             {...askPrimary(color)}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : authorizing ? <RefreshCw size={14} /> : <PlugZap size={14} />}
@@ -202,35 +197,15 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
               ? t("connectors.card.openAgain")
               : connector.status === "failed"
                 ? t("connectors.card.tryAgain")
-                : t(isMcp ? "connectors.card.signIn" : "connectors.card.connectSecurely")}
+                : t("connectors.card.signIn")}
           </button>
         </>
       }
     >
       <CardHint id="spot.connector" />
-      <p className="text-[12px] text-ink-tertiary">{t(isMcp ? "connectors.card.mcpSignInHint" : "connectors.card.signInHint")}</p>
+      <p className="text-[12px] text-ink-tertiary">{t("connectors.card.mcpSignInHint")}</p>
       {refusal && <p role="status" className="mt-1.5 text-[12px] text-ink-secondary">{refusal}</p>}
-      {labelNeeded ? (
-        <form
-          className="mt-1.5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (label.trim()) void connect(label.trim());
-          }}
-        >
-          <p role="alert" className="text-[12px] text-danger">
-            {t(requiresAccountAlias(errorText) ? "connectors.aliasNeeded" : "connectors.aliasTaken")}
-          </p>
-          <input
-            value={label}
-            maxLength={64}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder={t("connectors.aliasPlaceholder")}
-            aria-label={t("connectors.aliasAriaAnother", { service: connector.label })}
-            className="mt-1.5 h-8 w-full rounded-full bg-inset px-3 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </form>
-      ) : error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key)}</p>}
+      {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key)}</p>}
       {authorizationUrl && (
         <a href={authorizationUrl} target="_blank" rel="noopener noreferrer" onClick={(event) => {
           if (!reusableConnectionUrl(pendingAuthorization)) {
@@ -241,7 +216,6 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
           {t("connectors.openAuthorizationPage")}
         </a>
       )}
-      {!isMcp && <ConnectorAlsoUseful botId={botId} slug={connector.slug} />}
     </AskCard>
   );
 }

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readBody, startFleetAgent } from "./fleet-agent.ts";
 import { fleetAvailable, fleetRequest } from "./fleet-client.ts";
 import type { FleetDeps } from "./fleet-cli.ts";
-import { emptyRegistry, fleetLayout, MANAGED_OPENROUTER } from "./fleet.ts";
+import { emptyRegistry, fleetLayout } from "./fleet.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { appendUsage, flushUsageLedger, readUsage, summarizeUsage } from "./usage-ledger.ts";
 
@@ -65,32 +65,6 @@ describe.skipIf(process.platform === "win32")("fleet agent over its socket", () 
     return logs;
   }
 
-  it("creates an OpenRouter-only workspace and updates its catalog through the real isolated socket", async () => {
-    const m = machine(root);
-    m.files.set(fleetLayout(root).registryFile, JSON.stringify(emptyRegistry("example.test")));
-    await boot(m);
-    const created = await fleetRequest(socketPath, "POST", "/workspaces", { slug: "acme", admins: ["owner@example.test"], portalUrl: "https://admin.example.test", openrouterKey: "scoped-secret", openrouterUrl: "https://admin.example.test/api/gateway/acme/openrouter/v1", openrouterModels: ["provider/first"], openrouterDefault: true });
-    expect(created.status).toBe(200);
-    const configPath = join(root, "var/lib/openmausbot/acme/.openmausbot/config.json");
-    const original = m.files.get(configPath);
-    expect(JSON.parse(original!).defaultModelSelection).toEqual({ instanceId: "opencodeGo", model: `${MANAGED_OPENROUTER}/provider/first` });
-    const path = join(root, "var/lib/openmausbot/acme/.config/opencode/opencode.json");
-    const count = m.calls.length;
-    expect((await fleetRequest(socketPath, "POST", "/workspaces/acme/providers", { models: ["provider/second"] })).status).toBe(200);
-    expect(JSON.parse(m.files.get(path)!).provider[MANAGED_OPENROUTER]).toMatchObject({ options: { apiKey: "scoped-secret" }, models: { "provider/second": { name: "provider/second" } } });
-    expect(m.calls.length).toBe(count); // no service restart or live process mutation
-    expect(m.files.get(configPath)).toBe(original);
-    for (const models of [undefined, "provider/model", [null], ["invalid\nmodel"]]) expect((await fleetRequest(socketPath, "POST", "/workspaces/acme/providers", { models })).status).toBe(400);
-    const saved = m.files.get(path);
-    m.files.set(path, '{"private":"scoped-secret",');
-    expect(await fleetRequest(socketPath, "POST", "/workspaces/acme/providers", { models: [] })).toMatchObject({ status: 400, body: { error: expect.stringContaining("operator recovery") } });
-    expect(m.files.get(path)).toBe('{"private":"scoped-secret",');
-    expect(readFileSync(join(root, "audit.jsonl"), "utf8")).not.toContain("scoped-secret");
-    m.files.set(path, saved!);
-    expect((await fleetRequest(socketPath, "POST", "/workspaces/acme/providers", { models: [] })).status).toBe(200);
-    expect(JSON.parse(m.files.get(path)!).provider[MANAGED_OPENROUTER].models).toEqual({});
-  });
-
   it("creates, lists with this month's usage, edits users, suspends, deletes, and audits every action", async () => {
     const m = machine(root);
     const layout = fleetLayout(root);
@@ -100,10 +74,10 @@ describe.skipIf(process.platform === "win32")("fleet agent over its socket", () 
     expect(fleetAvailable(socketPath)).toBe(true);
     if (process.platform !== "win32") expect(statSync(socketPath).mode & 0o777).toBe(0o660);
 
-    const created = await fleetRequest(socketPath, "POST", "/workspaces", { slug: "acme", admins: ["ada@example.test"], members: ["@acme.test"], cap: 40, anthropicKey: "sk-ant-fixture", brandJson: '{"name":"Acme"}', portalUrl: "https://admin.example.test", anthropicUrl: "https://admin.example.test/api/gateway/acme/anthropic" });
+    const created = await fleetRequest(socketPath, "POST", "/workspaces", { slug: "acme", admins: ["ada@example.test"], members: ["@acme.test"], cap: 40, anthropicKey: "sk-ant-fixture", brandJson: '{"name":"Acme"}', portalUrl: "https://admin.example.test" });
     expect(created).toMatchObject({ status: 200, body: { ok: true, log: [expect.stringContaining("https://acme.agentada.cc is ready")] } });
     expect(m.calls).toContain("useradd --system --create-home --home-dir " + join(root, "var/lib/openmausbot/acme") + " --shell /usr/sbin/nologin --user-group omb-acme");
-    expect(JSON.parse(m.files.get(join(root, "var/lib/openmausbot/acme/.openmausbot/config.json"))!)).toMatchObject({ anthropic: { key: "sk-ant-fixture", url: "https://admin.example.test/api/gateway/acme/anthropic" }, budgets: { monthlyUsd: 40 } });
+    expect(JSON.parse(m.files.get(join(root, "var/lib/openmausbot/acme/.openmausbot/config.json"))!)).toMatchObject({ anthropic: { key: "sk-ant-fixture" }, budgets: { monthlyUsd: 40 } });
     expect(m.files.get(join(root, "etc/openmausbot/instances/acme.env"))).toContain("OMB_LICENSE_KEY=omb1.k");
     expect(m.files.get(join(root, "etc/openmausbot/instances/acme.env"))).toContain("OMB_ADMIN_URL=https://admin.example.test");
     expect(m.files.get(join(root, "etc/openmausbot/instances/acme.env"))).toContain("OMB_ADMIN_WORKSPACE=acme");

@@ -11,7 +11,7 @@ export const BOT_PARTS = Object.freeze({
   model: ["modelSelection"],
   access: ["approvalMode", "alwaysAllow"],
   voice: ["speakReplies", "replyStyle", "voice", "voiceNotes"],
-  tools: ["browser", "composio", "connectorTools", "connectorScopes", "outbound", "xResearch", "mcpServers", "toolScope"],
+  tools: ["browser", "apps", "connectorTools", "connectorScopes", "outbound", "xResearch", "mcpServers", "toolScope"],
   team: ["section"],
   habits: ["notifications", "parkDirectMessages", "helperModel", "cacheKeepWarm", "recordBrowserSteps"],
 });

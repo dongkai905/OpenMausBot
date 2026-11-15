@@ -23,16 +23,14 @@ import {
 import { api, useStore } from "@/state/store";
 import type { NewBotDefaults } from "../../shared/new-bot-defaults";
 
-export function ShareTeamContents({ preview, includeMemory, localSkips }: {
+export function ShareTeamContents({ preview, localSkips }: {
   preview: ShareResponse;
-  includeMemory: boolean;
   localSkips: string[];
 }) {
   const pkg = preview.document.package;
   const counts = preview.summary.counts;
   const leader = pkg.team?.leader ? pkg.agents.find((agent) => agent.key === pkg.team?.leader)?.name : undefined;
   const pictures = pkg.agents.filter((agent) => agent.appearance.avatar).length;
-  const notes = pkg.agents.reduce((total, agent) => total + Object.keys(agent.seed?.memory ?? {}).length, 0);
   const rows: Array<[string, string]> = [
     [t("teamShare.part.bots"), `${counts.bots} · ${preview.summary.botNames.join(", ")}`],
     [t("teamShare.part.skills"), String(counts.skills)],
@@ -42,7 +40,7 @@ export function ShareTeamContents({ preview, includeMemory, localSkips }: {
     [t("teamShare.part.leader"), leader ?? t("teamShare.none")],
     [t("teamShare.part.connections"), String(counts.connections)],
     [t("teamShare.part.pictures"), String(pictures)],
-    [t("teamShare.part.notes"), includeMemory ? String(notes) : t("teamShare.none")],
+    [t("teamShare.part.notes"), t("teamShare.none")],
     ...(counts.presets ? [[t("teamShare.part.presets"), `${counts.presets} · ${preview.summary.presetNames.join(", ")}`] as [string, string]] : []),
   ];
   const skipped = [...localSkips, ...preview.skipped.map((skip) => describeSkip(skip, preview.document))];
@@ -260,13 +258,13 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
             <p className="flex items-center gap-2 text-[14px] font-medium text-ink"><Check size={16} className="text-success" />{t("teamShare.saved", { filename: saved.filename })}</p>
             <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("teamShare.savedHint")}</p>
             <div className="mt-4">
-              <ShareTeamContents preview={saved} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
+              <ShareTeamContents preview={saved} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
             </div>
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
             {preview
-              ? <ShareTeamContents preview={preview} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
+              ? <ShareTeamContents preview={preview} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
               : !error && <div className="flex items-center gap-2 py-6 text-[13px] text-ink-secondary"><Loader2 size={15} className="animate-spin" />{t("teamShare.preparing")}</div>}
 
             <fieldset className="mt-4 space-y-2 text-[13px]" disabled={saving}>

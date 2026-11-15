@@ -1,12 +1,11 @@
 // Wires a new Cloud's first hour into the server (server/host/README.md): the counts every personal Cloud keeps, the
-// hooks the brief and the read-and-draft fence call before the first hour exists, and the first hour itself once its
-// Chief and services are up.
+// hooks the brief calls before the first hour exists, and the first hour itself once its Chief and services are up.
 import { CLOUD_WELCOME_DONE } from "../../shared/cloud-hints.ts";
 import type { Notification } from "../../shared/notification.ts";
 import type { RuntimeEvent } from "../../shared/runtime-events.ts";
 import type { AppConfig } from "../config.ts";
 import type { BotRecord, Store } from "../store.ts";
-import { createFirstHour, LOOK_APPS, type FirstHour, type FirstHourDeps, type LookApp } from "./first-hour.ts";
+import { createFirstHour, type FirstHour } from "./first-hour.ts";
 import { proactiveOwner } from "./proactive-owner.ts";
 import { createValueLedger, valueReport, type ValueKind } from "./value-ledger.ts";
 
@@ -16,10 +15,9 @@ export function createFirstHourHooks(options: { dataDir: string; personal: boole
   let current: FirstHour | null = null;
   return {
     ledger,
-    /** For createProactive: the counts, the first look's fence and the morning brief. */
+    /** For createProactive: the counts and the morning brief. */
     proactive: {
       counted: (kind: ValueKind, count: number) => ledger?.add(kind, count),
-      look: (threadId: string) => current?.look(threadId) ?? null,
       morning: {
         at: () => current?.morningAt(),
         push: (summary: string) => current?.morningPush(summary) ?? summary,
@@ -52,16 +50,10 @@ export interface FirstHourHostDeps {
   /** The brief is on: the proactive bot's briefing routine. */
   briefOn(): boolean;
   ensureBrief(): void;
-  composio: {
-    configured(cfg: AppConfig): boolean;
-    connectedServices(cfg: AppConfig): Promise<Record<string, { connected: boolean }>>;
-    toolkitCard(cfg: AppConfig, slug: string): Promise<{ label: string; blurb?: string }>;
-  };
   sessions: { list(): ReadonlyArray<{ owner?: string; email?: string; scopes: readonly string[] }> };
   phones(): number;
   mainThread(botId: string): string | undefined;
   threadBusy(botId: string, threadId: string): boolean;
-  startTurn: FirstHourDeps["startTurn"];
   notify(notification: Notification | null): void;
   wrote(bot: BotRecord, threadId: string): void;
   welcomeDone(): void;
@@ -72,7 +64,7 @@ export interface FirstHourHostDeps {
 /** Null where there is no first hour: anything but a personal Cloud, or one made before it existed. */
 export function startFirstHour(deps: FirstHourHostDeps): FirstHour | null {
   if (!deps.hooks.ledger) return null;
-  const { store, cfg, composio } = deps;
+  const { store, cfg } = deps;
   const firstHour = createFirstHour({
     store, dataDir: deps.dataDir,
     chief: () => proactiveOwner(store),
@@ -84,22 +76,9 @@ export function startFirstHour(deps: FirstHourHostDeps): FirstHour | null {
     },
     language: () => deps.brief.language(),
     timeZone: () => deps.brief.timeZone(),
-    apps: {
-      reachable: (bot) => composio.configured(cfg) && bot.composio !== false,
-      connected: async () => {
-        if (!composio.configured(cfg)) return null;
-        const services = await composio.connectedServices(cfg);
-        return Object.fromEntries(LOOK_APPS.map((app) => [app, services[app]?.connected === true])) as Record<LookApp, boolean>;
-      },
-      card: async (slug) => {
-        const card = await composio.toolkitCard(cfg, slug);
-        return { label: card.label, description: card.blurb ?? "" };
-      },
-    },
     briefOn: deps.briefOn,
     ensureBrief: deps.ensureBrief,
     phones: deps.phones,
-    startTurn: deps.startTurn,
     notify: (bot, threadId, body) => deps.notify(bot.notifications === false ? null : { kind: "brief", botId: bot.id, botName: bot.name, threadId, title: bot.name, body, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) }),
     wrote: deps.wrote,
     welcomeDone: deps.welcomeDone,
@@ -110,7 +89,6 @@ export function startFirstHour(deps: FirstHourHostDeps): FirstHour | null {
   deps.hooks.attach(firstHour);
   store.onChange((change) => {
     if (change.type === "message") firstHour.message(change.threadId, change.message);
-    else if (change.type === "message.patch") firstHour.patched(change.threadId, change.message);
   });
   deps.bus.subscribe((event) => {
     if (event.type === "turn.completed" && !deps.stale(event)) firstHour.turnCompleted(event.threadId, event.ok);

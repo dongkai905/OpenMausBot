@@ -6,15 +6,14 @@ import { cn } from "@/lib/cn";
 import { activeLocale, t, tFromServer } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { SkillRequestPreview } from "@/components/SkillRequestPreview";
-import { approvalDetailText, composioActionPhrase, outboundSummary } from "@/lib/approval-summary";
+import { approvalDetailText, outboundSummary } from "@/lib/approval-summary";
+import { toolActionPhrase } from "@/lib/tool-step-label";
 import { PROFILE_REQUEST_FIELDS, type ProfileRequestField } from "../../shared/profile-request";
 import { RESERVED_MCP_NAMES } from "../../shared/mcp-name";
 import { isSkillSwitchAction, type SkillShareRecord } from "../../shared/skill-request";
-import { cardAutomation } from "@/lib/automations";
 import { yourComputerAsk } from "@/lib/your-computer";
 import { computerAskWords } from "@/lib/computer-ask";
 import { mcpRequestActionLabel } from "@/lib/mcp-request-label";
-import { TriggerCard } from "./TriggerCard";
 import { CardHint } from "./CardHint";
 
 interface ToolLabels {
@@ -110,7 +109,7 @@ export function toolLabel(tool?: string): string {
   const key = nice[tool];
   if (key) return t(key);
   // A custom MCP server's tools read like the app's own unless the card names the server asking.
-  const phrase = mcp ? composioActionPhrase(mcp.slice(2).join("__")) ?? action : action;
+  const phrase = mcp ? toolActionPhrase(mcp.slice(2).join("__")) ?? action : action;
   return server && !RESERVED_MCP_NAMES.has(server) ? `${server} · ${phrase}` : phrase;
 }
 
@@ -377,7 +376,6 @@ export function ApprovalCard({
 }) {
   const card = message.card;
   if (!card) return null;
-  if (cardAutomation(card)) return <TriggerCard card={card} threadId={threadId} />;
   const applied = card.autoApplied === true && card.answered === "allow" && !card.held
     ? appliedChange(card, bot?.name ?? t("approval.someone"))
     : undefined;

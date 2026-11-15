@@ -44,7 +44,6 @@ describe("ready-made bots gallery", () => {
     const labels = [...host.querySelectorAll("button[aria-label^='Add ']")].map((add) => add.getAttribute("aria-label"));
     expect(new Set(labels).size).toBe(READY_BOTS.length);
     expect(host.textContent).toContain("Try: “Add my monstera: living room, bright indirect light”");
-    expect(host.textContent).toContain("Includes a paused routine");
   });
 
   it("narrows to a category and back to all", () => {

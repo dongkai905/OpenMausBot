@@ -7,7 +7,7 @@ import {
   limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
 } from "@/lib/limit-resets";
-import { api, useStore, type Message } from "@/state/store";
+import { useStore, type Message } from "@/state/store";
 import { failedTurnNotice } from "@/lib/failed-turn";
 import { openBotSettings } from "./bot-panel/panel-link";
 import { threadUpdatedLabel } from "./SidebarThreadRow";

@@ -12,7 +12,7 @@ import type { NeedsYouItem } from "../../shared/today.ts";
 import type { WidgetAction, WidgetRoot } from "../../shared/widget.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { createAgentCard } from "../chat-widgets.ts";
-import type { CalendarEvent, EmailHeader, ReadSession } from "../connected-reads.ts";
+import type { CalendarEvent, EmailHeader, ReadSession } from "../mail-facts.ts";
 import { recordsBlock, clean } from "../records-block.ts";
 import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
@@ -206,7 +206,6 @@ export function createBrief(deps: BriefDeps) {
       switch (item.kind) {
         case "signed-out": { const engine = deps.engineName(item.instanceId); return row(engine, w.signedOut(engine), w.signInAgain, { text: words("brief.row.signedOut", { engine }), note: words("brief.row.signInAgain") }); }
         case "usage-limit": return row("", w.usageLimit, clip(item.text, 140), { text: words("brief.row.usageLimit"), ...(item.textCode ? { note: words(item.textCode, item.textParams) } : {}) });
-        case "out-of-credit": return row("", w.outOfCredit, w.ownAccount, { text: words("brief.row.trialCredit"), note: words("brief.row.trialCreditNote") });
         case "connection": return row(item.app, w.reconnecting(item.app), clip(item.text, 140), { text: words("brief.row.reconnect", { app: item.app }) });
         case "place": return row("", w.unreachable, w.chooseAnother, { text: words("brief.row.place"), note: words("brief.row.placeNote") });
         case "question": { const bot = deps.store.bot(item.botId)?.name; return row(bot ?? "", w.asked(bot ?? w.aBot), clip(item.text, 140), { text: words("brief.row.asked", { name: bot ?? words("brief.part.aBot") }) }); }

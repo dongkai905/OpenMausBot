@@ -169,10 +169,6 @@ export interface SendTurnInput {
   preloadBrowserTools?: boolean;
   /** Per-bot integrations the driver may hand to the agent as tools. */
   integrations?: {
-    /** A harness-owned stdio bridge to Composio, so connection requests become trusted chat cards. */
-    composio?: { command: string; args: string[]; env: Record<string, string> };
-    /** The same bridge to a Team Cloud member's own apps, only in that member's own turns. */
-    composioOwn?: { command: string; args: string[]; env: Record<string, string> };
     /** Stdio connection to a computer MCP server. `scope` is set only for the host desktop, so host-only approval rules never apply elsewhere. */
     localComputer?: {
       command: string;
@@ -250,8 +246,6 @@ export interface ProviderAdapter {
     agentsMcp?: boolean;
     /** The driver mounts isolated computer MCP descriptors. */
     computerMcp?: boolean;
-    /** The driver mounts integrations.composio. */
-    composioMcp?: boolean;
     /** The engine's tool search finds an MCP tool by the name its server gives it, dots and all (Claude Code's
      * `select:`), so the connected-app tools are offered as gmail.search_emails rather than gmail_search_emails. */
     mcpToolsFoundByName?: boolean;

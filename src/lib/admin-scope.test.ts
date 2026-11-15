@@ -27,12 +27,12 @@ it("keeps asking after any other failure", async () => {
   expect(api).toHaveBeenCalledTimes(2);
 });
 
-it("asks for the connected apps once, and answers a refused session's later reads from that", async () => {
-  api.mockRejectedValue(refusal());
-  const { preloadConnectedApps } = await import("@/components/PluginsPanel");
-  expect(await preloadConnectedApps()).toEqual({ services: {}, authoritative: true, refused: true });
-  expect(await preloadConnectedApps(true)).toEqual({ services: {}, authoritative: true, refused: true });
-  expect(api).toHaveBeenCalledTimes(1);
+it("asks for a route once, and answers a refused session's later reads from that", async () => {
+  const { unlessRefused } = await import("./admin-scope");
+  const request = vi.fn().mockRejectedValue(refusal());
+  expect(await unlessRefused("/api/connectors", request, { refused: true })).toEqual({ refused: true });
+  expect(await unlessRefused("/api/connectors", request, { refused: true })).toEqual({ refused: true });
+  expect(request).toHaveBeenCalledTimes(1);
 });
 
 it("answers a refused route's later reads without asking, and leaves other routes alone", async () => {

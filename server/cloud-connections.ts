@@ -1,26 +1,25 @@
 // This computer's connections, as they move once to the person's own Cloud: MCP servers with their secrets and
-// sign-ins, the AI keys bots run on, the connected-apps account and mailboxes. GET /api/cloud-connections names each,
-// never a secret; the secrets reach the desktop's main process only over its private port (login-handoff.ts), which
-// sends them only to the person's own Cloud. A sign-in that refreshes itself (an MCP server's own account) moves: once
-// My Cloud has it, this computer forgets its copy, so the two never spend one refresh token.
+// sign-ins, the AI keys bots run on and mailboxes. GET /api/cloud-connections names each, never a secret; the secrets
+// reach the desktop's main process only over its private port (login-handoff.ts), which sends them only to the person's
+// own Cloud. A sign-in that refreshes itself (an MCP server's own account) moves: once My Cloud has it, this computer
+// forgets its copy, so the two never spend one refresh token.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 
 import { canonicalJson } from "../shared/package-format.ts";
 import { fingerprint } from "./cloud-send-verify.ts";
-import type { ComposioIdentity } from "./composio-share.ts";
 import type { AppConfig } from "./config.ts";
 import type { EmailAccount } from "./email/store.ts";
 import type { McpOAuthRecord } from "./mcp-oauth-store.ts";
 import type { McpAuthState } from "./mcp-oauth.ts";
 import { isRemoteMcpServer, parseStoredMcpServer, type StoredMcpServer } from "./mcp-registry.ts";
 
-export type ConnectionKind = "mcp" | "key" | "composio" | "email";
+export type ConnectionKind = "mcp" | "key" | "email";
 
 /** One connection, by name only. */
 export interface ConnectionListing {
-  /** "mcp:<name>", "key:<provider>", "composio" or "email". */
+  /** "mcp:<name>", "key:<provider>" or "email". */
   id: string;
   kind: ConnectionKind;
   label: string;
@@ -34,14 +33,9 @@ export interface ConnectionListing {
   for?: string[];
   /** A sign-in that refreshes itself (an MCP server's own account): it moves, and this computer then forgets it. */
   signIn?: true;
-  /** Connected apps: OpenMausBot's service or the person's own Composio project, the account in a digest equal on two
-   * servers exactly when they reach the same apps, and the service's installation a code is minted for. */
-  mode?: ComposioIdentity["mode"];
-  account?: string;
-  installationId?: string;
 }
 
-/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, Boat, X
+/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, X
  * research, the decider) are not listed, since the person's own key would replace what it includes. */
 interface Provider { id: string; label: string; for: string[]; config(cfg: AppConfig): Partial<AppConfig> | null }
 
@@ -122,7 +116,6 @@ function movingKeys(cfg: AppConfig): Array<{ provider: Provider; fragment: Parti
 export interface ConnectionSources {
   config: AppConfig;
   mcpAuth(name: string, url: string): McpAuthState;
-  composio: ComposioIdentity | null;
   /** The person's mailboxes, by address only here. */
   email?(): ReadonlyArray<{ address: string }>;
 }
@@ -143,11 +136,6 @@ export function listConnections(sources: ConnectionSources): ConnectionListing[]
       ...(remote && sources.mcpAuth(name, server.url) === "signed-in" ? { signIn: true as const } : {}) });
   }
   for (const { provider } of movingKeys(cfg)) items.push({ id: `key:${provider.id}`, kind: "key", label: provider.label, for: [...provider.for] });
-  const account = sources.composio;
-  if (account) {
-    items.push({ id: "composio", kind: "composio", label: "Connected apps", mode: account.mode, account: account.account,
-      ...(account.installationId ? { installationId: account.installationId } : {}) });
-  }
   if (sources.email?.().length) items.push({ id: "email", kind: "email", label: "Email" });
   return items;
 }
@@ -157,7 +145,6 @@ export type ConnectionHandoff =
   /** `keys`: the Vault items this server may read its `vault:<id>` keys from, which go with it. */
   | { mcp: { name: string; server: StoredMcpServer; signIn?: McpOAuthRecord; keys?: string[] } }
   | { config: Partial<AppConfig> }
-  | { composio: { apiKey: string; userId: string } }
   | { email: readonly EmailAccount[] };
 
 export interface HandoffSources {
@@ -205,10 +192,6 @@ export function answerConnection(id: string, sources: HandoffSources):
     if (fragment && modelStaysHere(fragment)) return { ok: false, error: "This key's model is on this computer's own network, so it stays here." };
     return fragment ? { ok: true, connection: { config: fragment } } : { ok: false, error: "This key is no longer saved on this computer." };
   }
-  if (id === "composio") {
-    const apiKey = cfg.composio?.apiKey?.trim(), userId = cfg.composio?.userId;
-    return apiKey && userId ? { ok: true, connection: { composio: { apiKey, userId } } } : { ok: false, error: "Connected apps here use OpenMausBot's service." };
-  }
   if (id === "email") {
     const accounts = sources.email?.() ?? [];
     return accounts.length ? { ok: true, connection: { email: accounts } } : { ok: false, error: "No mailbox is connected on this computer." };
@@ -250,8 +233,6 @@ export function connectionFingerprints(nonce: string, sources: Pick<HandoffSourc
     out[`mcp:${name}`] = fingerprint(nonce, isRemoteMcpServer(server) ? { headers: server.headers ?? {}, clientSecret: server.oauth?.clientSecret ?? null } : { env: server.env });
   }
   for (const { provider, fragment } of movingKeys(cfg)) out[`key:${provider.id}`] = fingerprint(nonce, fragment);
-  const apiKey = cfg.composio?.apiKey?.trim(), userId = cfg.composio?.userId;
-  if (apiKey && userId) out.composio = fingerprint(nonce, { apiKey, userId });
   return out;
 }
 

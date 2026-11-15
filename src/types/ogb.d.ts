@@ -1,24 +1,6 @@
 // The narrow bridge the Electron preload exposes. Absent in the browser.
 
 declare global {
-  type CompanyBackupEntry = Omit<import("../../electron/company-backups.mjs").CompanyBackupMetadata, "status"> & { status: "creating" | "uploading" | "completing" | "ready" | "cleanup" };
-  interface CompanyBackupScheduleState {
-    enabled: boolean;
-    status: "off" | "waiting" | "running" | "paused" | "error";
-    nextBackupAt?: number;
-    lastAttemptAt?: number;
-    lastBackupAt?: number;
-    message?: string;
-  }
-  interface CompanyBackupState {
-    busy: boolean;
-    pendingRestore?: boolean;
-    kind?: "backup" | "restore";
-    progress?: import("../../electron/company-backups.mjs").CompanyBackupProgress;
-    message?: string;
-    lastBackupAt?: number;
-    schedule?: CompanyBackupScheduleState;
-  }
 /** The package.json version, inlined by Vite's define at build time. */
 const __APP_VERSION__: string;
 
@@ -121,7 +103,6 @@ const __APP_VERSION__: string;
       /** This app's own version, and whether this page is this app's own: false on a server added in the Server menu,
        * whose page carries that server's version. Absent in desktop builds before it. */
       app?: { version: string; ownPage: boolean };
-      organization?: import("../../electron/managed-desktop.mjs").ManagedDesktopBridge;
       cloudAccount?: import("../../electron/cloud-account.mjs").CloudAccountBridge;
       accounts?: import("../../electron/cloud-account.mjs").AccountsBridge;
       accountSheet?: import("../../electron/cloud-account.mjs").AccountSheetBridge;
@@ -146,17 +127,6 @@ const __APP_VERSION__: string;
       desktopLanguage?: import("../../electron/desktop-prefs.mjs").DesktopLanguageBridge;
       /** This computer's page and My Cloud's own page: the one-time "Get MausBot updates?" answer. */
       updatesConsent?: import("../../electron/updates-consent.mjs").UpdatesConsentBridge;
-      companyBackups?: {
-        state(): Promise<CompanyBackupState>;
-        list(): Promise<{ backups: CompanyBackupEntry[]; usedBytes: number; limits: { ownerQuotaBytes: number; retainedSnapshots: number } }>;
-        create(input: { clientState: import("../../shared/workspace-backup").WorkspaceBackupClientState }): Promise<CompanyBackupEntry>;
-        configureSchedule?(input: { enabled: false } | { enabled: true; confirmation: "BACK UP THIS WORKSPACE DAILY" }): Promise<CompanyBackupState>;
-        prepareRestore(input: { id: string; password?: string }): Promise<{ id: string; summary: import("../../shared/workspace-backup").WorkspaceBackupSummary }>;
-        restore(input: { id: string; confirmation: "REPLACE" }): Promise<{ restoreId: string }>;
-        delete(input: { id: string; confirmation: "DELETE" }): Promise<unknown>;
-        cancel(): Promise<void>;
-        onState(callback: (state: CompanyBackupState) => void): () => void;
-      };
       /** The window's own rail of places: its page at /rail (a sheet of its own covers the window while open; the skin of
        * the page beside it comes from main), and the button on the page beside it that hides and shows it. */
       rail?: import("../../electron/chrome-rail.mjs").ChromeRailBridge;
@@ -455,7 +425,7 @@ const __APP_VERSION__: string;
       credentialStore?: { unreadable(): Promise<boolean>; reset(): Promise<"reset" | "cancelled" | "quitting" | "failed" | "readable"> };
       /** Save a provider credential through Electron's OS-backed store. */
       setCredential?(
-        name: "openaiApiKey" | "openrouterApiKey" | "composioApiKey" | "boxToken" | "ttsKey" | "fishAudioKey" | "geminiTtsKey" | "jevApiKey" | "openrouterDeciderKey" | "workersAiToken" | "openaiImageApiKey" | "customImageApiKey" | "geminiImageApiKey" | "openaiLiveKey" | "tregApiKey" | "postizApiKey",
+        name: "openaiApiKey" | "openrouterApiKey" | "boxToken" | "ttsKey" | "fishAudioKey" | "geminiTtsKey" | "jevApiKey" | "openrouterDeciderKey" | "workersAiToken" | "openaiImageApiKey" | "customImageApiKey" | "geminiImageApiKey" | "openaiLiveKey" | "tregApiKey" | "postizApiKey",
         value: string,
       ): Promise<ConfigStatus>;
       /** In-app auto-update (packaged app only; dormant in dev). Updates

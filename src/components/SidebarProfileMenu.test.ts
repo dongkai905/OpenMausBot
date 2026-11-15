@@ -340,7 +340,7 @@ describe("profileMenuItems", () => {
 
 describe("Simple mode's account menu", () => {
   const noop = () => {};
-  const tools = toolMenuItems({ activeView: "automations", automationsNeedYou: true, onAutomations: noop, onTeamMap: noop });
+  const tools = toolMenuItems({ activeView: "team-map", onTeamMap: noop });
   const place = (patch: Partial<Parameters<typeof placeMenuItems>[0]> = {}) => ({
     bridge: { state: async () => ({ local: true, name: "This computer" }), menu: async () => {} },
     current: { local: true, name: "This computer" },
@@ -365,12 +365,12 @@ describe("Simple mode's account menu", () => {
     return all;
   }, []);
 
-  it("is the same menu as Advanced, with Automations and Team map in their own group between Settings and Plan & billing, and Help on its own", () => {
+  it("is the same menu as Advanced, with Team map in its own group between Settings and Plan & billing, and Help on its own", () => {
     const items = build();
     expect(groups(items)).toEqual([
       ["account"],
       ["phone-devices", "settings"],
-      ["automations", "team-map"],
+      ["team-map"],
       ["plan"],
       ["support"],
     ]);
@@ -400,49 +400,44 @@ describe("Simple mode's account menu", () => {
 
   it("adds Files once My Cloud's files are ready and Archived bots while there are any, after Team map", () => {
     const open = vi.fn();
-    const items = toolMenuItems({ activeView: "files", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop, onFiles: noop, archived: { count: 3, open } });
-    expect(items.map((item) => [item.key, item.active, item.value])).toEqual([["automations", false, undefined], ["team-map", false, undefined], ["files", true, undefined], ["archived", undefined, "3"]]);
-    items[3]!.onSelect();
+    const items = toolMenuItems({ activeView: "files", onTeamMap: noop, onFiles: noop, archived: { count: 3, open } });
+    expect(items.map((item) => [item.key, item.active, item.value])).toEqual([["team-map", false, undefined], ["files", true, undefined], ["archived", undefined, "3"]]);
+    items[2]!.onSelect();
     expect(open).toHaveBeenCalledOnce();
-    expect(toolMenuItems({ activeView: "chat", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop, archived: { count: 0, open } }).map((item) => item.key)).toEqual(["automations", "team-map"]);
+    expect(toolMenuItems({ activeView: "chat", onTeamMap: noop, archived: { count: 0, open } }).map((item) => item.key)).toEqual(["team-map"]);
   });
 
   it("has Published apps among the tools, after Files and before Archived bots, lit while its page is open", () => {
     const openApps = vi.fn();
-    const items = toolMenuItems({ activeView: "published-apps", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop, onFiles: noop, onPublishedApps: openApps, archived: { count: 1, open: noop } });
-    expect(items.map((item) => [item.key, item.label, item.active])).toEqual([["automations", "Automations", false], ["team-map", "Team map", false], ["files", "Files", false],
+    const items = toolMenuItems({ activeView: "published-apps", onTeamMap: noop, onFiles: noop, onPublishedApps: openApps, archived: { count: 1, open: noop } });
+    expect(items.map((item) => [item.key, item.label, item.active])).toEqual([["team-map", "Team map", false], ["files", "Files", false],
       ["published-apps", "Published apps", true], ["archived", "Archived bots", undefined]]);
-    items[3]!.onSelect();
+    items[2]!.onSelect();
     expect(openApps).toHaveBeenCalledOnce();
   });
 
   it("names the account button after the person and whatever its dot is raised for", () => {
-    expect(accountLabel("You", { automationsNeedYou: false, update: null })).toBe("You");
-    expect(accountLabel("Ada", { automationsNeedYou: true, update: "Update failed. Try again." })).toBe("Ada · Automations need you · Update failed. Try again.");
+    expect(accountLabel("You", { update: null })).toBe("You");
+    expect(accountLabel("Ada", { update: "Update failed. Try again." })).toBe("Ada · Update failed. Try again.");
   });
 
-  it("adds the move to My Cloud: a short warning once failing, shared with automations, and a quiet segment on its way", () => {
-    expect(accountLabel("Omkar", { automationsNeedYou: false, update: null, move: "failed" })).toBe("Omkar · My Cloud move needs you");
-    expect(accountLabel("Omkar", { automationsNeedYou: true, update: null, move: "failed" })).toBe("Omkar · My Cloud move and automations need you");
-    expect(accountLabel("Omkar", { automationsNeedYou: true, update: "Update ready", move: "failed" })).toBe("Omkar · My Cloud move and automations need you · Update ready");
-    expect(accountLabel("Omkar", { automationsNeedYou: false, update: null, move: "sending" })).toBe("Omkar · Moving to My Cloud…");
-    expect(accountLabel("Omkar", { automationsNeedYou: true, update: null, move: "sending" })).toBe("Omkar · Automations need you · Moving to My Cloud…");
-    expect(accountLabel("Omkar", { automationsNeedYou: false, update: null, move: "done" })).toBe("Omkar");
-    expect(accountLabel("Omkar", { automationsNeedYou: true, update: null, move: "done" })).toBe("Omkar · Automations need you");
-    expect(accountLabel("Omkar", { automationsNeedYou: false, update: null, move: null })).toBe("Omkar");
+  it("adds the move to My Cloud: a short warning once failing, and a quiet segment on its way", () => {
+    expect(accountLabel("Omkar", { update: null, move: "failed" })).toBe("Omkar · My Cloud move needs you");
+    expect(accountLabel("Omkar", { update: "Update ready", move: "failed" })).toBe("Omkar · My Cloud move needs you · Update ready");
+    expect(accountLabel("Omkar", { update: null, move: "sending" })).toBe("Omkar · Moving to My Cloud…");
+    expect(accountLabel("Omkar", { update: null, move: "done" })).toBe("Omkar");
+    expect(accountLabel("Omkar", { update: null, move: null })).toBe("Omkar");
   });
 
-  it("raises the avatar's dot red for a failing move like automations, and none on its way or once done", () => {
-    expect(accountDot({ automationsNeedYou: false, update: null, move: "failed" })).toBe("danger");
-    expect(accountDot({ automationsNeedYou: true, update: null, move: "failed" })).toBe("danger");
-    expect(accountDot({ automationsNeedYou: false, update: "news", move: "failed" })).toBe("danger");
-    expect(accountDot({ automationsNeedYou: false, update: null, move: "sending" })).toBeNull();
-    expect(accountDot({ automationsNeedYou: false, update: null, move: "done" })).toBeNull();
-    expect(accountDot({ automationsNeedYou: false, update: "news", move: "done" })).toBe("accent");
-    expect(accountDot({ automationsNeedYou: false, update: null, move: null })).toBeNull();
-    expect(accountDot({ automationsNeedYou: true, update: null, move: null })).toBe("danger");
-    expect(accountDot({ automationsNeedYou: false, update: "failed", move: null })).toBe("danger");
-    expect(accountDot({ automationsNeedYou: false, update: "news", move: "sending" })).toBe("accent");
+  it("raises the avatar's dot red for a failing move, and none on its way or once done", () => {
+    expect(accountDot({ update: null, move: "failed" })).toBe("danger");
+    expect(accountDot({ update: "news", move: "failed" })).toBe("danger");
+    expect(accountDot({ update: null, move: "sending" })).toBeNull();
+    expect(accountDot({ update: null, move: "done" })).toBeNull();
+    expect(accountDot({ update: "news", move: "done" })).toBe("accent");
+    expect(accountDot({ update: null, move: null })).toBeNull();
+    expect(accountDot({ update: "failed", move: null })).toBe("danger");
+    expect(accountDot({ update: "news", move: "sending" })).toBe("accent");
   });
 
   it("puts the move's row first, in its own group, above a raised update", () => {
@@ -452,7 +447,7 @@ describe("Simple mode's account menu", () => {
       ["cloud-move"],
       ["account"],
       ["phone-devices", "settings"],
-      ["automations", "team-map"],
+      ["team-map"],
       ["plan"],
       ["support"],
     ]);
@@ -488,8 +483,8 @@ describe("Simple mode's account menu", () => {
     expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL", size: 50 }))).toContain("font-size:19px");
   });
 
-  it("marks Automations open and needing attention, and Team map plain", () => {
-    expect(tools.map((item) => [item.key, item.active, item.attention])).toEqual([["automations", true, true], ["team-map", false, undefined]]);
+  it("marks Team map open, and the other places plain", () => {
+    expect(tools.map((item) => [item.key, item.active, item.attention])).toEqual([["team-map", true, undefined]]);
   });
 
   it("ticks the current place and switches through the same native menu as the server pill", () => {

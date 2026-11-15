@@ -4,12 +4,6 @@
  * config path, label, URL, or arbitrary field name.
  */
 export const CREDENTIAL_TARGETS = {
-  boxToken: {
-    label: "Boat API key",
-    description: "Gives bots an isolated cloud computer when Boat is selected.",
-    placeholder: "Paste your Boat API key",
-    helpUrl: "https://docs.boat.dev/api-keys",
-  },
   ttsKey: {
     label: "ElevenLabs API key",
     description: "Enables text-to-speech voices in calls.",
@@ -40,12 +34,6 @@ export const CREDENTIAL_TARGETS = {
     placeholder: "ops_…",
     helpUrl: "https://developer.1password.com/docs/service-accounts/get-started/",
   },
-  composioApiKey: {
-    label: "Composio API key",
-    description: "Connects apps such as Gmail, Slack and GitHub through your own Composio project.",
-    placeholder: "ak_…",
-    helpUrl: "https://dashboard.composio.dev/~/project/settings/api-keys",
-  },
   openaiApiKey: {
     label: "OpenAI API key",
     description: "Runs OpenAI models with your own key.",
@@ -70,12 +58,10 @@ export const PROVIDER_CREDENTIAL_TARGETS = [
 ] as const satisfies readonly ConfigCredentialTargetId[];
 export type DesktopCredentialSlot = ConfigCredentialTargetId;
 export type CredentialConfig = {
-  box?: { token?: string };
   tts?: { key?: string; fishKey?: string; geminiKey?: string };
   imageGen?: { key?: string; customApiKey?: string; geminiKey?: string };
   /** Not in the settings file: the server fills it from its login store. */
   onePassword?: { connected?: boolean };
-  composio?: { apiKey?: string };
   openai?: { key?: string };
   openrouter?: { key?: string };
 };
@@ -113,8 +99,6 @@ export function credentialSaveRequest(id: CredentialTargetId, value: string): { 
 
 export function credentialConfigPatch(id: ConfigCredentialTargetId, value: string): CredentialConfig {
   switch (id) {
-    case "boxToken":
-      return { box: { token: value } };
     case "ttsKey":
       return { tts: { key: value } };
     case "geminiTtsKey":
@@ -123,8 +107,6 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
       return { tts: { fishKey: value } };
     case "openaiImageApiKey":
       return { imageGen: { key: value } };
-    case "composioApiKey":
-      return { composio: { apiKey: value } };
     case "openaiApiKey":
       return { openai: { key: value } };
     case "openrouterApiKey":
@@ -134,8 +116,6 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
 
 export function credentialIsConfigured(config: CredentialConfig, id: CredentialTargetId): boolean {
   switch (id) {
-    case "boxToken":
-      return Boolean(config.box?.token);
     case "ttsKey":
       return Boolean(config.tts?.key);
     case "geminiTtsKey":
@@ -146,8 +126,6 @@ export function credentialIsConfigured(config: CredentialConfig, id: CredentialT
       return Boolean(config.imageGen?.key);
     case "onePasswordToken":
       return Boolean(config.onePassword?.connected);
-    case "composioApiKey":
-      return Boolean(config.composio?.apiKey);
     case "openaiApiKey":
       return Boolean(config.openai?.key);
     case "openrouterApiKey":

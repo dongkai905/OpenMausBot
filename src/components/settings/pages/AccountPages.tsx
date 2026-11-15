@@ -4,12 +4,11 @@ import { CLOUD_PLAN_URL } from "@/lib/app-links";
 import { productName } from "@/lib/brand";
 import { api, useStore } from "@/state/store";
 import { useState } from "react";
-import { InertRow, useSwitchToComputer } from "../inert";
+import { useSwitchToComputer } from "../inert";
 import { PlaceBadge, YouAvatar } from "../SettingsNav";
 import { SignOutConfirm } from "../SignOutConfirm";
 import { CloudAccountSettings } from "../../CloudAccountSettings";
 import { useCloudUsageSettings } from "../../CloudUsageMeter";
-import { OrganizationSettings } from "../../OrganizationSettings";
 import { SettingRow, SettingsGroup, SettingsLinkRow, SettingsRows } from "../../SettingsPrimitives";
 import { UpdatesConsentRow } from "../../UpdatesConsent";
 import { useAccountSummary, useYou } from "../account-summary";
@@ -64,16 +63,6 @@ export function AccountPage() {
           )}
         </SettingsRows>
         {signingOut && <SignOutConfirm browser here={place.name} onConfirm={() => api("/api/auth/logout", { method: "POST" }).finally(() => location.reload())} onClose={() => setSigningOut(false)} />}
-      </SettingsGroup>
-    )}
-    {ctx.organization ? (
-      <SettingsGroup label={t("settings.section.organization")} block="organization">
-        <OrganizationSettings simple={!ctx.advanced} />
-      </SettingsGroup>
-    ) : elsewhere && ctx.advanced && (
-      // The organization sign-in is This computer's: it stays in place on a Cloud's page, inert, with the way there.
-      <SettingsGroup label={t("settings.section.organization")} block="organization">
-        <SettingsRows><InertRow title={t("settings.account.orgSignIn")} control={<button type="button" className="ui-button" tabIndex={-1}>{t("settings.account.signIn")}</button>} /></SettingsRows>
       </SettingsGroup>
     )}
     {ctx.desktop && !ctx.client && window.ogb?.updatesConsent && (

@@ -8,7 +8,6 @@ import { StoreProvider, useStore, type Bot } from "../../src/state/store";
 import { rememberComputerPanelOpen } from "../../src/lib/computer-panel-focus";
 import { applySkin, readSkin } from "../../src/lib/skins";
 import { publishLiveFrame } from "../../src/lib/live-events";
-import { CLOUD_COMPUTER_BUSY_ERROR } from "../../shared/computer-contention";
 import "../../src/styles.css";
 
 function frame(label: string, color: string) {
@@ -95,7 +94,7 @@ window.fetch = async (input, init) => {
   }
   // The real server refuses provision/sleep while a turn owns the boat.
   if (path.endsWith("/computer/provision")) {
-    if (turnActive) return json({ error: CLOUD_COMPUTER_BUSY_ERROR }, 409);
+    if (turnActive) return json({ error: "this bot's remote computer is being used by an active turn — interrupt it first" }, 409);
     return json({ state: "idle" });
   }
   if (path.endsWith("/computer/screenshot")) {
@@ -104,7 +103,7 @@ window.fetch = async (input, init) => {
     const selectedMode = mode;
     if (transport.capturing || selectedMode === "contended") {
       transport.conflicts++;
-      return json({ error: "this bot's cloud computer is being changed — wait for it to finish" }, 409);
+      return json({ error: "this bot's remote computer is being changed — wait for it to finish" }, 409);
     }
     if (selectedMode === "held") {
       transport.capturing = true;

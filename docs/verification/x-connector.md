@@ -21,8 +21,7 @@ loopback stand-in for the relay, with the same stand-in as treg
 (`OMB_TREG_URL`). It drives the real Apps pop-up and checks:
 
 - With neither a key nor a plan, the card asks for a treg key and links to
-  treg.to. The managed install's Composio Twitter tile, which cannot connect
-  there, is gone.
+  treg.to.
 - Saving a key tests it at once ("treg is working ✓ Balance: $4.25."), and
   **Remove key** takes the card back.
 - On a plan, the card shows "Included with your plan" and the month's use.

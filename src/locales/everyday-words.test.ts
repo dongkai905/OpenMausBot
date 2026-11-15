@@ -10,22 +10,20 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
   ],
   "notifications and alerts": ["attention.", "notifications.", "error.", "readyBots.", "app.loading."],
   "the sidebar and the switcher": ["sidebar."],
-  "moving from Grok Bot": ["grokMove."],
   "the rail of Clouds and its ＋": ["rail."],
   "a place's color, in Settings": ["placeLook."],
   "the bot panel": [
     "botPanel.", "botApi.", "botSettings.simple.", "botAccess.tools.", "botAccess.browser.", "memory.learnFromRooms.", "memory.upkeep.",
   ],
   "the Screen panel and where a bot works": [
-    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.cloud.", "computer.badge.", "computer.problem.",
-    "computer.screen.", "vm.cloud.", "browser.",
+    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.badge.", "computer.problem.",
+    "computer.screen.", "browser.",
   ],
   "MausBot Cloud: buying it, setting it up, moving to it and sharing with it": [
     "cloudBuy.", "cloudIntro.", "cloudTrial.", "cloudCancel.", "cloudSetup.", "cloudIntent.", "cloudNotice.", "cloudHowTo.", "whatsNew.",
-    "cloudCredit.", "cloudPower.", "cloudSignIn.", "cloudAdd.", "cloudHome.", "cloudPhone.", "cloudAccount.", "pro.", "lending.",
+    "cloudPower.", "cloudSignIn.", "cloudAdd.", "cloudHome.", "cloudPhone.", "cloudAccount.", "pro.", "lending.",
     "files.", "usageMeter.", "roomCard.", "botLimit.",
   ],
-  "routines and automations": ["routines.", "automations."],
   "the team map": ["canvas.", "mapComputer.", "canvasComputers."],
   "Apps": ["apps.", "connectors."],
   "the Settings pages Simple mode shows": ["settings.section.", "settings.group.", "settings.mcpCalls.", "settings.logins."],
@@ -37,8 +35,8 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
 
 const EVERYDAY_KEYS: Record<string, readonly string[]> = {
   "the Screen panel": [
-    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal", "computer.chooseCloudWake",
-    "computer.chooseCloudOpen", "computer.chooseCloudManage", "computer.autoChooseCloudOpen", "computer.createVm", "computer.replaceVm",
+    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal",
+    "computer.createVm", "computer.replaceVm",
     "computer.openVmSetup", "computer.confirm.replaceVm", "computer.err.emptyFrame", "computer.err.frameTimeout", "computer.err.noDesktopLink",
     "computer.err.vmNotReady", "computer.err.vmEngine", "computer.err.localEngine", "computer.err.vmOpenSettings", "computer.worksOnHint",
     "computer.worksOnHintCloudHome", "computer.linux.waylandAfter", "vm.dest.vm", "vm.setup.start", "vm.setup.starting", "vm.stopped.detail",
@@ -50,11 +48,10 @@ const EVERYDAY_KEYS: Record<string, readonly string[]> = {
   ],
   "adding and sharing a bot": ["newBot.presetKeeps", "presetShare.never"],
   "signing in to an AI, the Cloud's own sign-in included": [
-    "engineSetup.claude.description", "engineSetup.claude.connectedAccount", "engineSetup.device.description", "engineSetup.device.security",
-    "engineSetup.device.connectedAccount", "engineSetup.device.failed", "engineSetup.device.enableHint", "engineSetup.grok.description",
-    "engineSetup.grok.security", "engineSetup.grok.connectedAccount", "engineSetup.grok.failed", "engineSetup.grok.notInstalled",
+    "engineSetup.device.description", "engineSetup.device.security",
+    "engineSetup.device.connectedAccount", "engineSetup.device.failed", "engineSetup.device.enableHint",
     "engineSetup.serverInstall", "engineSetup.serverUpdate", "engineSetup.serverInstalling", "engineSetup.sendRedirect",
-    "engineSetup.sameMachine", "engineSetup.invalidStatus", "engines.account.signInHint", "engines.trialCredit", "engines.trialCreditEnded",
+    "engineSetup.sameMachine", "engineSetup.invalidStatus", "engines.account.signInHint",
     "keys.cerebras.desc", "keys.groq.desc", "keys.meta.desc",
   ],
   "the Settings pages Simple mode shows": [
@@ -70,11 +67,12 @@ const INTERNAL_WORDS: readonly Word[] = [
   { word: "instance", pattern: /\binstances?\b/i, say: "AI account" },
   // "Your own server" is the person's own word for a computer they run OpenMausBot on (the rail's ＋).
   { word: "server", pattern: /(?<!(?:Discord|Slack|MCP|own) )\bservers?\b/i, say: "the app, the Cloud when it is hosted, or your own server" },
-  { word: "Composio", pattern: /composio/i, say: "connected apps" },
   { word: "Cloud computer", pattern: /\bcloud computers?\b/i, say: "cloud desktop" },
   { word: "VPS", pattern: /\bVPS\b/, say: "your own machine" },
   { word: "Local VM", pattern: /\bLocal VMs?\b/i, say: "private desktop" },
   { word: "workspace", pattern: /\bworkspaces?\b/i, say: "installation, or leave it out" },
+  // The apps a person connects are the app's "Connected apps", not the person's "own" ones.
+  { word: "your own apps", pattern: /\byour own apps\b/i, say: "connected apps" },
 ];
 
 const PENDING_WORDS: readonly Word[] = [
@@ -120,7 +118,7 @@ describe("everyday screens", () => {
 
   it("catch each internal word, and let placeholders, commands, MCP servers and Discord or Slack servers through", () => {
     for (const bad of [
-      "Switch to another engine", "Add an instance", "Restart the server", "Connect apps through Composio",
+      "Switch to another engine", "Add an instance", "Restart the server", "Connect your own apps",
       "Start the cloud computer", "Self-hosted VPS", "Create Local VM", "Choose a workspace",
     ]) expect(wordsIn(bad), bad).not.toEqual([]);
     for (const good of [

@@ -11,7 +11,6 @@ import { EXECUTOR_LIKE_TOOLS } from "../testing/executor-like-tools.ts";
 import type { ToolScope } from "../../shared/tool-scope.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { catalogServer, CUA_DRIVER_WINDOWS_TOOLS, syntheticToolNames } from "../testing/cua-driver-tools.ts";
-import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { startFakeHttpMcp } from "../testing/fake-http-mcp-server.ts";
 import { whopLikeCatalog } from "../testing/whop-like-catalog.ts";
 import { wideSchema } from "../testing/oversized-tool-schema.ts";
@@ -533,42 +532,18 @@ describe("Chat MCP session", () => {
     expect(alive(failed.read().pid)).toBe(false);
   });
 
-  it("skips a connected-apps mount that fails, and keeps the turn alive", async () => {
+  it("skips an optional built-in mount that fails, and keeps the turn alive", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const ready = fixture();
     const refused = fixture(`if(message.method === "tools/list") { send({jsonrpc:"2.0",id:message.id,error:{code:-32000,message:"connector service returned HTTP 503"}}); continue; }`);
-    const session = await mountChatTools({ composio: refused.server, custom: { ready: ready.server } }, ready.controller.signal);
+    const session = await mountChatTools({ email: refused.server, custom: { ready: ready.server } }, ready.controller.signal);
     sessions.push(session);
     expect(session.definitions.map((definition) => definition.function.name)).toEqual(["ready_write"]);
-    expect(session.skipped).toEqual([{ server: "composio", reason: expect.stringContaining("MCP request failed") }]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`"composio"`));
+    expect(session.skipped).toEqual([{ server: "email", reason: expect.stringContaining("MCP request failed") }]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`"email"`));
     await vi.waitFor(() => expect(alive(refused.read().pid)).toBe(false));
     expect(alive(ready.read().pid)).toBe(true);
     await expect(session.execute("ready_write", { value: "still works" }, ready.controller.signal)).resolves.toMatchObject({ ok: true, text: "recorded:still works" });
-    warn.mockRestore();
-  });
-
-  it("skips the connected-apps own-apps mount that fails, and keeps the turn alive", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const ready = fixture();
-    const missing = { command: join(ready.dir, "does-not-exist"), args: [], env: {} };
-    const session = await mountChatTools({ composioOwn: missing, custom: { ready: ready.server } }, ready.controller.signal);
-    sessions.push(session);
-    expect(session.definitions.map((definition) => definition.function.name)).toEqual(["ready_write"]);
-    expect(session.skipped.map((entry) => entry.server)).toEqual([OWN_APPS_SERVER]);
-    warn.mockRestore();
-  });
-
-  it("keeps a configured server that shares the own-apps name alive when the built-in own-apps mount fails", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const ready = fixture();
-    const missing = { command: join(ready.dir, "does-not-exist"), args: [], env: {} };
-    const session = await mountChatTools({ composioOwn: missing, custom: { [OWN_APPS_SERVER]: ready.server } }, ready.controller.signal);
-    sessions.push(session);
-    expect(session.skipped.map((entry) => entry.server)).toEqual([OWN_APPS_SERVER]);
-    expect(alive(ready.read().pid)).toBe(true);
-    expect(session.definitions).toHaveLength(1);
-    await expect(session.execute(session.definitions[0]!.function.name, { value: "still works" }, ready.controller.signal)).resolves.toMatchObject({ ok: true });
     warn.mockRestore();
   });
 
@@ -924,7 +899,7 @@ describe("Chat MCP tool limit", () => {
     localComputer: { ...catalog(CUA_DRIVER_WINDOWS_TOOLS), scope: "local-computer" as const },
     browser: catalog(syntheticToolNames("agent_browser", 32)),
     agents: catalog(syntheticToolNames("agent", agents)),
-    composio: catalog(syntheticToolNames("router", 7)),
+    device: catalog(syntheticToolNames("phone", 7)),
     data: catalog(syntheticToolNames("table", 5)),
     ...more,
   });
@@ -951,11 +926,10 @@ describe("Chat MCP tool limit", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const { session, names } = await mount(windowsTurn(51, {
-        composio: catalog(syntheticToolNames("router", 14)),
+        browser: catalog(syntheticToolNames("agent_browser", 46)),
         email: catalog(syntheticToolNames("mail", 20)),
         device: catalog(syntheticToolNames("phone", 23)),
-      }));
-      expect(names).toHaveLength(127);
+      }));      expect(names).toHaveLength(127);
       expect(names).toEqual(expect.arrayContaining(syntheticToolNames("agents_agent", 51)));
       expect(names).toEqual(expect.arrayContaining(CORE_COMPUTER.map((tool) => `computer_${tool}`)));
       expect(names.filter((name) => name.startsWith("data_"))).toEqual(["data_table_1", "data_table_2"]);

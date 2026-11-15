@@ -56,7 +56,6 @@ function fixture() {
     broadcast: () => {},
     audienceChanged: () => {},
     assertTeamComputerChangeIdle: () => {},
-    routines: () => null,
     // A member's session may chat with this bot: the level that still can't move it or change what it may do.
     levelOf: () => "chat",
     mainThreadTasks: (botId: string) => store.tasks(botId).filter((task) => !privateThreads.has(task.threadId)),
@@ -336,17 +335,15 @@ describe("PATCH /api/bots/:id phoneApps", () => {
 });
 
 describe("PATCH /api/bots/:id mainThreadChoice", () => {
-  it("stores the conversation the person chose, clears it with null, and refuses a routine run or another bot's thread", async () => {
+  it("stores the conversation the person chose, clears it with null, and refuses another bot's thread", async () => {
     const { store, bot, patch } = fixture();
     const chosen = store.createTask(bot.id, "Chosen", false)!;
-    const run = store.createTask(bot.id, "Run", false)!;
-    store.patchTask(bot.id, run.threadId, { routineRunId: "run-1" });
     const other = store.createBot({ name: "Other" });
 
     expect((await patch(bot.id, { mainThreadChoice: chosen.threadId })).status).toBe(200);
     expect(store.bot(bot.id)?.mainThreadChoice).toBe(chosen.threadId);
 
-    for (const refused of [run.threadId, other.threadId, "missing", 7]) {
+    for (const refused of [other.threadId, "missing", 7]) {
       expect((await patch(bot.id, { mainThreadChoice: refused })).status).toBe(400);
     }
     expect(store.bot(bot.id)?.mainThreadChoice).toBe(chosen.threadId);

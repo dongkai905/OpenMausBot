@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { cloudHomeLendingRefusal, type CloudLendingTurn } from "../cloud-lending.ts";
-import { adoptExistingRoutines, desktopLendingTurn, desktopPhonesOffered, NOT_THE_OWNER, type DesktopTurn } from "./owner.ts";
+import { desktopLendingTurn, desktopPhonesOffered, NOT_THE_OWNER, type DesktopTurn } from "./owner.ts";
 
-const ADMIN = "p_admin", MEMBER = "p_member", ROUTINE = "routine-1", WEBHOOK = "webhook-1";
+const ADMIN = "p_admin", MEMBER = "p_member";
 const said = (id: string, extra: Record<string, unknown> = {}) => ({ id, role: "user", ...extra });
 const reply = (id: string, extra: Record<string, unknown> = {}) => ({ id, role: "bot", ...extra });
 const card = (answeredBy?: { kind: string; person?: string; name?: string }) =>
@@ -14,10 +14,9 @@ const base = (overrides: Partial<DesktopTurn> = {}): DesktopTurn => ({
   ownerPerson: () => false, cardAnswerer: (c) => (c.answeredBy?.kind === "session" ? c.answeredBy.person : undefined),
   routineRun: () => null, reportsFromOthers: true, ...overrides,
 });
-/** `written`: the routines the owner wrote and nobody has changed since. */
-const deps = (overrides: { originIsUser?: boolean; written?: string[] } = {}) => ({
+/** The desktop's owner: the admin sessions here, and whether the work came from the user. */
+const deps = (overrides: { originIsUser?: boolean } = {}) => ({
   adminPersons: () => new Set([ADMIN]), originIsUser: () => overrides.originIsUser ?? true,
-  ownerWrote: (id: string) => (overrides.written ?? [ROUTINE]).includes(id),
 });
 const owners = (turn: DesktopTurn, d = deps()) => cloudHomeLendingRefusal(desktopLendingTurn(turn, d)) === null;
 
@@ -70,25 +69,17 @@ describe("whose turn may use the desktop owner's phones", () => {
     expect(owners(inFlight(NOT_THE_OWNER))).toBe(false);
   });
 
-  it("a webhook's posted payload, an outside event's run report and the report of a routine the owner did not write are someone else's words", () => {
+  it("a webhook's posted payload is someone else's words", () => {
     expect(owners(base({ thread: [said("m1"), reply("w1", { webhookPost: true })] }))).toBe(false);
-    expect(owners(base({ thread: [said("m1"), reply("a1", { automation: { routineId: WEBHOOK } })] }))).toBe(false);
-    expect(owners(base({ thread: [said("m1"), reply("a1", { kind: "routine.run", routineRun: { routineId: WEBHOOK } })] }))).toBe(false);
-    expect(owners(base({ thread: [said("m1"), reply("a1", { automation: { routineId: ROUTINE } })] }))).toBe(true);
-    expect(owners(base({ thread: [said("m1"), reply("a1", { kind: "routine.run", routineRun: { routineId: ROUTINE } })] }))).toBe(true);
-    // Written by a client session, or changed by one since the owner wrote it.
-    expect(owners(base({ thread: [said("m1"), reply("a1", { automation: { routineId: ROUTINE } })] }), deps({ written: [] }))).toBe(false);
-    expect(owners(base({ thread: [said("m1"), reply("a1", { kind: "routine.run", routineRun: { routineId: ROUTINE } })] }), deps({ written: [] }))).toBe(false);
   });
 
-  it("a routine's run is the owner's only when the owner wrote it, unchanged, and a schedule, a restart or the owner started it", () => {
+  it("a routine's run is the owner's only when the owner wrote it, and a run they started by hand counts too", () => {
     type Trigger = "schedule" | "manual" | "startup" | "webhook";
     const runTurn = (triggerSource: Trigger, record: { ownerStarted: boolean; ownerAuthored: boolean }) => desktopLendingTurn(base({
       request: { messageId: "m1", generations: new Set(["g1"]), automation: triggerSource },
       routineRun: () => ({ triggerSource, ...record }),
     }), deps());
     for (const trigger of ["schedule", "startup"] as const) {
-      expect(runTurn(trigger, { ownerStarted: false, ownerAuthored: true }).routineRun()).toEqual({ triggerSource: trigger, ownerStarted: true, ownerAuthored: true });
       expect(cloudHomeLendingRefusal(runTurn(trigger, { ownerStarted: false, ownerAuthored: true }))).toBeNull();
       // Someone else wrote it, or changed it since: never the owner's, however it started.
       expect(cloudHomeLendingRefusal(runTurn(trigger, { ownerStarted: true, ownerAuthored: false }))).toBe("not-owner");
@@ -98,7 +89,6 @@ describe("whose turn may use the desktop owner's phones", () => {
     expect(runTurn("manual", { ownerStarted: false, ownerAuthored: true }).routineRun()).toEqual({ triggerSource: "manual", ownerStarted: false, ownerAuthored: true });
     expect(cloudHomeLendingRefusal(runTurn("manual", { ownerStarted: false, ownerAuthored: true }))).toBe("not-owner");
     expect(cloudHomeLendingRefusal(runTurn("manual", { ownerStarted: true, ownerAuthored: false }))).toBe("not-owner");
-    expect(runTurn("webhook", { ownerStarted: true, ownerAuthored: true }).routineRun()).toMatchObject({ ownerStarted: false });
     expect(cloudHomeLendingRefusal(runTurn("webhook", { ownerStarted: true, ownerAuthored: true }))).toBe("not-owner");
     const none: CloudLendingTurn = desktopLendingTurn(base(), deps());
     expect(none.routineRun()).toBeNull();
@@ -113,31 +103,5 @@ describe("where the desktop owner's phones are offered", () => {
     // A request from this machine is a service (a hosted workspace's or a headless server's shell), not the owner.
     expect(desktopPhonesOffered({ sharedMembership: false, loopbackTrust: "service" })).toBe(false);
     expect(desktopPhonesOffered({ sharedMembership: true, loopbackTrust: "service" })).toBe(false);
-  });
-});
-
-describe("routines that were already there when authorship started being recorded", () => {
-  const routines = [{ id: "r1", prompt: "Morning brief" }, { id: "r2", prompt: "Stretch reminder" }];
-  const run = (overrides: Partial<Parameters<typeof adoptExistingRoutines>[0]> = {}) => {
-    const recorded: string[] = []; let persisted = 0;
-    const adopted = adoptExistingRoutines({
-      recordsExisted: false, offered: true, otherPeople: false, routines,
-      record: (routine) => { recorded.push(routine.id); }, persist: () => { persisted += 1; }, ...overrides,
-    });
-    return { adopted, recorded, persisted };
-  };
-
-  it("are the owner's on the first run of a desktop only one person uses, and the record is kept so it never runs again", () => {
-    expect(run()).toEqual({ adopted: 2, recorded: ["r1", "r2"], persisted: 1 });
-  });
-
-  it("an empty desktop still keeps the record, so a routine someone adds later is never adopted by a later start", () => {
-    expect(run({ routines: [] })).toEqual({ adopted: 0, recorded: [], persisted: 1 });
-  });
-
-  it("are never adopted once records exist, where phones are not offered, or while any other person has a session here", () => {
-    expect(run({ recordsExisted: true })).toEqual({ adopted: 0, recorded: [], persisted: 0 });
-    expect(run({ offered: false })).toEqual({ adopted: 0, recorded: [], persisted: 0 });
-    expect(run({ otherPeople: true })).toEqual({ adopted: 0, recorded: [], persisted: 0 });
   });
 });

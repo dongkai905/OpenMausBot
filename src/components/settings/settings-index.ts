@@ -27,7 +27,6 @@ export interface SettingsContext {
   places: boolean;
   /** Plan & billing can be read here: the desktop's plan bridge, or a personal Cloud's owner in a browser */
   plan: boolean;
-  organization: boolean;
   environments: boolean;
   installations: boolean;
   skills: boolean;
@@ -102,7 +101,6 @@ export interface SettingsTarget {
 /** Every older page name, as notices, links and the native menu still send them, and where it now lives. */
 export const LEGACY_SETTINGS: Record<Exclude<AppSettingsSection, SettingsPageId>, (ctx: SettingsContext) => SettingsTarget> = {
   desktopWorkspaces: () => ({ page: "app", anchor: "your-computers" }),
-  organization: () => ({ page: "account", anchor: "organization" }),
   cloudAccount: (ctx) => (ctx.plan ? { page: "plan", anchor: "plan" } : { page: "account" }),
   experimental: () => ({ page: "bots", anchor: "early" }),
   connections: () => ({ page: "ai", anchor: "ai-keys" }),
@@ -143,7 +141,7 @@ export function resolveSettingsTarget(requested: AppSettingsSection, ctx: Settin
 /** A context with every page showing (Advanced mode), for tests and previews to narrow down. */
 export const fullContext = (over: Partial<SettingsContext> = {}): SettingsContext => ({
   desktop: true, here: true, home: true, cloud: false, team: false, client: false, admin: true, places: false, plan: true,
-  organization: false, environments: true, installations: false, skills: false, advanced: true, ...over,
+  environments: true, installations: false, skills: false, advanced: true, ...over,
 });
 
 /** One row, section or page search can open. `label` beats `labelKey` where the name is not a string of the app's. */
@@ -183,7 +181,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "sidebar-picture", page: "overview", anchor: "sidebar", labelKey: "placeLook.sidebarPicture", sectionKey: "settings.overview.sidebar", topFor: ["wallpaper", "background", "sidebar image"], synonyms: ["picture", "banner", "image"] },
   { id: "show-helper", page: "overview", anchor: "sidebar", labelKey: "settings.search.showHelper", sectionKey: "settings.overview.sidebar", synonyms: ["helper", "starter", "default bot"] },
   { id: "providers", page: "ai", anchor: "providers", labelKey: "settings.ai.providers", topFor: ["local model", "model providers"], synonyms: ["models", "engines", "sign in", "subscription", "cli"] },
-  { id: "keys", page: "ai", anchor: "ai-keys", labelKey: "settings.ai.otherServices", topFor: ["api keys", "api key"], synonyms: ["keys", "key", "openai", "anthropic", "openrouter", "router", "composio", "elevenlabs"] },
+  { id: "keys", page: "ai", anchor: "ai-keys", labelKey: "settings.ai.otherServices", topFor: ["api keys", "api key"], synonyms: ["keys", "key", "openai", "anthropic", "openrouter", "router", "elevenlabs"] },
   { id: "backup-model", page: "ai", anchor: "backup-model", labelKey: "settings.recovery.title", sectionKey: "settings.ai.backupModel", advanced: true, synonyms: ["backup model", "fallback", "recovery"] },
   { id: "routing", page: "ai", anchor: "routing", labelKey: "settings.ai.routing", advanced: true, synonyms: ["decision and extraction", "decision", "extraction", "routing", "who answers", "jev", "typesafe", "cloudflare", "workers ai"] },
   { id: "images", page: "ai", anchor: "images", labelKey: "settings.ai.images", advanced: true, synonyms: ["image generation", "images", "generate", "picture"] },
@@ -209,7 +207,6 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "members", page: "people", anchor: "members", labelKey: "settings.people.members", synonyms: ["invite", "roles", "admins"] },
   { id: "bot-access", page: "people", anchor: "bot-access", labelKey: "settings.section.botAccess", synonyms: ["who can", "share", "permissions"] },
   { id: "account", page: "account", labelKey: "settings.page.account", topFor: ["sign in", "log in", "log out", "sign out", "email"], synonyms: ["account", "mausbot cloud"] },
-  { id: "organization", page: "account", anchor: "organization", labelKey: "settings.section.organization", when: (ctx) => ctx.organization, synonyms: ["company", "organisation", "managed"] },
   { id: "emails", page: "account", anchor: "emails", labelKey: "settings.account.emails", when: desk, synonyms: ["newsletter", "product updates", "email updates"] },
   { id: "plan", page: "plan", anchor: "plan", labelKey: "settings.page.plan", topFor: ["billing", "subscription", "invoice", "receipt", "payment", "card", "upgrade", "plan", "trial", "cancel", "cancel plan", "cancel subscription", "cancel trial", "unsubscribe", "refund"], synonyms: ["usage & billing", "manage subscription"] },
   { id: "this-week", page: "plan", anchor: "this-week", labelKey: "settings.plan.thisWeek", sectionKey: "settings.page.plan", synonyms: ["usage", "weekly", "limits", "cloud desktop hours", "voice replies"] },

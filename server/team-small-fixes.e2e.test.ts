@@ -14,7 +14,6 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { TEAM_POLICY_ADMIN_PATH, teamPolicyFingerprint } from "./cloud-team-policy.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { startFakeHttpMcp, type FakeHttpMcp } from "./testing/fake-http-mcp-server.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
@@ -35,7 +34,7 @@ type Evidence = { step?: { tool?: string; arguments?: Record<string, unknown> };
 type Turn = { botId: string; turnIndex: number; threadId?: string; system: string; prompt: unknown; evidence: Evidence[] };
 
 const admin = { answer: { status: 200, body: { policy: null } as unknown }, reports: [] as Array<{ loaded: { fingerprint: string } | null }>, version: 0 };
-let adminServer: Server, gateway: FakeHttpMcp, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
+let adminServer: Server, gateway: FakeHttpMcp, fx: CloudSendFixture, team: CloudTeamFixture;
 let ada = "", mira = "";
 let support: Bot, sales: Bot;
 let mirasChat = "";
@@ -90,8 +89,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
   gateway = await startFakeHttpMcp({ tools: [{ name: "lookup_order", inputSchema: { type: "object", properties: {} } }], callResult: () => ({ content: [{ type: "text", text: "ok" }] }) });
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-team-${randomBytes(8).toString("hex")}`, broker, team: { id: "team-acme-3", name: "Acme", engine: ENGINE,
+  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-team-${randomBytes(8).toString("hex")}`, team: { id: "team-acme-3", name: "Acme", engine: ENGINE,
     env: { OMB_BOT_BOX: "0", OMB_TEST_WAIT_CLOCK: CLOCK, NODE_OPTIONS: `--import=${new URL("./testing/wait-clock-hooks.mjs", import.meta.url).href}`, FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } } });
   team = fx.team!;
   ada = (await team.pair(ADA)).token!;
@@ -113,7 +111,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await fx?.close();
   await gateway?.close();
-  await broker?.close();
   await new Promise((resolve) => adminServer?.close(resolve));
   rmSync(clockDir, { recursive: true, force: true });
 });

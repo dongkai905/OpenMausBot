@@ -92,7 +92,6 @@ export function CloudEngineSignIn() {
   let face: MausState = "curious";
   if (handing) face = "proud";
   else if (engines.checking) face = "searching";
-  const credit = state.instances.find((instance) => instance.trialCredit && instance.trialCredit !== "active")?.trialCredit;
 
   return (
     <main data-cloud-sign-in className="relative flex h-full min-w-0 flex-1 flex-col overflow-y-auto bg-app">
@@ -129,9 +128,6 @@ export function CloudEngineSignIn() {
         <h1 className={cn("animate-rise text-center text-[22px] font-semibold tracking-[-0.01em] text-ink", pending ? "mt-7" : "mt-5")} style={staggerIndex(1)}>
           {t(pending ? "cloudSignIn.titleForJob" : "cloudSignIn.title")}
         </h1>
-        {credit && <p role="status" data-trial-credit={credit} className="animate-rise mx-auto mt-2 max-w-[440px] text-center text-[14px] font-medium leading-relaxed text-ink" style={staggerIndex(2)}>
-          {t(credit === "used_up" ? "cloudSignIn.creditUsedUp" : "cloudSignIn.creditEnded")}
-        </p>}
         <p className="animate-rise mx-auto mt-2 max-w-[440px] text-center text-[14px] leading-relaxed text-ink-secondary" style={staggerIndex(2)}>
           {t(pending ? "cloudSignIn.introForJob" : "cloudSignIn.intro")}
         </p>

@@ -43,21 +43,18 @@ describe.skipIf(process.platform === "win32")("a member's own MCP server and the
       orders: { type: "http", url: gateway.url, headers: { Authorization: "Bearer team-orders", "CF-Access-Client-Id": CLIENT_ID, "CF-Access-Client-Secret": CLIENT_SECRET }, enabled: true },
     } } as unknown as AppConfig;
     const host = createTeamConnectionsHost({
-      team: { id: "team-acme-1", name: "Acme" }, dataDir: dir, cfg: () => cfg, adminOrigin: "https://cloud.example.test", harnessUrl: "http://127.0.0.1:1",
+      team: { id: "team-acme-1", name: "Acme" }, dataDir: dir, cfg: () => cfg, adminOrigin: "https://cloud.example.test",
       audienceOf: (threadId) => (threadId === "ada-chat" ? `member:${ADA}` : "team"),
       requester: (threadId) => (threadId === "ada-chat" ? ADA : null),
-      mint: (capability) => `tok-${capability.threadId}`,
       mcpOAuth: new McpOAuthManager({ file: join(dir, "mcp-oauth.json") }),
       botMcp: () => Object.fromEntries(Object.entries(cfg.mcpServers ?? {}).map(([name, raw]) => {
         const server = raw as { url: string; headers: Record<string, string> };
         return [name, { type: "http", url: server.url, headers: server.headers } as McpServerSpec];
       })),
       isOwnerLive: () => true,
-      brokerUrl: () => null,
-      composio: { configured: () => false, mcpIntegration: async () => null, connectedServices: async () => ({}), connectedServiceSlugs: async () => [], authorizeService: async () => { throw new Error("unused"); }, removeService: async () => {} } as never,
     });
     // Ada connects the wedding server with her own key; the gateway server stays the team's.
-    host.scopes.set("mcp", "mi-boda-hq", "person");
+    host.scopes.set("mi-boda-hq", "person");
     host.people.putKey(ADA, "ada@acme.test", "mi-boda-hq", { url: own.url, header: "Authorization", value: ADA_KEY });
 
     credentials = await openCredentialBroker({ socketPath: join(dir, "broker.sock") });

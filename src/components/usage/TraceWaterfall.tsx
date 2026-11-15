@@ -9,7 +9,7 @@ import {
 } from "@/lib/usage-trace";
 import { useStore, type InstanceInfo } from "@/state/store";
 import type { TraceDetail, TraceNode, TraceRootSummary, TraceTotals } from "../../../shared/usage-trace";
-import { appName, StepIcon, ToolIcon, TurnAvatar, useAppCards } from "./TraceIcon";
+import { appName, StepIcon, ToolIcon, TurnAvatar } from "./TraceIcon";
 
 export function modelName(model: string, instances: readonly InstanceInfo[]): string {
   for (const instance of instances) {
@@ -94,7 +94,6 @@ function tokenLine(node: TraceNode): string | null {
 
 function RowName({ row, models }: { row: TraceRow; models: readonly InstanceInfo[] }) {
   const { state } = useStore();
-  const catalog = useAppCards();
   const node = row.node;
   const failed = rowFailed(node);
   let icon: ReactNode;
@@ -112,13 +111,13 @@ function RowName({ row, models }: { row: TraceRow; models: readonly InstanceInfo
       detail = node.tokens ? t("trace.stepTokens", { tokens: formatTokens(node.tokens.output) }) : undefined;
       break;
     case "group":
-      icon = <ToolIcon icon={node.icon} app={node.app} catalog={catalog} error={failed} />;
-      name = groupLabel(node, appName(node.app, catalog));
+      icon = <ToolIcon icon={node.icon} app={node.app} error={failed} />;
+      name = groupLabel(node, appName(node.app));
       detail = node.errors ? t("trace.groupErrors", { count: String(node.errors) }) : undefined;
       break;
     default:
-      icon = <ToolIcon icon={node.icon} app={node.app} catalog={catalog} error={failed} />;
-      name = node.icon === "app" && node.app ? `${appName(node.app, catalog)} · ${toolLabel(node)}` : toolLabel(node);
+      icon = <ToolIcon icon={node.icon} app={node.app} error={failed} />;
+      name = node.icon === "app" && node.app ? `${appName(node.app)} · ${toolLabel(node)}` : toolLabel(node);
       detail = failed && node.error ? node.error : node.status === "ended" ? t("trace.endedWithTurn") : node.detail;
   }
   return (

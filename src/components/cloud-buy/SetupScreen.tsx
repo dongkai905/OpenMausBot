@@ -3,7 +3,7 @@ import type { CloudColor } from "../../../electron/cloud-buy.mjs";
 import type { CloudSetupStep } from "../../../electron/cloud-home.mjs";
 import { cn } from "@/lib/cn";
 import { CLOUD_COLOR_LABEL, CLOUD_COLORS, CLOUD_NAME_MAX, cloudColorFill } from "@/lib/cloud-look";
-import { cloudPlanLabel, usd, type CloudStarted } from "@/lib/cloud-plan";
+import { cloudPlanLabel, type CloudStarted } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { ACTIONS, Badge, Checklist, CloudTile, FIELD, Heading, PRIMARY, ProgressBar, QUIET, SCREEN } from "./parts";
@@ -11,11 +11,11 @@ import { ACTIONS, Badge, Checklist, CloudTile, FIELD, Heading, PRIMARY, Progress
 const STEPS = [["reserving", "cloudHome.step.reserving"], ["storage", "cloudHome.step.storage"], ["starting", "cloudBuy.step.starting"], ["checking", "cloudHome.step.checking"]] as const satisfies
   ReadonlyArray<readonly [CloudSetupStep, LocaleKey]>;
 
-export function startedBadge({ tier, trial, credit }: CloudStarted, received: boolean): string {
+export function startedBadge({ tier, trial }: CloudStarted, received: boolean): string {
   if (received) return t("cloudAdd.receivedTitle");
   const plan = cloudPlanLabel(tier ?? trial?.tier ?? undefined);
   if (!trial) return t("cloudBuy.setup.badgePaid", { plan });
-  return credit ? t("cloudBuy.setup.badgeCredit", { plan, credit: usd(credit.grantedUsd) }) : t("cloudBuy.setup.badgeTrial", { plan });
+  return t("cloudBuy.setup.badgeTrial", { plan });
 }
 
 export function SetupScreen({ started, received, step, slow, ready, sleeps = false, name, typed, color, counting, busy, openFailed, onName, onColor, onOpen, onNotNow }: {

@@ -161,13 +161,12 @@ describe("the move's row in the account menu", () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
-  it("done: what arrived and what was held, the phone to pair, and Got it", () => {
+  it("done: what arrived, the phone to pair, and Got it", () => {
     const onPairPhone = vi.fn(), onClose = vi.fn();
-    const done = line({ phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true, held: ["OPENAI_API_KEY"] }, "cloud");
+    const done = line({ phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true }, "cloud");
     const items = rows(done, { onPairPhone, onClose });
     expect(items.map((item) => item.key)).toEqual(["cloud-move", "cloud-move-phone", "cloud-move-close"]);
     expect(items[0]!.label).toBe("Everything from this computer is here: 4 bots, 2 skills, 2 logins, 1Password, 148 chats, and 2 routines.");
-    expect(items[0]!.note).toContain("OPENAI_API_KEY");
     expect(items[1]!.label).toBe("Pair your phone with My Cloud");
     expect(items[2]!.label).toBe("Got it");
     items[1]!.onSelect();
@@ -243,7 +242,7 @@ describe("useAccountMove", () => {
   });
 
   it("My Cloud's page says once what arrived, with the phone to pair, until Got it", async () => {
-    const done = await shown({ ...notice, move: { phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true, held: [] } }, true);
+    const done = await shown({ ...notice, move: { phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true } }, true);
     expect(done.kind).toBe("done");
     expect(lineHook(true)).toEqual({ kind: "done", retry: null });
     done.items.find((item) => item.key === "cloud-move-phone")!.onSelect();
@@ -253,7 +252,7 @@ describe("useAccountMove", () => {
     expect(hook(true)).toEqual({ kind: null, items: [] });
     // This computer's own page never says what arrived on My Cloud.
     f.values = [];
-    expect((await shown({ ...notice, move: { phase: "done", phone: false, held: [] } })).kind).toBeNull();
+    expect((await shown({ ...notice, move: { phase: "done", phone: false } })).kind).toBeNull();
   });
 
   it("the move's row opens My Cloud's settings when it does not retry", async () => {

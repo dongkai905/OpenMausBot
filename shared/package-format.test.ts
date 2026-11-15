@@ -98,13 +98,13 @@ describe("package v2 reader", () => {
     input.package.somethingNew = true;
     Object.assign(input.package.agents[0], {
       modelSelection: { instanceId: "private", model: "x" }, visibility: "admins", approvalMode: "full",
-      alwaysAllow: ["Bash"], composio: true, connectorTools: { gmail: { tools: "*" } }, computer: "local", cwd: "/private",
+      alwaysAllow: ["Bash"], connectorScopes: { apps: { gmail: "write" } }, connectorTools: { gmail: { tools: "*" } }, computer: "local", cwd: "/private",
     });
     input.package.connections[0].mcp.headers = { Authorization: "Bearer value-that-must-not-travel" };
     const parsed = parsePackageDocument(input);
     const text = JSON.stringify(parsed);
     expect(parsed.package).not.toHaveProperty("somethingNew");
-    for (const field of ["modelSelection", "visibility", "approvalMode", "alwaysAllow", "composio", "connectorTools", "computer", "cwd", "headers"]) {
+    for (const field of ["modelSelection", "visibility", "approvalMode", "alwaysAllow", "connectorScopes", "connectorTools", "computer", "cwd", "headers"]) {
       expect(text).not.toContain(`"${field}"`);
     }
     expect(text).not.toContain("value-that-must-not-travel");

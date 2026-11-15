@@ -1,6 +1,5 @@
 // Wire shapes of the usage trace view, shared by the server's builder and the renderer.
 import { TOOL_NAMESPACE, toolSurfaceKind } from "./tool-surface.ts";
-import { isConnectedAppsServer, OWN_APPS_SERVER } from "./own-apps.ts";
 
 /** Who or what started a root. */
 export type TraceSource = "person" | "owner" | "routine" | "bot" | "helper";
@@ -150,8 +149,8 @@ export function traceRootId(threadId: string, turnId: string): string {
 }
 
 const SERVER_ICONS: Readonly<Record<string, TraceToolIcon>> = { phone: "phone", data: "data", dweb: "web", browser: "browser", computer: "computer" };
-const OWN_SERVERS = new Set(["agents", "ogb", "composio", OWN_APPS_SERVER, ...Object.keys(SERVER_ICONS)]);
-const COMPOSIO_ACTION = /^([A-Z][A-Z0-9]+)_[A-Z0-9_]+$/;
+const OWN_SERVERS = new Set(["agents", "ogb", ...Object.keys(SERVER_ICONS)]);
+const APP_ACTION = /^([A-Z][A-Z0-9]+)_[A-Z0-9_]+$/;
 const BUILT_IN_ICONS: ReadonlyArray<[RegExp, TraceToolIcon]> = [
   [/^(?:websearch|web_search|search_web|google_search|x_search|research)$/, "search"],
   [/^(?:webfetch|web_fetch|fetch|open_url|read_url|fetch_url)$/, "web"],
@@ -172,9 +171,8 @@ const BUILT_IN_ICONS: ReadonlyArray<[RegExp, TraceToolIcon]> = [
 export function traceToolLook(name: string): { icon: TraceToolIcon; app?: string; server?: string } {
   const server = /^mcp__(.+?)__/.exec(name)?.[1];
   const bare = name.replace(TOOL_NAMESPACE, "");
-  const composio = COMPOSIO_ACTION.exec(bare);
-  if (composio && composio[1] !== "COMPOSIO") return { icon: "app", app: composio[1]!.toLowerCase() };
-  if ((server && isConnectedAppsServer(server)) || composio) return { icon: "app" };
+  const app = APP_ACTION.exec(bare);
+  if (app) return { icon: "app", app: app[1]!.toLowerCase() };
   const surface = toolSurfaceKind(name);
   if (surface) return { icon: surface };
   const lower = bare.toLowerCase();

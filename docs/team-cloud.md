@@ -75,8 +75,8 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   (below), never off the team.
 - **Rules.** A team's Owner and Admins choose the AI engines and computers its bots may use, whether bots may add MCP servers
   of their own, and whether it opens on a phone or with a link (below, "Rules"). What they restrict shows as *Managed by Acme*.
-- **Connected apps.** The team's connections (Composio, MCP sign-ins, an AI key an Admin saved) belong to the
-  Team Cloud and serve every member's turn through the broker. An Admin can instead make an app or an MCP server *each
+- **Connected apps.** The team's connections (MCP sign-ins, an AI key an Admin saved) belong to the
+  Team Cloud and serve every member's turn. An Admin can instead make an MCP server *each
   person's own* (below): then every member connects their own, and only their own chats use it. A person's
   connections from elsewhere have no way in: a share code, a moved MCP sign-in or a mailbox is refused with
   *"Personal connections never enter Acme. Ask an admin to connect it for Acme."* A login from a sign-in card is saved by
@@ -172,7 +172,7 @@ only restricts. `server/cloud-team-policy.ts` fetches it at boot, every 5 minute
 /api/cloud/team/policy-changed` nudges it, signed with the bootstrap secret (`POST /api/cloud/machines/team-policy`), and each
 request reports the fingerprint in force here. A change applies without a restart. A turn already running keeps its engine
 process and the servers it mounted when it began, and finishes with them. What it reaches for through this
-machine is refused from that moment, mid-turn too: a connected-apps tool (the turn carries on without it) and the first claim on
+machine is refused from that moment, mid-turn too: the first claim on
 a computer (the turn stops there, in the rule's words; a computer it already holds stays with it until it ends). Every turn that
 starts after the change, a hand-off's included, gets the new rules, even in a chat whose engine process is still warm: that
 process restarts without what is now blocked.
@@ -184,8 +184,7 @@ process restarts without what is now blocked.
   `bindTurnComputer`, and a lent computer's request is refused too (nobody's Mac serves a team anyway). A turn's MCP servers
   all come through `mcpServersHost.mounted`, which drops what isn't allowed, whoever connected it; adding or signing in to one is
   refused. `allowedMcpServers: "team"` is the plain form: admins add servers as ever, a bot can't add one, a bot's own doesn't
-  start and an engine's own user settings aren't read. Every connected-apps tool crosses `POST /api/internal/connectors/mcp`, which refuses a tool of an app that isn't
-  allowed, and code that could reach any app; connecting one is refused.
+  start and an engine's own user settings aren't read.
 - **Remote access** on a Team Cloud is what a member's own code opens: "Open on your phone" is refused, codes already made stop
   working and phones already open sign out. The Admin-signed pairing stays: it is how every member's app and the Admin reach
   this machine, so a rule never locks the team out.
@@ -252,8 +251,7 @@ this server shares with every bot. It exists only on a Team Cloud.
     An app whose accounts all say they are not active shows that, whatever the last call did.
   - **The background check.** A team server nothing used or checked for a day is tested once, as Test does it, at most
     one about every hour (jittered, the first a quarter hour after start). It never runs while the machine has agreed
-    to sleep, starts no request to it, and a check the machine slept through is dropped. Apps aren't checked in the
-    background: the read itself asks the connected-apps service for each account's status.
+    to sleep, starts no request to it, and a check the machine slept through is dropped.
   - **Each person's own.** A connection each person connects has no `health` or `lastUsedAt` of its own; instead
     `people.states` is `{ apps: { <slug>: { <address>: state } }, mcp: { <name>: { <address>: state } } }`, with
     `state` `connected` | `needs-sign-in` | `not-connected`, for every member the Admin paired here and only for those
@@ -279,7 +277,7 @@ this server shares with every bot. It exists only on a Team Cloud.
 
 ## Connections: the team's or each person's
 
-Every app (a Composio toolkit) and MCP server has a scope. `team`, the default and what every connection made before this
+Every MCP server has a scope. `team`, the default and what every connection made before this
 is, is one connection an Admin makes and every turn uses. `person` is one connection per member, made by that member on
 their team page in MausBot Cloud (the Admin's Cloud page calls the routes below as them).
 
@@ -296,40 +294,24 @@ their team page in MausBot Cloud (the Admin's Cloud page calls the routes below 
   other member and no admin sees it), where their own connections work. What that chat hands back to the place they
   asked in is only where the result is ("Done. The result is in Clerk's chat with Ada."), never the result: a private chat
   never reaches a room or the team (server/host/room-access.ts).
-- **Apps.** A member's own apps are their own installation on the connected-apps service (their own Composio user),
-  registered the first time they press Connect. While the team has its own Composio project key they are instead the
-  member's own Composio user in the team's project, and nothing of theirs goes to the service
-  ([composio.md](composio.md), "Keeping traffic off the managed service"); who gets them is the same. Their turn gets a second bridge, `own_apps`, beside the team's
-  `composio`; the relay checks every frame again: the team's bridge refuses a `person` app (and code that calls apps
-  while the team's own installation still holds one), a member's bridge refuses a team app and anything outside their
-  own turn. A connection card for a `person` app is never shown: the bot gets one plain line to say, *"Connect your
-  Gmail here: <their page>"* (a User's team home; the Owner's and an Admin's own connections are on the team's Apps
-  page); in work that acts for nobody, that the person can ask themselves, or an admin can connect it for the whole
-  team on the team's Apps page. A card for a team app asked through a member's own bridge is never shown either: for
-  the Owner or an Admin, the bot asks for it through the team's `composio` bridge, whose card connects it for everyone;
-  a User is told who can connect it, by name (the team's Owner and Admins), never to "ask an admin" with no name. Either
-  way the bot doesn't try it another way (the browser or another tool).
 - **MCP servers.** Only a server reached by its address can be `person`. A `person` server's team credential is never
   attached to any turn; a turn that acts for a member gets the server with their own key (in the header the Admin's key
   used, else `Authorization: Bearer`) or their own sign-in; one not mounted is named to the bot with why and the fix. Both are pinned to the server's address: re-pointed, they aren't sent.
   Removing the server forgets every member's key and sign-in for it.
 - **Storage.** `team-connection-scopes.json` (no secret, carried by backups) and `people-connections/` (0700; each
-  member's installation token, keys and sign-ins, 0600; with the team's own key, `project-apps.json`: each member's
-  Composio user and Session ids and a short hash of the key, never the key), which no backup carries and no bot box binds. Nothing a route
+  member's keys and sign-ins, 0600), which no backup carries and no bot box binds. Nothing a route
   answers carries a key, a token or more of an address than its host.
 
 | Route | Who | |
 |---|---|---|
-| `PUT /api/team/connection-scopes { kind: "app" \| "mcp", id, scope: "team" \| "person" }` | admin | `{ scopes: { apps, mcp } }`; recorded in admin activity |
-| `GET /api/team/my-connections` | the member | `{ team, link, email, apps: [{ slug, name, connected, accounts, reconnect? }], mcp: [{ name, host, connected, how, offers }], ownApps? }`; `reconnect: true` on an app they connected before the team changed its Composio key, to connect again; `ownApps: "needs-key"` when the connected-apps service is off and the team has no key |
-| `POST /api/team/my-connections/apps/:slug/connect` | the member | `{ url }`, the app's own sign-in (a new tab); 409 `own_apps_need_key` when an admin must add the team's key first |
-| `DELETE /api/team/my-connections/apps/:slug` | the member | |
+| `PUT /api/team/connection-scopes { kind: "mcp", id, scope: "team" \| "person" }` | admin | `{ scopes: { mcp } }`; recorded in admin activity |
+| `GET /api/team/my-connections` | the member | `{ team, link, email, mcp: [{ name, host, connected, how, offers }] }` |
 | `POST /api/team/my-connections/mcp/:name/sign-in` | the member | `{ auth }`; it comes back to this server's `/mcp-oauth/callback` |
 | `PUT /api/team/my-connections/mcp/:name/key { value, url? }` | the member | write-only; with `url`, returns 409 if the server URL changed |
 | `DELETE /api/team/my-connections/mcp/:name` | the member | |
 
-The signed read (`GET /api/cloud/team/admin`) adds `scopes: { apps, mcp }` and `people: { apps: { <slug>: [address] },
-mcp: { <name>: [address] } }`: who has connected each, never with what.
+The signed read (`GET /api/cloud/team/admin`) adds `scopes: { mcp }` and `people: { mcp: { <name>: [address] } }`: who has
+connected each, never with what.
 
 ## The pairing claim (contract v1)
 
@@ -1031,12 +1013,8 @@ opens the team's page on the Cloud site (`/cloud/team/<id>`), not a chat. Nothin
   (the team's), whichever chat wrote them; a routine is its place's (above, "Routines"). The Owner's whole-machine
   export leaves every member's private chats out (above), the Owner's own too: an export is the team's, never anyone's
   alone.
-- **Own apps after the team changes its Composio key.** Saving, removing or replacing the team's key leaves every
-  member's own apps to be connected again. What they connected before stays where it was made (the connected-apps
-  service, or the earlier project) and is not erased from here.
-- **A member who leaves a team on the connected-apps service.** Their installation's token is forgotten here, but the
-  installation and its connections are not erased at the service. With the team's own key their connections are
-  removed from the project.
+- **A member who leaves a team.** Their own keys and sign-ins are forgotten here, so nothing they gave the team is
+  left behind.
 
 ## The desktop app and a team it was invited to
 

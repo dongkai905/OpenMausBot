@@ -140,16 +140,15 @@ describe("turn starts", () => {
     expect(m.speed.report().turnStarts).toEqual(buckets({ 0: 1, 1: 1, 3: 1, 5: 1 }));
   });
 
-  it("leaves out a message sent while its thread runs a turn, a bot's, a peer's, a routine's and a steer, and counts the thread again once it is idle", () => {
+  it("leaves out a message sent while its thread runs a turn, a bot's, a peer's and a steer, and counts the thread again once it is idle", () => {
     const m = machine({});
     m.speed.noteEvent(started("a"));
     m.speed.noteMessage("a", { ...person, at: m.now() });
     m.speed.noteMessage("b", { role: "bot", kind: "text", at: m.now() });
     m.speed.noteMessage("c", { ...person, at: m.now(), from: { botId: "peer" } as never });
     m.speed.noteMessage("d", { ...person, at: m.now(), steered: true });
-    m.speed.noteMessage("e", { ...person, at: m.now(), automation: {} as never });
     m.pass(30_000);
-    for (const thread of ["b", "c", "d", "e"]) m.speed.noteEvent(started(thread));
+    for (const thread of ["b", "c", "d"]) m.speed.noteEvent(started(thread));
     m.speed.noteEvent(completed("a"));
     m.speed.noteEvent(started("a"));
     expect(m.speed.report().turnStarts).toEqual(buckets({}));

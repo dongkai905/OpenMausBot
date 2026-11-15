@@ -50,7 +50,6 @@ const ENTRY_POINTS = [
   "container-mcp.ts",
   "vps-container-mcp.ts",
   "permission-proxy.ts",
-  "connector-proxy.ts",
   "mcp-gate.ts",
   "mcp-remote-proxy.ts",
   "harness-mcp-proxy.ts",
@@ -63,7 +62,6 @@ const ENTRY_POINTS = [
   "bot-box/box-probe.ts",
   "bot-box/box-check.ts",
   // the meeting bot, copied to a cloud computer and run there with its own Node
-  "meetings/meetbot.ts",
 ];
 
 await build({

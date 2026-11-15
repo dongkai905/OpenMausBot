@@ -119,14 +119,6 @@ export function parseCloudTrial(input) {
     ...(switchTo ? { switchTo } : {}) };
 }
 
-const dollars = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 10_000;
-/** In US dollars; spent and metered only by the Admin. */
-export function parseCloudCredit(input) {
-  if (!record(input) || !["active", "used_up"].includes(input.state) || !dollars(input.grantedUsd) || input.grantedUsd <= 0 ||
-    !dollars(input.remainingUsd) || input.remainingUsd > input.grantedUsd) return null;
-  return { grantedUsd: input.grantedUsd, remainingUsd: input.remainingUsd, state: input.state };
-}
-
 export const CLOUD_USAGE_KINDS = Object.freeze(["computerHours", "voice", "decisions", "x", "research", "storage"]);
 const amount = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1e12;
 /** Display only, never an entitlement. */
@@ -189,13 +181,12 @@ function offerPlans(input, allDays) {
   if (allDays && !plans.some(plan => plan.trialDays)) return plans.map(plan => ({ ...plan, trialDays: allDays }));
   return plans;
 }
-function offerOf(plans, { recommended, creditUsd, reminderDays, refundDays }) {
+function offerOf(plans, { recommended, reminderDays, refundDays }) {
   if (!plans.length) return null;
   const trial = plans.some(plan => plan.trialDays);
   const preselected = plans.find(plan => plan.tier === recommended) ?? plans.find(plan => plan.tier === "pro") ?? plans[0];
-  const credit = trial && typeof creditUsd === "number" && Number.isFinite(creditUsd) && creditUsd > 0 && creditUsd <= 100 ? creditUsd : null;
   const reminder = trial ? days(reminderDays, 30) : null, refund = days(refundDays, 90);
-  return { plans, recommended: preselected.tier, ...(credit ? { creditUsd: credit } : {}), ...(reminder ? { reminderDays: reminder } : {}), ...(refund ? { refundDays: refund } : {}) };
+  return { plans, recommended: preselected.tier, ...(reminder ? { reminderDays: reminder } : {}), ...(refund ? { refundDays: refund } : {}) };
 }
 
 export function parseCloudOffer(input) {
@@ -210,12 +201,12 @@ export function parseCloudOffer(input) {
 export function parsePublicOffer(config) {
   if (!record(config)) return null;
   const trial = record(config.trial) ? config.trial : {};
-  return offerOf(offerPlans(config.plans, days(trial.days, 30)), { creditUsd: trial.creditUsd, reminderDays: trial.reminderDays, refundDays: config.refundDays });
+  return offerOf(offerPlans(config.plans, days(trial.days, 30)), { reminderDays: trial.reminderDays, refundDays: config.refundDays });
 }
 
 export function withoutTrial(offer) {
   if (!offer) return null;
-  const { creditUsd: _credit, reminderDays: _reminder, checkout: _checkout, ...rest } = offer;
+  const { reminderDays: _reminder, checkout: _checkout, ...rest } = offer;
   return { ...rest, plans: offer.plans.map(({ trialDays: _days, ...plan }) => plan) };
 }
 

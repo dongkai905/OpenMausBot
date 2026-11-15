@@ -1,13 +1,9 @@
 import { t } from "@/lib/i18n";
-import { POSTIZ_SERVER } from "../../shared/postiz";
 
 export const POSTIZ_API = "/api/postiz";
 
 /** What the Apps search box matches for the Postiz card. */
 export const POSTIZ_SEARCH = "postiz social media posts schedule linkedin instagram facebook tiktok threads bluesky";
-
-/** Where the card sits among the catalog's categories. */
-export const POSTIZ_CATALOG_CARD = { slug: POSTIZ_SERVER, categories: ["Social"] };
 
 export function postizHost(address: string): string {
   try { return new URL(address.trim()).host; } catch { return address.trim(); }

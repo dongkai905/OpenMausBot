@@ -104,7 +104,7 @@ describe("CI concurrency", () => {
       expect(shards.map((entry) => entry.shard)).toEqual(Array.from({ length: shards[0]!.shards }, (_, i) => i + 1));
       expect(new Set(shards.map((entry) => entry.e2e))).toEqual(new Set([os === "ubuntu-latest" ? "all" : "host"]));
     }
-    const units = (workflow.jobs.vitest.steps as { name?: string; if?: string; "timeout-minutes"?: number }[]).find((step) => step.name === "Broker and Electron unit tests")!;
+    const units = (workflow.jobs.vitest.steps as { name?: string; if?: string; "timeout-minutes"?: number }[]).find((step) => step.name === "Electron unit tests")!;
     expect(units["timeout-minutes"]).toBe(5);
     // Once per platform's full run, and beside the locale tests, never once per shard.
     expect(units.if).toBe("matrix.node_tests");
@@ -273,33 +273,11 @@ describe("CI concurrency", () => {
     )).toBe(true);
     for (const [name, job] of Object.entries(workflow.jobs) as [string, { needs?: string | string[]; if?: string }][]) {
       if (["static", "gate"].includes(name)) continue;
-      // The one deploy job: after the control-plane checks, on main pushes only. It is
-      // not part of the merge gate.
-      if (name === "deploy-composio-broker") {
-        expect(job.needs).toEqual(["control-plane"]);
-        expect(job.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
-        expect(workflow.jobs.gate.needs).not.toContain(name);
-        // Without the Cloudflare token the deploy is skipped with a warning, not failed:
-        // every step after the token check waits on it.
-        const [check, ...rest] = job.steps as { id?: string; if?: string; env?: Record<string, string>; run?: string }[];
-        expect(check.id).toBe("token");
-        expect(check.env).toEqual({ CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}" });
-        expect(check.run).toContain("::warning");
-        for (const step of rest) expect(step.if).toBe("steps.token.outputs.present == 'true'");
-        // The broker is typechecked and tested in the same checkout it deploys.
-        const runs = rest.map((step) => step.run);
-        const deploy = rest.findIndex((step) => (step as { uses?: string }).uses?.startsWith("cloudflare/wrangler-action@"));
-        expect(runs.indexOf("pnpm broker:check")).toBeGreaterThan(-1);
-        expect(runs.indexOf("pnpm broker:check")).toBeLessThan(deploy);
-        expect(runs.indexOf("pnpm broker:test")).toBeGreaterThan(-1);
-        expect(runs.indexOf("pnpm broker:test")).toBeLessThan(deploy);
-        continue;
-      }
       expect(job.needs).toBe("static");
       expect(job.if).toBe(`contains(needs.static.outputs.jobs, '"${name}"')`);
     }
     // ci-scope selects exactly the jobs the workflow has.
-    expect(Object.keys(workflow.jobs).filter((name) => !["static", "gate", "deploy-composio-broker"].includes(name)).sort())
+    expect(Object.keys(workflow.jobs).filter((name) => !["static", "gate"].includes(name)).sort())
       .toEqual([...SELECTABLE_JOBS].sort());
   });
 
@@ -391,7 +369,7 @@ describe("CI on Boat", () => {
     for (const entry of vitestMatrix(["ubuntu-latest"]).include.slice(0, 2)) {
       const context = { matrix: entry, runner: { temp: "/t" } };
       const tests = steps("vitest").find((step) => step.name === "Run tests")!;
-      const units = steps("vitest").find((step) => step.name === "Broker and Electron unit tests")!;
+      const units = steps("vitest").find((step) => step.name === "Electron unit tests")!;
       const lane = vitestLane(entry, "/t/vitest-retries.jsonl");
       expect(lane.commands).toEqual([interpolate(tests.run!, context), ...(entry.node_tests ? [units.run] : [])]);
       expect(lane.env).toEqual(Object.fromEntries(Object.entries(tests.env!).map(([key, value]) => [key, interpolate(value, context)])));

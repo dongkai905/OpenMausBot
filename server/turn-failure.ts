@@ -21,7 +21,6 @@ export interface FailureFacts {
   stopReason?: string | null;
   setup?: boolean;
   stalled?: boolean;
-  trialCredit?: string;
   limitResetsAt?: number;
   /** A usage limit refused it (the runtime error's `limit`). */
   limit?: "engine" | "model" | "credits";
@@ -57,7 +56,7 @@ export function classifyFailure(failure: string, facts: FailureFacts = {}): Fail
   if (facts.stalled) return { kind: "retry", cause: "stalled" };
   const engine = engineFailureKind(failure);
   const { reason, transient } = classifyError({ text: failure });
-  if (facts.trialCredit || (engine === "credits" && !facts.limit)) return { kind: "owner", cause: "credits" };
+  if (engine === "credits" && !facts.limit) return { kind: "owner", cause: "credits" };
   if (facts.limit || facts.limitResetsAt || facts.stopReason === "quota" || engine === "usage_limit") {
     return { kind: "owner", cause: "usage_limit", ...(facts.limitResetsAt ? { resetsAt: facts.limitResetsAt } : {}) };
   }
@@ -84,6 +83,6 @@ export function retriesTeammateThread(failure: string, facts: FailureFacts = {})
   return classifyFailure(failure, facts).kind === "retry";
 }
 
-export function engineFacts({ setup, stalled, trialCredit, limitResetsAt, limit, partial, text }: RuntimeEvent & { type: "runtime.error" }): FailureFacts {
-  return { setup, stalled, trialCredit, limitResetsAt, limit, partial, text };
+export function engineFacts({ setup, stalled, limitResetsAt, limit, partial, text }: RuntimeEvent & { type: "runtime.error" }): FailureFacts {
+  return { setup, stalled, limitResetsAt, limit, partial, text };
 }

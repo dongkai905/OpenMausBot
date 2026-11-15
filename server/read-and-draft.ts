@@ -5,10 +5,10 @@ import { recordsText } from "./records-block.ts";
 
 /** The system prompt a read-and-draft run keeps: who the person is, where its files are, its connected apps and what a
  * run of its own is. No memory, recent work, team notes, skills or tool guides: less to leak, and a smaller turn. */
-export const READ_AND_DRAFT_PARTS: ReadonlySet<string> = new Set(["user-profile", "files", "composio", "routine-execution", "automation-reply", "webhook"]);
+export const READ_AND_DRAFT_PARTS: ReadonlySet<string> = new Set(["user-profile", "files", "routine-execution", "automation-reply", "webhook"]);
 /** The integrations a read-and-draft run keeps: OpenMausBot's own tools (fenced by route), the connected apps (fenced
  * by call) and the engine's hooks. */
-export const READ_AND_DRAFT_TOOLS: ReadonlySet<string> = new Set(["agents", "composio", "hooks"]);
+export const READ_AND_DRAFT_TOOLS: ReadonlySet<string> = new Set(["agents", "hooks"]);
 
 export const READ_AND_DRAFT_REFUSAL = "This work reads and drafts only: OpenMausBot refused this. Do not try another way.";
 

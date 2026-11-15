@@ -18,8 +18,8 @@ const days = Number(process.argv[3] ?? 30);
 const now = Date.now();
 const start = now - days * 86_400_000;
 const pad = (n: number) => "x".repeat(n);
-const tools = ["Bash", "Read", "Edit", "WebSearch", "mcp__composio__GMAIL_FETCH_EMAILS", "mcp__composio__GMAIL_SEND_EMAIL",
-  "mcp__composio__GMAIL_CREATE_EMAIL_DRAFT", "mcp__composio__SLACK_SEND_MESSAGE", "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", "mcp__composio__NOTION_CREATE_PAGE"];
+const tools = ["Bash", "Read", "Edit", "WebSearch", "EMAIL_LIST_MESSAGES", "EMAIL_SEND_MESSAGE",
+  "EMAIL_SEARCH_MESSAGES", "mcp__phone__PHONE_SEND_MESSAGE", "mcp__multi__MULTI_EXECUTE_TOOL", "mcp__docs__DOCS_CREATE_PAGE"];
 const bots = Array.from({ length: 12 }, (_, i) => ({ id: `bot-${i}`, threadId: `main-${i}`, tasks: [] as Array<{ threadId: string }>, modelSelection: { instanceId: i % 2 ? "codex" : "claude" } }));
 const threads = new Map<string, Array<Record<string, unknown>>>();
 let seeded = 0;
@@ -34,7 +34,7 @@ for (let turn = 0; seeded < total; turn++) {
   for (let j = 0; j < calls; j++) {
     const name = tools[(turn + j) % tools.length]!;
     const ok = (turn + j) % 17 !== 0;
-    const input = name.includes("MULTI") ? JSON.stringify({ tools: [{ tool_slug: "GMAIL_FETCH_EMAILS", arguments: { q: pad(200) } }, { tool_slug: "SLACK_SEND_MESSAGE", arguments: { text: pad(300) } }] }, null, 2)
+    const input = name.includes("MULTI") ? JSON.stringify({ tools: [{ tool_slug: "EMAIL_SEARCH_MESSAGES", arguments: { text: pad(200) } }, { tool_slug: "EMAIL_SEND_MESSAGE", arguments: { text: pad(300) } }] }, null, 2)
       : JSON.stringify({ command: pad(600) });
     rows.push({ id: `a-${turn}-${j}`, role: "bot", kind: "activity", at: at + 1_000 * (j + 1), turnId, tool: { name, ok, input, output: ok ? pad(1_800) : `Error: 401 Unauthorized ${pad(200)}`, itemId: `i-${turn}-${j}` } });
   }

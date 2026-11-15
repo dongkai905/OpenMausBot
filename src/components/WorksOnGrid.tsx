@@ -27,8 +27,8 @@ export function worksOnSelected(mode: WorksOnMode, computer: Bot["computer"], ca
   return mode === null ? !computer || (computer === "local" && pageOnRemoteServer(capabilities)) : computer === mode;
 }
 
-export function placeManagedBy(mode: WorksOnMode, cloudBackend: Bot["cloudBackend"], policy: ConfigStatus["managedPolicy"]): string | undefined {
-  const kind = mode === "local" ? "thisComputer" : mode === "vm" ? "localVm" : mode === "cloud" ? (cloudBackend === "vps" ? "vps" : "box") : null;
+export function placeManagedBy(mode: WorksOnMode, policy: ConfigStatus["managedPolicy"]): string | undefined {
+  const kind = mode === "local" ? "thisComputer" : mode === "vm" ? "localVm" : mode === "cloud" ? "vps" : null;
   return policy && kind && !policy.computers[kind] ? t("policy.managedBy", { organization: policy.organizationName }) : undefined;
 }
 

@@ -41,7 +41,7 @@ const CLOUD = { name: "Studio Cloud", origin: "https://omb-u-1a2b3c4d5e6f.fly.de
 const quiet: CloudSendNotice = { ready: true, bots: [], updatedBots: [], skills: 0, logins: 0, onePassword: false, settings: 0, signature: "", dismissed: false, running: false, last: null, whole: null };
 const claude = { instanceId: "claude", driverKind: "customAcp", displayName: "Claude", access: "subscription", authentication: { method: "paste-code" }, snapshot: { state: "available", authenticated: false }, models: { default: "", options: [] } };
 const second = { ...claude, instanceId: "agent-two", driverKind: "customAcp", displayName: "Codex" };
-const credit = { instanceId: "trial", driverKind: "customAcp", displayName: "Trial credit · Claude", readOnly: true, trialCredit: "active", snapshot: { state: "available" }, models: { default: "", options: [] } };
+
 
 let host: HTMLDivElement;
 let root: Root;
@@ -244,14 +244,14 @@ describe("CloudWelcome", () => {
     expect([...host.querySelectorAll("button")].some((node) => node.textContent?.startsWith("Copy to"))).toBe(false);
   });
 
-  it("resumes where it was left, and with the trial's credit goes straight past the AI step", async () => {
+  it("resumes where it was left, and waits for an AI before the files", async () => {
     fixture.state.config.onboarding = { ...EMPTY_ONBOARDING, hintsSeen: [welcomeStepHint("bring")] };
-    fixture.state.instances = [claude, second, credit];
-    fixture.plan = { status: "paid", credit: { grantedUsd: 5, remainingUsd: 5, state: "active" } };
+    fixture.state.instances = [claude, second];
+    fixture.plan = { status: "paid" };
     render();
-    await vi.waitFor(() => expect(host.querySelector('[data-welcome-step="files"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[data-welcome-step="engine"]')).not.toBeNull());
     expect(host.querySelector('[data-welcome-rail="bring"]')!.hasAttribute("data-finished")).toBe(true);
-    expect(hintsPut().at(-1)).toEqual(expect.arrayContaining([welcomeStepHint("bring"), SHOWN, welcomeStepHint("engine")]));
+    expect(hintsPut().at(-1)).toEqual(expect.arrayContaining([welcomeStepHint("bring"), SHOWN]));
     expect(host.querySelector("[data-cloud-choice]")).toBeNull();
   });
 

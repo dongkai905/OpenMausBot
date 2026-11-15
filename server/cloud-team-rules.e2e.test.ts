@@ -11,7 +11,6 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { TEAM_POLICY_ADMIN_PATH, TEAM_POLICY_FILE, teamPolicyFingerprint } from "./cloud-team-policy.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { startFakeHttpMcp, type FakeHttpMcp } from "./testing/fake-http-mcp-server.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
@@ -26,7 +25,7 @@ const admin = {
   signed: [] as boolean[],
   version: 0,
 };
-let adminServer: Server, gateway: FakeHttpMcp, relay: Server, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
+let adminServer: Server, gateway: FakeHttpMcp, relay: Server, fx: CloudSendFixture, team: CloudTeamFixture;
 let owner = "", ada = "";
 let botId = "", peerId = "";
 
@@ -98,9 +97,8 @@ beforeAll(async () => {
   relay = createServer((_req, res) => { res.writeHead(404, { "content-type": "application/json" }); res.end("{}"); });
   await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
   gateway = await startFakeHttpMcp({ tools: [{ name: "lookup_order", inputSchema: { type: "object", properties: {} } }], callResult: () => ({ content: [{ type: "text", text: "ok" }] }) });
-  broker = await startBrokerFake();
   const relayBase = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`;
-  fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-rules", broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
+  fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-rules", team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
     OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
     OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, OMB_CLOUD_BOAT_TOKEN: "box_omb_rules",
   } } });
@@ -118,7 +116,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await fx?.close();
   await gateway?.close();
-  await broker?.close();
   await new Promise((resolve) => adminServer?.close(resolve));
   await new Promise((resolve) => relay?.close(resolve));
 });
@@ -216,24 +213,6 @@ it("only the team's own servers: an admin still adds one, a bot can't, and a tur
   expect([byBot.status, (await byBot.json() as { error?: string }).error]).toEqual([403, "Acme uses only the MCP servers its admins add. Ask a team admin."]);
   await rules(null);
 }, hostTimeout(90_000));
-
-it("a connected app the rules don't allow: its tools and its sign-in are refused, whatever the bot asks; it lifts", async () => {
-  await rules({ allowedApps: ["gmail"] });
-  const thread = await team.as(owner, "POST", `/api/bots/${botId}/tasks`, { title: "uses an app" });
-  const capability = await team.capability(botId, thread.body.task.threadId, "connectors");
-  const call = async (name: string, args: unknown = {}) => {
-    const answer = await fetch(`${team.base}/api/internal/connectors/mcp`, { method: "POST", headers: { authorization: `Bearer ${capability}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) });
-    return JSON.stringify(await answer.json());
-  };
-  expect(await call("SLACK_SEND_MESSAGE")).toContain("Acme does not allow bots to use Slack. Ask a team admin.");
-  expect(await call("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS" }, { tool_slug: "SLACK_SEND_MESSAGE" }] })).toContain("Acme does not allow bots to use Slack.");
-  expect(await call("COMPOSIO_REMOTE_WORKBENCH", { code: "run()" })).toContain("can't run code");
-  expect(await call("GMAIL_FETCH_EMAILS")).not.toContain("Acme does not allow");
-  const signIn = await team.as(owner, "POST", "/api/connectors/slack/authorize", {});
-  expect([signIn.status, signIn.body.code]).toEqual([403, "managed_policy"]);
-  await rules(null);
-  expect(await call("SLACK_SEND_MESSAGE")).not.toContain("Acme does not allow");
-}, hostTimeout(60_000));
 
 it("a blocked cloud desktop is refused for a chat turn and a routine; a lent computer is refused too; both lift", async () => {
   const setComputer = await team.as(owner, "PATCH", `/api/bots/${botId}`, { computer: "cloud" });

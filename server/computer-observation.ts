@@ -45,7 +45,7 @@ export class ObservationCoordinator {
   }
 
   /** canonicalFrame must describe the full screenshot, even when the image
-   * returned to the model is cropped. A boat-provided full-frame hash works. */
+   * returned to the model is cropped. A provider's full-frame hash works. */
   observeFrame(canonicalFrame: string | null, crop: CropRegion | null) {
     this.metrics.screenshotsCaptured += 1;
     const hash = canonicalFrame

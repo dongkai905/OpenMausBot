@@ -136,6 +136,6 @@ export function cloudSendSummary(sources: CloudSendSources, { move = false, bot:
   items.push({ key: itemKey.setting("profile"), kind: "setting", label: "profile",
     parts: { name: partHash(profile.name), email: partHash(profile.email), about: partHash(profile.aboutMe) } });
   items.push({ key: itemKey.setting("language"), kind: "setting", label: "language", parts: { value: partHash(language) } });
-  if (move && sources.move) items.push(...sources.move.items(carried).filter((item) => !chosen || item.kind !== "call"));
+  if (move && sources.move) items.push(...sources.move.items(carried));
   return { v: 1, appVersion: sources.appVersion, items };
 }

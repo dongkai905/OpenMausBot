@@ -1,34 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { boatCapableEngine, isActiveTurnRefusal, isRemoteScreenshotContention, remoteScreenshotSource } from "@/lib/remote-desktop";
+import { computerCapableEngine, isRemoteScreenshotContention, remoteScreenshotSource } from "@/lib/remote-desktop";
 import type { InstanceInfo } from "@/state/store";
-import { CLOUD_COMPUTER_BUSY_ERROR } from "../../shared/computer-contention";
 
 describe("remote VPS preview", () => {
-  it("runs the cloud computer on the bot's own engine, never on a swapped-in Boat runner", () => {
+  it("runs the remote computer on the bot's own engine, never on a swapped-in runner", () => {
     const plain = { instanceId: "plain", driverKind: "customAcp", snapshot: { state: "available" }, capabilities: { computerMcp: false } } as InstanceInfo;
     const tools = { ...plain, instanceId: "tools", driverKind: "claude", capabilities: { computerMcp: true } } as InstanceInfo;
-    expect(boatCapableEngine([plain, tools], "plain")).toBeUndefined();
-    expect(boatCapableEngine([plain, tools], "tools")).toBe(tools);
-    expect(boatCapableEngine([plain, { ...tools, snapshot: { state: "unavailable" } }], "tools")?.snapshot.state).toBe("unavailable");
-    expect(boatCapableEngine([plain, tools])).toBeUndefined();
+    expect(computerCapableEngine([plain, tools], "plain")).toBeUndefined();
+    expect(computerCapableEngine([plain, tools], "tools")).toBe(tools);
+    expect(computerCapableEngine([plain, { ...tools, snapshot: { state: "unavailable" } }], "tools")?.snapshot.state).toBe("unavailable");
+    expect(computerCapableEngine([plain, tools])).toBeUndefined();
   });
   it("retries only known transient contention, not permanent 409 failures", () => {
-    expect(isRemoteScreenshotContention({ status: 409, message: "this bot's cloud computer is being changed — wait for it to finish" })).toBe(true);
+    expect(isRemoteScreenshotContention({ status: 409, message: "this bot's remote computer is being changed — wait for it to finish" })).toBe(true);
     expect(isRemoteScreenshotContention({ status: 409, message: "the VPS is being prepared — try again shortly" })).toBe(true);
-    for (const message of ["VPS is not configured", "The VPS computer is not ready", "Choose Cloud computer before changing or opening this cloud computer. Auto only checks existing computer state."]) {
+    for (const message of ["VPS is not configured", "The VPS computer is not ready", "Choose a computer before changing or opening it."]) {
       expect(isRemoteScreenshotContention({ status: 409, message })).toBe(false);
     }
-    expect(isRemoteScreenshotContention({ status: 503, message: "this bot's cloud computer is being changed — wait for it to finish" })).toBe(false);
-  });
-  it("recognises the active-turn refusal as a wait, not a fault", () => {
-    const message = CLOUD_COMPUTER_BUSY_ERROR;
-    expect(isActiveTurnRefusal({ status: 409, message })).toBe(true);
-    expect(isActiveTurnRefusal(new Error(message))).toBe(true);
-    expect(isActiveTurnRefusal({ status: 409, message: `computer: ${message}` })).toBe(true);
-    expect(isActiveTurnRefusal({ status: 503, message })).toBe(false);
-    expect(isActiveTurnRefusal({ status: 409, message: "this bot's cloud computer is being changed — wait for it to finish" })).toBe(false);
-    expect(isActiveTurnRefusal(null)).toBe(false);
+    expect(isRemoteScreenshotContention({ status: 503, message: "this bot's remote computer is being changed — wait for it to finish" })).toBe(false);
   });
 
   it("accepts only validated screenshot response shapes", () => {

@@ -4,9 +4,9 @@ import { credentialSaveError } from "./credential-patch.mjs";
 import nativeText from "./native-text.cjs";
 
 test("a key the provider refused crosses IPC named KeyRejected, with the server's words", () => {
-  const error = credentialSaveError(400, { error: "boat.dev rejected that key", code: "key_rejected" });
-  assert.equal(error.toString(), "KeyRejected: boat.dev rejected that key");
-  assert.equal(`Error invoking remote method 'credential:set': ${error}`, "Error invoking remote method 'credential:set': KeyRejected: boat.dev rejected that key");
+  const error = credentialSaveError(400, { error: "the provider rejected that key", code: "key_rejected" });
+  assert.equal(error.toString(), "KeyRejected: the provider rejected that key");
+  assert.equal(`Error invoking remote method 'credential:set': ${error}`, "Error invoking remote method 'credential:set': KeyRejected: the provider rejected that key");
 });
 
 test("fixed decider refusals use native words before Electron serializes the error", () => {
@@ -28,7 +28,7 @@ test("fixed decider refusals use native words before Electron serializes the err
 });
 
 test("every other refusal stays a plain Error", () => {
-  for (const [status, body] of [[400, { error: "Couldn't reach boat.dev" }], [409, { error: "busy", code: "conflict" }], [503, null], [403, { code: "KeyRejected" }]]) {
+  for (const [status, body] of [[400, { error: "Couldn't reach the provider" }], [409, { error: "busy", code: "conflict" }], [503, null], [403, { code: "KeyRejected" }]]) {
     const error = credentialSaveError(status, body);
     assert.ok(error.toString().startsWith("Error: "), error.toString());
     assert.ok(!error.toString().startsWith("KeyRejected: "));

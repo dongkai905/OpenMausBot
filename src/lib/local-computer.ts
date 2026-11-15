@@ -51,31 +51,32 @@ export function localComputerDisabledReason({
   return t("computer.problem.localMac");
 }
 
-export type BoatPanelAction =
+export type CloudPanelAction =
   | "cloud-new"
   | "cloud-asleep"
-  | "attach-ready-boat"
-  | "busy-boat"
-  | "team-boat"
-  | "show-ready-boat"
-  | "show-sleeping-boat"
-  | "show-pending-boat"
+  | "attach-ready-computer"
+  | "busy-computer"
+  | "team-computer"
+  | "show-ready-computer"
+  | "show-sleeping-computer"
+  | "show-pending-computer"
   | "local"
   | "unconfigured"
   | "auto-unavailable";
 
-const READY_BOAT_STATES = new Set(["idle", "ready", "running"]);
+const READY_CLOUD_STATES = new Set(["idle", "ready", "running"]);
 
-export function isReadyBoatState(state: string | null | undefined): boolean {
-  return typeof state === "string" && READY_BOAT_STATES.has(state);
+export function isReadyCloudState(state: string | null | undefined): boolean {
+  return typeof state === "string" && READY_CLOUD_STATES.has(state);
 }
-const SLEEPING_BOAT_STATES = new Set(["archived", "stopped"]);
+const SLEEPING_CLOUD_STATES = new Set(["archived", "stopped"]);
 
-/** A passive panel open never provisions: nothing creates, wakes or opens a Boat without an explicit Cloud choice. */
-export function resolveBoatPanelAction({
+/** A passive panel open never provisions: nothing creates, wakes or opens the person's own VPS computer without an
+ * explicit Cloud choice. */
+export function resolveCloudPanelAction({
   computer,
   configured,
-  boatState,
+  cloudState,
   canUseCloud,
   autoLocal,
   teamComputer = false,
@@ -83,13 +84,13 @@ export function resolveBoatPanelAction({
 }: {
   computer: Bot["computer"];
   configured: boolean;
-  boatState: string | null;
+  cloudState: string | null;
   canUseCloud: boolean;
   autoLocal: boolean;
   teamComputer?: boolean;
   busy?: boolean;
-}): BoatPanelAction {
-  if (computer === undefined && teamComputer) return "team-boat";
+}): CloudPanelAction {
+  if (computer === undefined && teamComputer) return "team-computer";
   const explicitCloud = computer === "cloud";
 
   if (!configured) {
@@ -98,25 +99,25 @@ export function resolveBoatPanelAction({
   }
   if (explicitCloud) {
     if (!canUseCloud) return "auto-unavailable";
-    if (boatState && READY_BOAT_STATES.has(boatState)) return "attach-ready-boat";
-    if (busy || (boatState && !SLEEPING_BOAT_STATES.has(boatState))) return "busy-boat";
-    return boatState ? "cloud-asleep" : "cloud-new";
+    if (cloudState && READY_CLOUD_STATES.has(cloudState)) return "attach-ready-computer";
+    if (busy || (cloudState && !SLEEPING_CLOUD_STATES.has(cloudState))) return "busy-computer";
+    return cloudState ? "cloud-asleep" : "cloud-new";
   }
-  if (canUseCloud && boatState) {
-    if (READY_BOAT_STATES.has(boatState)) return "show-ready-boat";
-    if (SLEEPING_BOAT_STATES.has(boatState)) return "show-sleeping-boat";
-    return "show-pending-boat";
+  if (canUseCloud && cloudState) {
+    if (READY_CLOUD_STATES.has(cloudState)) return "show-ready-computer";
+    if (SLEEPING_CLOUD_STATES.has(cloudState)) return "show-sleeping-computer";
+    return "show-pending-computer";
   }
   return autoLocal ? "local" : "auto-unavailable";
 }
 
-export function busyBoatView(boatState: string | null, busy: boolean): {
-  line: "computer.cloud.new" | "computer.cloud.asleep" | "computer.phase.busyBoat" | "computer.phase.starting";
+export function busyCloudView(cloudState: string | null, busy: boolean): {
+  line: "computer.cloud.new" | "computer.cloud.asleep" | "computer.phase.busyComputer" | "computer.phase.starting";
   spinner: boolean;
 } {
-  if (!boatState) return { line: "computer.cloud.new", spinner: false };
-  if (SLEEPING_BOAT_STATES.has(boatState)) return { line: "computer.cloud.asleep", spinner: false };
-  return { line: busy ? "computer.phase.busyBoat" : "computer.phase.starting", spinner: true };
+  if (!cloudState) return { line: "computer.cloud.new", spinner: false };
+  if (SLEEPING_CLOUD_STATES.has(cloudState)) return { line: "computer.cloud.asleep", spinner: false };
+  return { line: busy ? "computer.phase.busyComputer" : "computer.phase.starting", spinner: true };
 }
 
 /** A stale ready phase can survive one render, so preview POSTs also need the durable, explicit Cloud choice. */
@@ -157,7 +158,7 @@ export function persistedComputerSelectionMatches({
   persistedBot: Pick<Bot, "computer" | "cloudBackend">;
 }): boolean {
   return persistedBot.computer === computer
-    && (persistedBot.cloudBackend ?? "box") === cloudBackend;
+    && (persistedBot.cloudBackend ?? "vps") === cloudBackend;
 }
 
 export function autoSelectsLocalComputer({

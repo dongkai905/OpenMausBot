@@ -53,7 +53,7 @@ describe("ToolActivity in Simple mode", () => {
     expect(html).not.toContain('title="pnpm test --filter api"');
   });
 
-  it("names a Composio slug by its action", () => {
+  it("names an upper-snake tool by its action", () => {
     expect(render({ name: "GITHUB_GET_A_COMMIT", ok: true })).toContain("Get a commit · Completed");
   });
 });

@@ -1,7 +1,7 @@
 export type HandoffWhat = { kind: "1password" } | { kind: "login"; id: string } | { kind: "secret"; id: string };
 /** A move's ask for one connection's secrets, a code for the person's Cloud, letting go of a sign-in that moved, or
  * every credential's fingerprint under a nonce, which checks what a move carried without a secret leaving. */
-export type ConnectionAsk = { kind: "connection"; id: string } | { kind: "composio-share"; for: string } | { kind: "connection-release"; id: string; digest: string }
+export type ConnectionAsk = { kind: "connection"; id: string } | { kind: "connection-release"; id: string; digest: string }
   | { kind: "verify-secrets"; nonce: string };
 
 interface PrivateProcess { postMessage(message: unknown): void }

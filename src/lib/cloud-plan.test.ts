@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CloudAccountState, CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { CHECKOUT_SOURCES } from "../../electron/cloud-account.mjs";
-import type { CloudCredit, CloudOffer, CloudOfferPlan, CloudTeam, CloudTrial } from "../../electron/cloud-home.mjs";
-import { buyOfferAllowed, cardRows, CLOUD_SOURCES, cloudAddView, cloudCreditLine, cloudIntroView, cloudNoticeKind, cloudPlanLine, cloudPlanView, cloudTrialNotice, cloudTrialView,
+import type { CloudOffer, CloudOfferPlan, CloudTeam, CloudTrial } from "../../electron/cloud-home.mjs";
+import { buyOfferAllowed, cardRows, CLOUD_SOURCES, cloudAddView, cloudIntroView, cloudNoticeKind, cloudPlanLine, cloudPlanView, cloudTrialNotice, cloudTrialView,
   dueToday, moneyBackLine, moneyBackShort, offerPlan, offerTrialDays, planCardRows, planCards, sameTerms, sharedTrialDays, trialTimeline, usd,
   type CloudSignInPhase } from "./cloud-plan";
 import { setLocale } from "./i18n";
@@ -11,30 +11,26 @@ const DAY = 86_400_000;
 const ENDS = new Date(2026, 9, 15, 12).getTime();
 const trial = (state: CloudTrial["state"], extra: Partial<CloudTrial> = {}): CloudTrial =>
   ({ state, tier: "pro", endsAt: ENDS, amount: 4900, chargeAt: null, holdUntil: null, deleteAt: null, keep: "none", ...extra });
-const credit: CloudCredit = { grantedUsd: 5, remainingUsd: 3.2, state: "active" };
 
 beforeEach(() => setLocale("en"));
 afterEach(() => setLocale("en"));
 
 describe("a free trial, in one message and at most one next step per state", () => {
   it("active: when it ends, what is charged and when, how to cancel, and nothing to do", () => {
-    const view = cloudTrialView(trial("active", { chargeAt: ENDS }), credit);
+    const view = cloudTrialView(trial("active", { chargeAt: ENDS }));
     expect(view.title).toBe("Your free trial ends on Oct 15");
     expect(view.body).toBe("Then Pro is $49/month plus tax, charged on Oct 15. The Cloud keeps running, so there's nothing to do. To cancel, choose Manage subscription before then.");
-    expect(view.credit).toBe("Includes $5 of Claude credit: $3.20 left.");
     expect(view.action).toEqual({ kind: "manage", label: "Manage subscription" });
     expect(view.body).toContain(view.action!.label);
     const unpriced = cloudTrialView(trial("active", { amount: null, tier: "max" }));
     expect(unpriced.body).toBe("Then Max is charged monthly, plus tax, from Oct 15. The Cloud keeps running, so there's nothing to do. To cancel, choose Manage subscription before then.");
-    expect(unpriced.credit).toBeUndefined();
-    expect(cloudTrialView(trial("active"), { ...credit, remainingUsd: 0, state: "used_up" }).credit).toBeUndefined();
     expect(cloudTrialView(trial("active", { tier: "team-2027" })).body).toContain("Then Cloud is $49/month");
     expect(cloudTrialView(trial("active", { tier: undefined })).body).toContain("Then your plan is $49/month");
     expect(cloudTrialView(trial("active", { amount: 5831 })).body).toContain("$58.31/month");
   });
 
   it("ending with renewal off: when it stops, when its files go, and Subscribe to keep it", () => {
-    const view = cloudTrialView(trial("ending", { deleteAt: ENDS + 3 * DAY, keep: "portal" }), credit);
+    const view = cloudTrialView(trial("ending", { deleteAt: ENDS + 3 * DAY, keep: "portal" }));
     expect(view).toEqual({ state: "ending", title: "Your free trial ends on Oct 15",
       body: "Renewal is off, so the Cloud stops then and its files are deleted on Oct 18.", action: { kind: "subscribe", label: "Subscribe to keep it" } });
     expect(cloudTrialView(trial("ending", { keep: "portal" })).body).toBe("Renewal is off, so the Cloud stops then, and its files are deleted a few days later.");
@@ -73,7 +69,7 @@ describe("a free trial, in one message and at most one next step per state", () 
   });
 });
 
-describe("the plan line and the credit", () => {
+describe("the plan line", () => {
   const connected = (extra: Partial<CloudAccountState>): CloudAccountState => ({ status: "connected", account: { id: "a", email: "person@example.test" },
     entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: ENDS + 3 * DAY, version: 1 }, ...extra });
   it("a running trial is a free trial, not an active paid plan; once paid, or ended, it is not", () => {
@@ -84,10 +80,7 @@ describe("the plan line and the credit", () => {
     expect(cloudPlanView(connected({ entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 2 }, machine: { status: "stopped" }, trial: trial("ended") })).kind).toBe("attention");
   });
 
-  it("says what is left, or that it is used up and what to do", () => {
-    expect(cloudCreditLine(credit)).toBe("Trial Claude credit: $3.20 of $5 left. Cloud bots use it until you sign in there with your own Claude or ChatGPT account, or add an API key.");
-    expect(cloudCreditLine({ grantedUsd: 5, remainingUsd: 0, state: "used_up" }))
-      .toBe("Your $5 trial Claude credit is used up. To keep your bots working, sign in with your own Claude or ChatGPT account in the Cloud, or add an API key there.");
+  it("says the money the plans do", () => {
     expect([usd(5), usd(3.2), usd(0.004), usd(49), usd(58.31)]).toEqual(["$5", "$3.20", "$0", "$49", "$58.31"]);
   });
 
@@ -123,8 +116,8 @@ const PLANS: CloudOfferPlan[] = [
   { tier: "pro", label: "Pro", amount: 4900, allowances: allowances(4, 40, 50), trialDays: 7 },
   { tier: "max", label: "Max", amount: 9900, allowances: allowances(8, 80, 100), trialDays: 7 },
 ];
-const OFFER: CloudOffer = { plans: PLANS, recommended: "pro", creditUsd: 5, reminderDays: 2, refundDays: 14 };
-const noTrial = (offer: CloudOffer): CloudOffer => ({ ...offer, creditUsd: undefined, reminderDays: undefined, plans: offer.plans.map(({ trialDays: _days, ...plan }) => plan) });
+const OFFER: CloudOffer = { plans: PLANS, recommended: "pro", reminderDays: 2, refundDays: 14 };
+const noTrial = (offer: CloudOffer): CloudOffer => ({ ...offer, reminderDays: undefined, plans: offer.plans.map(({ trialDays: _days, ...plan }) => plan) });
 const NOW = new Date(2026, 9, 8, 12).getTime();
 /** A plan the Admin says sleeps when idle, with no swap and a fixed disk. */
 const SLEEPS: CloudOfferPlan = { tier: "lite", label: "Lite", amount: 900, allowances: { cpus: 2, cpuKind: "shared", memoryMb: 2048, diskGb: 10, maxDiskGb: 10, computers: 15,
@@ -161,7 +154,7 @@ describe("what is for sale, as the Admin says", () => {
     const mine = planCards(OFFER, { current: "personal", own: personal });
     expect(mine.map(card => [card.name, card.price, card.current, card.action])).toEqual([["Starter", "$15", false, "Start free trial"], ["Personal", "$29", true, null],
       ["Pro", "$49", false, "Start free trial"], ["Max", "$99", false, "Start free trial"]]);
-    expect(mine[1]!.rows.map(row => row.text)).toContain("100 cloud desktop hours a month");
+    expect(mine[1]!.rows.map(row => row.text)).toContain("10 GB storage, grows to 20 GB");
     expect(planCards(OFFER, { own: personal }).map(card => card.tier), "nobody else sees Personal").toEqual(["starter", "pro", "max"]);
     expect(planCards(OFFER, { current: "max", own: personal }).map(card => card.tier), "nor a subscriber on another plan").toEqual(["starter", "pro", "max"]);
     expect(planCards(OFFER, { current: "personal" }).map(card => card.tier), "with no plan to show, no card").toEqual(["starter", "pro", "max"]);
@@ -174,24 +167,19 @@ describe("what is for sale, as the Admin says", () => {
       voiceCharacters: 30_000 } };
     const max = { tier: "max", label: "Max", amount: 9900, allowances: { ...pro.allowances, cpus: 8, memoryMb: 8192, computerHours: 800, voiceCharacters: 180_000 } };
     const cards = planCards({ plans: [starter, pro, max], recommended: "pro" });
-    expect(cards.map(card => card.rows.map(row => row.key))).toEqual(Array(3).fill(["power", "desktops", "hours", "machine", "storage", "voice", "backups"]));
+    expect(cards.map(card => card.rows.map(row => row.key))).toEqual(Array(3).fill(["power", "machine", "storage", "voice", "backups"]));
     expect(cards[0]!.rows).toEqual([
       { key: "power", text: "Always on, around the clock" },
-      { key: "desktops", text: "Cloud desktops: as many as your bots need", note: "Fair use: up to 15 at once" },
-      { key: "hours", text: "100 cloud desktop hours a month" },
       { key: "machine", text: "2 shared CPUs · 2 GB memory", note: "Plus 3 GB of swap" },
       { key: "storage", text: "10 GB storage, grows to 20 GB" },
       { key: "voice", text: "Voice replies: about 30 minutes of speech a month" },
       { key: "backups", text: "Daily backups, kept 14 days" },
     ]);
-    expect(cards.map(card => card.rows[2]!.text)).toEqual(["100 cloud desktop hours a month", "300 cloud desktop hours a month", "800 cloud desktop hours a month"]);
-    expect(cards.map(card => card.rows[5]!.text)).toEqual(["Voice replies: about 30 minutes of speech a month", "Voice replies: about an hour of speech a month",
+    expect(cards.map(card => card.rows[3]!.text)).toEqual(["Voice replies: about 30 minutes of speech a month", "Voice replies: about an hour of speech a month",
       "Voice replies: about 3 hours of speech a month"]);
     // Another catalog's numbers show as such; an older Admin without swap, backup days or the CPU kind leaves them unsaid, and a plan it says sleeps says so.
-    expect(planCardRows({ ...pro.allowances, computers: 6, computerHours: 450 }).slice(1, 3)).toEqual([
-      { key: "desktops", text: "Cloud desktops: as many as your bots need", note: "Fair use: up to 6 at once" }, { key: "hours", text: "450 cloud desktop hours a month" }]);
     expect(planCardRows({ cpus: 8, memoryMb: 8192, diskGb: 10, maxDiskGb: 10, computers: 4, computerHours: 500, voiceCharacters: 90_000 }).map(row => row.text)).toEqual([
-      "Always on, around the clock", "Cloud desktops: as many as your bots need", "500 cloud desktop hours a month", "8 CPUs · 8 GB memory", "10 GB storage",
+      "Always on, around the clock", "8 CPUs · 8 GB memory", "10 GB storage",
       "Voice replies: about 1.5 hours of speech a month"]);
     expect(planCardRows(SLEEPS.allowances!)[0]!.text).toBe("Sleeps when idle, wakes in about a second");
     expect(JSON.stringify(cards)).not.toMatch(/a day|credit|Everything in/);
@@ -205,18 +193,18 @@ describe("what is for sale, as the Admin says", () => {
     const keys = (rows: Array<{ key: string }>) => rows.map(row => row.key);
     const cards = planCards({ plans: [starter, pro, max], recommended: "pro" });
     const split = cardRows(cards);
-    expect(split.map(card => keys(card.shown))).toEqual(Array(3).fill(["hours", "storage", "voice"]));
-    expect(split.map(card => keys(card.details))).toEqual(Array(3).fill(["power", "desktops", "machine", "backups"]));
+    expect(split.map(card => keys(card.shown))).toEqual(Array(3).fill(["storage", "voice"]));
+    expect(split.map(card => keys(card.details))).toEqual(Array(3).fill(["power", "machine", "backups"]));
     expect(split.map(card => [...card.shown, ...card.details].length), "no row is dropped").toEqual(cards.map(card => card.rows.length));
     const asleep = (plan: typeof pro) => ({ ...plan, allowances: { ...plan.allowances, sleeps: true as const } });
     const one = cardRows(planCards({ plans: [asleep(starter), pro, max], recommended: "pro" }));
     expect(one.map(card => card.shown[0]!.text), "one plan sleeps: every card says how it runs")
       .toEqual(["Sleeps when idle, wakes in about a second", "Always on, around the clock", "Always on, around the clock"]);
-    expect(one.map(card => keys(card.details))).toEqual(Array(3).fill(["desktops", "machine", "backups"]));
+    expect(one.map(card => keys(card.details))).toEqual(Array(3).fill(["machine", "backups"]));
     const all = cardRows(planCards({ plans: [starter, pro, max].map(asleep), recommended: "pro" }));
-    expect(all.map(card => keys(card.shown)), "every plan sleeps: nothing sets them apart there").toEqual(Array(3).fill(["hours", "storage", "voice"]));
+    expect(all.map(card => keys(card.shown)), "every plan sleeps: nothing sets them apart there").toEqual(Array(3).fill(["storage", "voice"]));
     const bare = cardRows(planCards({ plans: [{ tier: "team", label: "Team", amount: 19900 }, pro], recommended: "pro" }));
-    expect(bare.map(card => keys(card.shown)), "a plan without allowances sets nothing apart").toEqual([[], ["hours", "storage", "voice"]]);
+    expect(bare.map(card => keys(card.shown)), "a plan without allowances sets nothing apart").toEqual([[], ["storage", "voice"]]);
   });
 
   it("says who a team plan is for, from the most people the Admin allows it, and nothing it can't back", () => {
@@ -247,7 +235,7 @@ describe("what is for sale, as the Admin says", () => {
     setLocale("de");
     const [card] = planCards({ plans: [{ tier: "max", amount: 9900, trialDays: 3, allowances: { cpus: 8, cpuKind: "shared", memoryMb: 8192, diskGb: 10, maxDiskGb: 100, computers: 15,
       computerHours: 800, voiceCharacters: 90_000, snapshotDays: 14 } }], recommended: "max" });
-    expect(card!.rows.map(row => row.text)).toEqual(["Immer an, rund um die Uhr", "Cloud-Desktops: so viele, wie deine Bots brauchen", "800 Cloud-Desktop-Stunden im Monat",
+    expect(card!.rows.map(row => row.text)).toEqual(["Immer an, rund um die Uhr",
       "8 geteilte CPUs · 8 GB Arbeitsspeicher", "10 GB Speicher, wächst bis 100 GB", "Sprachantworten: etwa 1,5 Stunden Sprache im Monat", "Tägliche Backups, 14 Tage aufbewahrt"]);
     expect([card!.action, card!.terms]).toEqual(["Kostenlos testen", "3 Tage kostenlos, dann $99/Monat zzgl. Steuern"]);
   });
@@ -279,14 +267,14 @@ describe("what is for sale, as the Admin says", () => {
       OFFER, { now: NOW, terms: true })).toMatchObject({ kind: "offer", notice: "terms" });
   });
 
-  it("the timeline, when every plan has the same trial: today (and the credit), the reminder only while the Admin sends one, and the first payment", () => {
+  it("the timeline, when every plan has the same trial: today, the reminder only while the Admin sends one, and the first payment", () => {
     expect(sharedTrialDays(OFFER)).toBe(7);
     expect(trialTimeline(OFFER, NOW)).toEqual([
-      { when: "Today", text: "Trial starts, with $5 of Claude credit" },
+      { when: "Today", text: "Trial starts" },
       { when: "Oct 13", text: "Reminder email" },
       { when: "Oct 15", text: "First payment" },
     ]);
-    expect(trialTimeline({ ...OFFER, reminderDays: undefined, creditUsd: undefined }, NOW)).toEqual([
+    expect(trialTimeline({ ...OFFER, reminderDays: undefined }, NOW)).toEqual([
       { when: "Today", text: "Trial starts" },
       { when: "Oct 15", text: "First payment" },
     ]);
@@ -297,10 +285,10 @@ describe("what is for sale, as the Admin says", () => {
 
   it("the card after the update needs a trial, and says only the Admin's numbers: never a launch price or a later one", () => {
     expect(cloudIntroView(OFFER)).toEqual({ badge: "Free for 7 days",
-      points: ["Routines run on time, day and night", "Reach your bots from your phone, even with this computer off", "$5 of Claude credit to start"],
+      points: ["Routines run on time, day and night", "Reach your bots from your phone, even with this computer off", "Voice and cloud desktops included"],
       price: "Then from $15/month + tax. Cancel any time.", moneyBack: "14-day money-back on every plan." });
-    const bare = cloudIntroView({ ...OFFER, creditUsd: undefined, refundDays: undefined })!;
-    expect(bare.points[2]).toBe("Voice and cloud desktops by Boat included"); expect(bare.moneyBack).toBeNull();
+    const bare = cloudIntroView({ ...OFFER, refundDays: undefined })!;
+    expect(bare.points[2]).toBe("Voice and cloud desktops included"); expect(bare.moneyBack).toBeNull();
     expect(cloudIntroView(noTrial(OFFER))).toBeNull(); expect(cloudIntroView(null)).toBeNull(); expect(cloudIntroView(undefined)).toBeNull();
     expect(JSON.stringify(cloudIntroView(OFFER))).not.toMatch(/launch|\$89|first 100/i);
     const partial: CloudOffer = { ...OFFER, plans: OFFER.plans.map(plan => plan.tier === "starter" ? { ...plan, trialDays: undefined } : plan) };
@@ -343,16 +331,15 @@ describe("the buying sheet, one view per state", () => {
     expect(cloudAddView({ status: "signed-out", checkout: { plan: "pro", startedAt: NOW } }, OFFER, at).kind).toBe("offer");
   });
 
-  it("then: the payment received, the Cloud set up (the plan, trial and credit for its badge), and ready after this app's checkout or sign-in", () => {
+  it("then: the payment received, the Cloud set up (the plan and trial for its badge), and ready after this app's checkout or sign-in", () => {
     expect(cloudAddView(connected({ purchase: { state: "confirming", tier: "pro", paidAt: NOW } }), OFFER, at))
-      .toEqual({ kind: "starting", tier: "pro", trial: null, credit: null, step: null, slow: false, received: true });
+      .toEqual({ kind: "starting", tier: "pro", trial: null, step: null, slow: false, received: true });
     const running = trial("active", { endsAt: NOW + 7 * DAY, chargeAt: NOW + 7 * DAY });
-    expect(cloudAddView(paid({ trial: running, credit }), undefined, at)).toEqual({ kind: "starting", tier: "pro", trial: running, credit, step: null, slow: false, received: false });
-    expect(cloudAddView(paid({ credit: { ...credit, remainingUsd: 0, state: "used_up" } }), undefined, at)).toMatchObject({ kind: "starting", credit: null });
+    expect(cloudAddView(paid({ trial: running }), undefined, at)).toEqual({ kind: "starting", tier: "pro", trial: running, step: null, slow: false, received: false });
     expect(cloudAddView(paid({ machine: { status: "provisioning", setup: { step: "storage", slow: true } } }), undefined, at))
-      .toEqual({ kind: "starting", tier: "pro", trial: null, credit: null, step: "storage", slow: true, received: false });
+      .toEqual({ kind: "starting", tier: "pro", trial: null, step: "storage", slow: true, received: false });
     const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
-    expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined, at)).toEqual({ kind: "ready", tier: "pro", trial: null, credit: null });
+    expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined, at)).toEqual({ kind: "ready", tier: "pro", trial: null });
     expect(cloudAddView(paid({ machine: ready }), undefined, at), "Add a Cloud… with a Cloud: one Cloud for now").toEqual({ kind: "has-cloud" });
     expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000, done: true } }), undefined, at),
       "a purchase that is over (opened, announced or shown ready): one Cloud for now").toEqual({ kind: "has-cloud" });

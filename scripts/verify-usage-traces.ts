@@ -116,13 +116,13 @@ try {
   });
   step(researcher.id, clock + 0.1, 38.4, 980, 9_000);
   step(writer.id, 9.1, 10.9, 140);
-  tool(writer.id, "mcp__composio__NOTION_FETCH_DATA", 10.9, 14.5, "Brand voice");
-  tool(writer.id, "mcp__composio__FIGMA_GET_FILE_JSON", 11.2, 16.3, "Pricing frames");
+  tool(writer.id, "mcp__notes__notes_fetch_page", 10.9, 14.5, "Brand voice");
+  tool(writer.id, "mcp__design__design_get_frame", 11.2, 16.3, "Pricing frames");
   step(writer.id, 16.4, 39.6, 2_450, 7_200);
-  tool(writer.id, "mcp__composio__NOTION_CREATE_NOTION_PAGE", 39.7, 43.3, "Launch draft");
+  tool(writer.id, "mcp__notes__notes_create_page", 39.7, 43.3, "Launch draft");
   step(writer.id, 43.3, 46.2, 200);
   step(coder.id, 12.4, 13.6, 160);
-  tool(coder.id, "mcp__composio__GITHUB_CREATE_A_REFERENCE", 13.6, 15.7, "pricing-page-v2");
+  tool(coder.id, "mcp__git__git_create_ref", 13.6, 15.7, "pricing-page-v2");
   const computer = ["launch_app", "screenshot", "click", "type_text", "press_key", "screenshot", "scroll", "click", "type_text", "screenshot",
     "click", "click", "type_text", "press_key", "screenshot", "scroll", "click", "screenshot", "drag", "click", "type_text", "press_key", "screenshot"];
   clock = 15.9;

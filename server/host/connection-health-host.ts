@@ -6,23 +6,18 @@
 // admin asked everyone to connect: never when or how they used it, nor anything about a connection nobody asked for.
 import { join } from "node:path";
 
-import { type ConnectionHealthWord, type ConnectionStatus, type PersonConnectionState, type TeamAdminSummary } from "../cloud-team-admin.ts";
-import type { ConnectorServiceState } from "../composio.ts";
+import { type ConnectionStatus, type PersonConnectionState, type TeamAdminSummary } from "../cloud-team-admin.ts";
 import { STALE_MS, createBackgroundCheck } from "../connection-health-check.ts";
-import { CONNECTION_HEALTH_FILE, accountHealth, createConnectionHealth, type ConnectionHealthView, type ConnectionOutcome, type ConnectionRef } from "../connection-health.ts";
-import { MCP_FAILURE_CLASS, appCallOutcome, forbidsRatherThanSignsOut, probeOutcome } from "../connection-outcome.ts";
-import { serviceSlugFor } from "../connector-verdict.ts";
+import { CONNECTION_HEALTH_FILE, createConnectionHealth, type ConnectionHealthView, type ConnectionOutcome, type ConnectionRef } from "../connection-health.ts";
+import { MCP_FAILURE_CLASS, forbidsRatherThanSignsOut, probeOutcome } from "../connection-outcome.ts";
 import { mcpFailureKind, mcpServerOfTool } from "../mcp-failure.ts";
 import type { McpOAuthManager, McpRefreshOutcome } from "../mcp-oauth.ts";
 import type { McpProbeResult } from "../mcp-probe.ts";
 import { isRemoteMcpServer, parseStoredMcpServer } from "../mcp-registry.ts";
-import { personAppOf } from "../team-connections.ts";
 import type { McpConfigResult } from "./mcp-config.ts";
-import type { TeamConnectionsHost } from "./team-connections-host.ts";
 
 type Bot = {
   name: string; hidden?: boolean; movedTo?: unknown; defaultBot?: { person?: string };
-  composio?: boolean; connectorTools?: Record<string, unknown>; connectorScopes?: { apps: Record<string, unknown> };
 };
 type OAuth = Pick<McpOAuthManager, "authState" | "tokenRefused" | "endsAt">;
 
@@ -31,8 +26,12 @@ export interface ConnectionHealthHostDeps<B extends Bot = Bot> {
   dataDir: string | null;
   mcpServers(): Record<string, unknown>;
   mcpOAuth: OAuth;
-  connections: Pick<TeamConnectionsHost, "personMcp" | "personApps" | "turnPerson" | "ownAppsServices"> & {
-    people: { oauth(person: string): OAuth; key(person: string, name: string, url: string): unknown; appsAccess(person: string): unknown };
+  connections: {
+    /** The MCP servers each person signs in to themselves. */
+    personMcp(): readonly string[];
+    /** The member this turn acts for, whose own sign-in it mounts; null off a team. */
+    turnPerson(threadId: string, generation?: string): string | null;
+    people: { oauth(person: string): OAuth; key(person: string, name: string, url: string): unknown };
   };
   bots(): readonly B[];
   /** The MCP servers a bot's turns start, by name. */
@@ -50,8 +49,6 @@ export interface ConnectionHealthHostDeps<B extends Bot = Bot> {
 }
 
 const iso = (ms: number | undefined) => (ms === undefined ? undefined : new Date(ms).toISOString());
-/** A connection whose app's account stays gone this long after it was added is taken for removed. */
-const ADD_PENDING_MS = 60 * 60_000;
 
 export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealthHostDeps<B>) {
   const store = deps.dataDir === null ? null : createConnectionHealth({ file: join(deps.dataDir, CONNECTION_HEALTH_FILE), ...(deps.now ? { now: deps.now } : {}) });
@@ -107,9 +104,6 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
   }) : null;
 
   const teamBots = () => deps.bots().filter((bot) => !bot.hidden && !bot.movedTo && !bot.defaultBot?.person);
-  const usesApp = (bot: B, slug: string) => bot.composio !== false
-    && (!bot.connectorScopes || Object.hasOwn(bot.connectorScopes.apps, slug))
-    && (bot.connectorTools === undefined || Object.hasOwn(bot.connectorTools, slug));
 
   const status = (view: ConnectionHealthView): ConnectionStatus => ({
     ...(view.health ? { health: view.health, checkedAt: iso(view.checkedAt) } : {}),
@@ -127,14 +121,6 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
     if (signedIn === false && view.health !== "needs-sign-in" && view.health !== "refused") return { ...view, health: "needs-sign-in", checkedAt: now(), lastError: "sign-in" };
     return view;
   };
-  /** The team's app's health: its accounts' own word when that says it is not working, else what real use showed. */
-  const appView = (slug: string, accounts: ReadonlyArray<{ status: string }>): ConnectionHealthView => {
-    const view = store?.get({ kind: "app", id: slug }) ?? {};
-    const words = accounts.map((account) => accountHealth(account.status)).filter((word) => word !== null);
-    if (words.some((word) => word.health === "working")) return view.health ? view : { ...view, health: "working", checkedAt: now() };
-    const first = words[0];
-    return first ? { ...view, health: first.health, checkedAt: now(), ...(first.error ? { lastError: first.error } : {}) } : view;
-  };
   const ownState = (ref: ConnectionRef, connected: boolean, signedOut: boolean): PersonConnectionState => {
     const health = store?.get(ref).health;
     if (connected) return health === "needs-sign-in" || health === "refused" ? "needs-sign-in" : "connected";
@@ -142,7 +128,7 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
   };
 
   /** Every member's own state for each connection each person connects, by address: only those, never another of theirs. */
-  const personStates = async (scopes: { apps: readonly string[]; mcp: readonly string[] }, members: ReadonlyArray<{ email: string }>) => {
+  const personStates = async (scopes: { mcp: readonly string[] }, members: ReadonlyArray<{ email: string }>) => {
     const out: NonNullable<NonNullable<TeamAdminSummary["people"]>["states"]> = { apps: {}, mcp: {} };
     for (const name of scopes.mcp) {
       const url = remoteUrl(name);
@@ -152,19 +138,6 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
         const key = url ? deps.connections.people.key(person, name, url) !== null : false;
         return [email, ownState({ kind: "mcp", id: name, person }, signIn === "signed-in" || key, signIn === "needs-sign-in")];
       }));
-    }
-    if (scopes.apps.length) {
-      const reads = new Map((await deps.connections.ownAppsServices()).map((read) => [read.person, read.services]));
-      for (const slug of scopes.apps) {
-        out.apps[slug] = Object.fromEntries(members.flatMap(({ email }) => {
-          const person = deps.personKey(email);
-          if (!reads.has(person)) return [[email, "not-connected" as const]];
-          const services: Record<string, ConnectorServiceState> | null = reads.get(person) ?? null;
-          if (!services) return [];
-          const service = services[slug];
-          return [[email, ownState({ kind: "app", id: slug, person }, Boolean(service?.connected), Boolean(service && !service.connected && service.accounts.length))]];
-        }));
-      }
     }
     return out;
   };
@@ -186,20 +159,6 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
       const outcome = error === "sign-in" || error === "refused" ? await refusedCredentials(ref, error, step.output!) : { ok: false as const, error };
       if (outcome) store?.observe(ref, outcome, { use: true });
       else store?.used(ref);
-    },
-
-    /** A connected-apps call through the relay, the team's installation or (`person`) a member's own. */
-    appCall(call: { person?: string; slugs: readonly string[]; status: number; bytes: Uint8Array; contentType: string }): void {
-      if (!store) return;
-      const personApps = deps.connections.personApps();
-      const apps = [...new Set(call.slugs.map((slug) => (call.person ? personAppOf(slug, personApps) : null) ?? serviceSlugFor(slug)).filter((app): app is string => Boolean(app)))];
-      if (!apps.length) return;
-      const outcome = appCallOutcome(call.status, call.bytes, call.contentType);
-      for (const app of apps) {
-        const ref: ConnectionRef = { kind: "app", id: app, ...(call.person ? { person: call.person } : {}) };
-        if (!outcome || (!outcome.ok && apps.length > 1)) { store.used(ref); continue; }
-        store.observe(ref, outcome, { use: true });
-      }
     },
 
     /** How a refresh of the team's (`person` null) or a member's own sign-in ended. */
@@ -234,34 +193,11 @@ export function createConnectionHealthHost<B extends Bot>(deps: ConnectionHealth
       const configured = deps.mcpServers();
       for (const id of store.known("mcp")) if (!Object.hasOwn(configured, id)) store.forget("mcp", id);
       const scopes = summary.scopes ?? { apps: [], mcp: [] };
-      if (summary.apps.available) {
-        const listed = new Set(summary.apps.services.map((service) => service.slug));
-        for (const id of store.known("app")) {
-          const added = store.addedBy("app", id);
-          if (!listed.has(id) && !scopes.apps.includes(id) && (!added || now() - added.at >= ADD_PENDING_MS)) store.forget("app", id);
-        }
-      }
       const bots = teamBots();
       const servers = new Map(bots.map((bot) => [bot, deps.botServers(bot)]));
       const members = deps.roster();
       return {
         ...summary,
-        apps: {
-          ...summary.apps,
-          services: summary.apps.services.map((service) => {
-            const shared = !scopes.apps.includes(service.slug);
-            return {
-              ...service,
-              accounts: service.accounts.map((account) => {
-                const word = accountHealth(account.status);
-                return word ? { ...account, health: word.health as ConnectionHealthWord } : account;
-              }),
-              ...(shared ? status(appView(service.slug, service.accounts)) : {}),
-              ...provenance("app", service.slug),
-              bots: bots.filter((bot) => usesApp(bot, service.slug)).map((bot) => bot.name),
-            };
-          }),
-        },
         mcp: summary.mcp.map((server) => {
           const shared = !scopes.mcp.includes(server.name);
           const url = remoteUrl(server.name);

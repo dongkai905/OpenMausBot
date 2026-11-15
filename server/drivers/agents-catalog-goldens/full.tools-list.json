@@ -868,13 +868,11 @@
           "credential_id": {
             "type": "string",
             "enum": [
-              "boxToken",
               "ttsKey",
               "geminiTtsKey",
               "fishAudioKey",
               "openaiImageApiKey",
               "onePasswordToken",
-              "composioApiKey",
               "openaiApiKey",
               "openrouterApiKey",
               "email"
@@ -1354,7 +1352,7 @@
     },
     {
       "name": "trigger_info",
-      "description": "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet.",
+      "description": "Read this bot's triggers (was list_triggers). list: its routines (schedules) and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1362,8 +1360,7 @@
           "action": {
             "type": "string",
             "enum": [
-              "list",
-              "events"
+              "list"
             ]
           },
           "trigger_id": {
@@ -1377,14 +1374,6 @@
           "for_bot_id": {
             "type": "string",
             "description": "list: ANOTHER bot's triggers in your section, from list_bots."
-          },
-          "app": {
-            "type": "string",
-            "description": "events: optional app slug, e.g. gmail."
-          },
-          "search": {
-            "type": "string",
-            "description": "events: optional words in event names."
           }
         },
         "required": [
@@ -1400,7 +1389,7 @@
     },
     {
       "name": "trigger",
-      "description": "Set up or change work that happens on its own (was create_trigger / manage_trigger): when <something happens>, a bot does <instructions>. create in this turn whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); never ask for confirmation first. when=schedule runs on a time rule, cron included (call trigger_info first for relative dates: it has the authoritative time and timezone); when=app_event runs when something happens in a connected app (trigger_info action=events first; prefer it to a schedule that keeps checking); when=webhook gives an address another app sends to: the result carries its private address, so you can paste it into that app's setup yourself (never anywhere else). when=limit_reset runs when an AI's usage limit resets (\"run this when my limit resets\", or to finish work your own limit stopped). To the person these are automations: write name and instructions as they would say them. Something to do once, now, is not a trigger. update (only the fields to change), pause, resume and run_now (an app event or webhook gets a test event) act on one of the bot's routines, app events or webhooks, by its trigger_id from trigger_info. Before reporting a task finished, inspect related automations with trigger_info; pause a temporary monitor whose goal is met, then read its state back. Keep standing automations; delete_trigger deletes one only at the person's explicit request. Each applies at once; the person sees it with Edit, Pause and Undo. for_bot_id: a trigger of ANOTHER bot in your section, which keeps that bot's engine and permissions.",
+      "description": "Set up or change work that happens on its own (was create_trigger / manage_trigger): when <something happens>, a bot does <instructions>. create in this turn whenever the person describes recurring or event-based work (\"every morning send me…\", \"when another app calls…\"); never ask for confirmation first. when=schedule runs on a time rule, cron included (call trigger_info first for relative dates: it has the authoritative time and timezone); when=webhook gives an address another app sends to: the result carries its private address, so you can paste it into that app's setup yourself (never anywhere else). when=limit_reset runs when an AI's usage limit resets (\"run this when my limit resets\", or to finish work your own limit stopped). To the person these are automations: write name and instructions as they would say them. Something to do once, now, is not a trigger. update (only the fields to change), pause, resume and run_now (a webhook gets a test event) act on one of the bot's routines or webhooks, by its trigger_id from trigger_info. Before reporting a task finished, inspect related automations with trigger_info; pause a temporary monitor whose goal is met, then read its state back. Keep standing automations; delete_trigger deletes one only at the person's explicit request. Each applies at once; the person sees it with Edit, Pause and Undo. for_bot_id: a trigger of ANOTHER bot in your section, which keeps that bot's engine and permissions.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1423,11 +1412,10 @@
             "type": "string",
             "enum": [
               "schedule",
-              "app_event",
               "webhook",
               "limit_reset"
             ],
-            "description": "create: schedule = on a time rule (give schedule); app_event = something happens in a connected app (give app and event); webhook = when another app calls a link; limit_reset = when an AI engine's usage limit resets."
+            "description": "create: schedule = on a time rule (give schedule); webhook = when another app calls a link; limit_reset = when an AI engine's usage limit resets."
           },
           "name": {
             "type": "string",
@@ -1532,36 +1520,12 @@
             },
             "description": "Only for when=webhook: optional event names to accept (from the caller's event-type header, e.g. push). Omit to accept every call."
           },
-          "filter": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "from": {
-                "type": "string"
-              },
-              "subject_contains": {
-                "type": "string"
-              },
-              "label": {
-                "type": "string"
-              },
-              "contains": {
-                "type": "string"
-              }
-            },
-            "description": "app_event only: plain words, all must match. Gmail filters at the source."
-          },
-          "event_config": {
-            "type": "object",
-            "description": "app_event only: settings from trigger_info action=events config_fields."
-          },
           "run_on": {
             "type": "string",
             "enum": [
-              "maus",
-              "box"
+              "maus"
             ],
-            "description": "Omit normally: maus (default) keeps the bot's model and configured computer, INCLUDING a self-hosted VPS. box runs on the bot's cloud computer, same model, once cloud computers are set up; a legacy cloud value from trigger_info means box."
+            "description": "Omit normally: maus (default) keeps the bot's model and configured computer, INCLUDING a self-hosted VPS."
           },
           "timeout_minutes": {
             "type": "integer",
@@ -1586,18 +1550,6 @@
           "run_on_startup": {
             "type": "boolean",
             "description": "Repeating schedules only: also run once whenever OpenMausBot starts, for a computer often off when it is due."
-          },
-          "app": {
-            "type": "string",
-            "description": "app_event: app slug from trigger_info action=events."
-          },
-          "event": {
-            "type": "string",
-            "description": "app_event: event slug from trigger_info action=events."
-          },
-          "account": {
-            "type": "string",
-            "description": "app_event: account id or alias, only when the app has several."
           },
           "engine": {
             "type": "string",

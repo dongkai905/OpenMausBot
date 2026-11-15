@@ -20,7 +20,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 describe.skipIf(!available)(`the real box (${detection.box === "bwrap" ? "bubblewrap works here" : `skipped: ${detection.reason}`})`, () => {
   const options = () => ({
     bwrap: detection.tools!.bwrap, bridge: { socat: detection.tools!.socat, bridgeScript: BOX_BRIDGE_SCRIPT, node: process.execPath },
-    root, denyEnv: new Set(["COMPOSIO_API_KEY"]), publicTarget: null, timeoutMs: 90_000, seccompFile: writeSeccompFile(root),
+    root, denyEnv: new Set(["EXAMPLE_VENDOR_API_KEY"]), publicTarget: null, timeoutMs: 90_000, seccompFile: writeSeccompFile(root),
   });
 
   it("passes every check inside a real box", async () => {

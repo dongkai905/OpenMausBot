@@ -122,12 +122,12 @@ describe("new thread folder navigation", () => {
     expect(seen.bots.find((bot) => bot.id === "B")?.threadId).toBe("B-other");
   });
 
-  it.each(["another bot", "away and back", "automations"])("leaves newer navigation to %s in place", async (destination) => {
+  it.each(["another bot", "away and back", "the team map"])("leaves newer navigation to %s in place", async (destination) => {
     mount();
     submit();
     await createWasSent();
     flushSync(() => {
-      if (destination === "automations") dispatch({ type: "showAutomations" });
+      if (destination === "the team map") dispatch({ type: "showTeamMap" });
       else {
         dispatch({ type: "select", id: "C" });
         if (destination === "away and back") dispatch({ type: "select", id: "A" });
@@ -136,7 +136,7 @@ describe("new thread folder navigation", () => {
     created.resolve(response({ bot: newBot() }, 201));
     await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
     expect(seen.selectedId).toBe(destination === "another bot" ? "C" : "A");
-    expect(seen.activeView).toBe(destination === "automations" ? "automations" : "chat");
+    expect(seen.activeView).toBe(destination === "the team map" ? "team-map" : "chat");
     expect(seen.bots.find((bot) => bot.id === "B")?.threadId).toBe("B-old");
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { IdleCompactResult } from "../contracts.ts";
 import type { HandedState } from "../delta-context.ts";
 import type { Message } from "../store.ts";
-import { WARM_SUMMARY_IDLE_MS, WARM_SUMMARY_RETRY_MS, WARM_SUMMARY_SOON_MS } from "../warm-summary.ts";
+import { WARM_SUMMARY_IDLE_MS, WARM_SUMMARY_SOON_MS } from "../warm-summary.ts";
 import { addServerLinePacks } from "../server-lines.ts";
 import { createWarmSummaryHost, keptAfterSummary, PRESENCE_HOLD_MS, summaryInstructions, type WarmSummaryHostDeps } from "./warm-summary-host.ts";
 
@@ -86,7 +86,6 @@ function setup(overrides: Partial<WarmSummaryHostDeps> = {}, options: { tokens?:
     queued: () => false,
     coordinator: { activeDirect: () => false, awaitingTeammateThreads: () => new Set() },
     waits: () => ({ all: () => [] }),
-    routines: () => ({ listRoutines: () => [], listRuns: () => [] }),
     fold,
     book,
     keepWarmUntil: () => undefined,
@@ -192,18 +191,6 @@ describe("warm summaries for a Claude conversation", () => {
     f.finishTurn();
     await f.advance(WARM_SUMMARY_IDLE_MS * 10);
     expect(f.compactCalls).toEqual([]);
-  });
-
-  it("waits for a routine due soon, a busy bot or short memory, then summarizes", async () => {
-    let due = true;
-    const routine = { id: "r", botId: "b1", enabled: true, nextRunAt: 0 } as never;
-    const f = setup({ routines: () => ({ listRoutines: () => (due ? [{ ...(routine as object), nextRunAt: f.now() + 60_000 }] : []) as never, listRuns: () => [] }) });
-    f.finishTurn();
-    await f.advance(WARM_SUMMARY_IDLE_MS);
-    expect(f.compactCalls).toEqual([]);
-    due = false;
-    await f.advance(WARM_SUMMARY_RETRY_MS);
-    expect(f.compactCalls).toHaveLength(1);
   });
 
   it("uses OpenMausBot's own fold for an engine without its own compaction", async () => {

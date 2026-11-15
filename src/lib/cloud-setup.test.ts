@@ -90,20 +90,18 @@ describe("cloudSetupStage", () => {
     expect(cloudSetupStage(facts({ welcomeShown: false }))).toBe("shown");
   });
 
-  it("after the welcome, goes once an engine can run, or once a job given at its end has its routine", () => {
+  it("after the welcome, goes once an engine can run", () => {
     const ended = record({ hintsSeen: [CLOUD_WELCOME_DONE] });
     expect(cloudSetupStage(facts({ onboarding: ended }))).toBe("shown");
     expect(cloudSetupStage(facts({ onboarding: ended, engineReady: true }))).toBe("done");
     const given = record({ hintsSeen: [CLOUD_WELCOME_DONE, CLOUD_INTENT_ASKED, CLOUD_INTENT_GIVEN] });
     expect(cloudSetupStage(facts({ onboarding: given, engineReady: true }))).toBe("shown");
-    expect(cloudSetupStage(facts({ onboarding: given, engineReady: true, planned: true }))).toBe("done");
   });
 
-  it("before the welcome, with a first job given, waits for its routine: the bot's first turn only asks its questions", () => {
+  it("before the welcome, with a first job given, waits for the bot's first turn", () => {
     const given = before({ hintsSeen: [CLOUD_INTENT_GIVEN], firstTurnAt: "2026-09-30T08:00:00.000Z" });
-    expect(cloudSetupStage(facts({ engineReady: true, onboarding: given }))).toBe("shown");
-    expect(cloudSetupStage(facts({ engineReady: true, onboarding: given, planned: true }))).toBe("done");
-    expect(cloudSetupStage(facts({ onboarding: given, planned: true }))).toBe("shown");
+    expect(cloudSetupStage(facts({ engineReady: true, onboarding: given }))).toBe("done");
+    expect(cloudSetupStage(facts({ onboarding: given }))).toBe("shown");
   });
 
   it("before the welcome, goes away once an engine can run and a bot has finished a turn there, or once hidden", () => {
@@ -129,31 +127,23 @@ describe("cloudSetupItems", () => {
     expect(steps(facts({ onboarding: record({ hintsSeen: finished("files") }) }))).toContain("files:done");
   });
 
-  it("after the welcome, lists what it brought and the AI, and a job only when one was given", () => {
+  it("after the welcome, lists what it brought and the AI", () => {
     const ended = record({ hintsSeen: [...finished("bring"), CLOUD_WELCOME_DONE] });
     expect(steps(facts({ onboarding: ended }))).toEqual(["cloud:done", "engine:todo", "move:done"]);
     const given = record({ hintsSeen: [CLOUD_WELCOME_DONE, CLOUD_INTENT_ASKED, CLOUD_INTENT_GIVEN] });
-    expect(steps(facts({ onboarding: given }))).toEqual(["cloud:done", "job:done", "engine:todo", "plan:todo"]);
+    expect(steps(facts({ onboarding: given }))).toEqual(["cloud:done", "engine:todo"]);
   });
 
   it("before the welcome, starts one step in: the Cloud exists", () => {
-    expect(steps(facts({ onboarding: before() }))).toEqual(["cloud:done", "job:todo", "engine:todo"]);
+    expect(steps(facts({ onboarding: before() }))).toEqual(["cloud:done", "engine:todo"]);
   });
 
   it("before the welcome, connecting an AI is done when any engine can run", () => {
     expect(steps(facts({ onboarding: before(), engineReady: true }))).toContain("engine:done");
   });
 
-  it("before the welcome, a first job is done once one is given, or once a turn has finished there", () => {
-    expect(steps(facts({ onboarding: before() }))).toContain("job:todo");
-    expect(steps(facts({ onboarding: before({ hintsSeen: [CLOUD_INTENT_GIVEN] }) }))).toContain("job:done");
-    expect(steps(facts({ onboarding: record({ firstTurnAt: "2026-09-30T08:00:00.000Z" }) }))).toContain("job:done");
-  });
-
-  it("before the welcome, a given job adds its plan: done once its routine exists", () => {
+  it("before the welcome, a given job leaves the AI as the one step left", () => {
     const given = before({ hintsSeen: [CLOUD_INTENT_GIVEN] });
-    expect(steps(facts({ onboarding: given }))).toEqual(["cloud:done", "job:done", "engine:todo", "plan:todo"]);
-    expect(steps(facts({ onboarding: given, engineReady: true, planned: true }))).toEqual(["cloud:done", "job:done", "engine:done", "plan:done"]);
-    expect(steps(facts({ onboarding: record({ firstTurnAt: "2026-09-30T08:00:00.000Z" }) }))).not.toContain("plan:todo");
+    expect(steps(facts({ onboarding: given, engineReady: true }))).toEqual(["cloud:done", "engine:done"]);
   });
 });

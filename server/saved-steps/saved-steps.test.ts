@@ -372,8 +372,6 @@ describe("SavedSteps.requestSettled", () => {
 
   it.each([
     ["Local VM", { localVmTarget: { kind: "vm" } }],
-    ["Cloud Boat", { boxId: "bx_1" }],
-    ["Cloud Boat not created yet", { boxId: null }],
     ["team computer", { teamComputerId: "tc_1" }],
   ])("saves nothing when the request also used a %s", (_, place) => {
     steps.gateChecked({ botId: "b1", threadId: "t1", generation: "g1", kind: "computer", ...place });

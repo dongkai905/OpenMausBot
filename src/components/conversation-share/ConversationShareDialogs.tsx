@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { UserPlus, Users } from "lucide-react";
 
 import { t } from "@/lib/i18n";
@@ -7,7 +7,7 @@ import { teamChats } from "@/state/team-chats";
 import { setTeamSide } from "@/state/team-side";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Select } from "../Select";
-import { UndoToast, useTeamName } from "../bot-access/ShareBotButton";
+import { useTeamName } from "../bot-access/ShareBotButton";
 import {
   closeConversationDialog, shareConversation, sharingOf, useConversationDialog,
   type ConversationDialog, type Sharing,

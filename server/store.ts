@@ -353,7 +353,7 @@ export class Store {
           botsMigrated = true;
         }
       }
-      if (b.cloudBackend !== undefined && b.cloudBackend !== "box" && b.cloudBackend !== "vps") {
+      if (b.cloudBackend !== undefined && b.cloudBackend !== "vps") {
         delete b.cloudBackend;
         botsMigrated = true;
       }
@@ -1715,7 +1715,7 @@ export class Store {
 
   retireInstances(ids: ReadonlySet<string>, replacement: ModelSelection, options: {
     driverKind?: string;
-    canWorkOnCloud: boolean;
+    canWorkOnRemote: boolean;
     keepCloud: (bot: BotRecord) => boolean;
   }): ComputerEngineMove[] {
     const retired = (selection?: { instanceId: string }) => Boolean(selection && ids.has(selection.instanceId));
@@ -1731,7 +1731,7 @@ export class Store {
       const patch: Partial<BotRecord> = {};
       const tasks = (bot.tasks ?? []).map((): Partial<TaskRecord> => ({}));
       const botMoved = retired(bot.modelSelection);
-      const keepsCloud = options.canWorkOnCloud && options.keepCloud(bot);
+      const keepsCloud = options.canWorkOnRemote && options.keepCloud(bot);
       let botAsk = false;
       if (botMoved) {
         if (bot.computer === undefined && keepsCloud) patch.computer = "cloud";
@@ -1747,7 +1747,7 @@ export class Store {
       const cloudAfterMove = (pin: TaskRecord["surface"], pinSource: TaskRecord["surfaceSource"]): Pick<ComputerEngineMove, "cloud" | "noComputer"> => {
         const place = pin ?? bot.computer;
         const wasCloud = place === "cloud" || (place === undefined && options.keepCloud(bot));
-        if (!wasCloud || options.canWorkOnCloud) return { cloud: wasCloud, noComputer: false };
+        if (!wasCloud || options.canWorkOnRemote) return { cloud: wasCloud, noComputer: false };
         const personPin = pin !== undefined && pinSource !== "auto";
         const still = personPin ? pin : bot.computer;
         return { cloud: false, noComputer: still !== "cloud" ? "auto" : personPin ? "pin" : "works-on" };
@@ -1767,7 +1767,7 @@ export class Store {
             taskPatch.surface = "cloud";
             taskPatch.surfaceSource = "auto";
           }
-          if (!options.canWorkOnCloud && task.surface === "cloud" && task.surfaceSource === "auto") {
+          if (!options.canWorkOnRemote && task.surface === "cloud" && task.surfaceSource === "auto") {
             taskPatch.surface = undefined;
             taskPatch.surfaceSource = undefined;
           }

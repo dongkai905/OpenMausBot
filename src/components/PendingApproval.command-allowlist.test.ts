@@ -122,7 +122,7 @@ describe("remembering exact command approvals", () => {
   });
 
   it("never offers always allow on code or a real send", () => {
-    for (const tool of ["COMPOSIO_PROXY_EXECUTE", "SLACK_SEND_MESSAGE"]) {
+    for (const tool of ["SLACK_SEND_MESSAGE", "GMAIL_SEND_EMAIL"]) {
       const result = view({ tool, commandAllowlist: undefined, allowSession: undefined, allowKey: undefined,
         heldCode: "approval.held.outbound", outboundRequest: { tool, app: "Slack", calls: [{ app: "Slack", label: "Send" }] } });
       expect(result.html).toContain("Allow once");

@@ -190,7 +190,7 @@ describe("creating a bot from a preset", () => {
     expect(record.installedPackage).toEqual({ id: "sales-desk", name: "Sales desk", release: "1.3.0", requiredApps: [], source: "file",
       installId: imported.installId, presetKey: "support" });
     expect(record.modelSelection).toEqual({ instanceId: "claude", model: "default-model" });
-    for (const field of ["approvalMode", "autoApprove", "computer", "cwd", "composio", "mcpServers", "browser"] as const) {
+    for (const field of ["approvalMode", "autoApprove", "computer", "cwd", "apps", "mcpServers", "browser"] as const) {
       expect(record).not.toHaveProperty(field);
     }
   });
@@ -222,7 +222,7 @@ describe("sharing my New bot defaults as a preset", () => {
     profile: {
       name: "Sky", title: "Support", description: "Answers customers.", soul: "Be kind.\n", color: "blue", mascotExpression: "happy",
       modelSelection: { instanceId: "claude", model: "opus" }, computer: "local", cwd: "/Users/me/secret", approvalMode: "full",
-      alwaysAllow: ["Bash(*)"], chiefOfStaff: true, managedSections: ["Ops"], composio: true, browser: true,
+      alwaysAllow: ["Bash(*)"], chiefOfStaff: true, managedSections: ["Ops"], apps: true, browser: true,
       browserProfile: "work", mcpServers: ["crm"], section: "Support", parkDirectMessages: true, avatarCrop: "rounded",
     },
     memory: { "MEMORY.md": "- Customers first.\n", "memory/tone.md": "Warm.\n" },

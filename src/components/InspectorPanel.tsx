@@ -9,9 +9,10 @@ import type { RuntimeEvent } from "../../shared/runtime-events";
 import { RunLog } from "./RunLog";
 import { timelineEvents } from "@/lib/taskTimeline";
 import { activeLocale, t } from "@/lib/i18n";
-import { capital } from "@/lib/automations";
 import type { LocaleKey } from "@/locales";
 import { appendInspectorRuntime, mergeInspectorSnapshot, INSPECTOR_WINDOW_LIMIT } from "@/lib/inspector-window";
+
+const capital = (text: string) => text.charAt(0).toLocaleUpperCase(activeLocale()) + text.slice(1);
 
 const tabLabel = (key: LocaleKey) => (activeLocale() === "en" ? t(key) : capital(t(key)));
 

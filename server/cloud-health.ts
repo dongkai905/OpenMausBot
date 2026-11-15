@@ -5,7 +5,6 @@ import { accessSync, constants, readFileSync, statfsSync } from "node:fs";
 import { availableParallelism, freemem, loadavg, totalmem } from "node:os";
 import { failedTurnCause } from "../shared/failed-turn.ts";
 import { PLACE_STATES } from "../shared/place-view.ts";
-import { trialCreditKind } from "../shared/trial-credit.ts";
 import type { BoxReport } from "./bot-box/box.ts";
 import type { RoomReport } from "./engine-memory.ts";
 import type { FirstHourReport } from "./host/first-hour.ts";
@@ -65,11 +64,10 @@ export interface RoutineHealth { routineId: string; status: RoutineRunStatus; at
 export interface TurnRates { started15m: number; failed15m: number; started24h: number; failed24h: number }
 interface Pending { at: number; botId: string | null; engine: string | null; fallback: string }
 
-/** A cause the server words itself, or the trial credit's refusal: its code needs no stop reason. */
+/** A cause the server words itself: its code needs no stop reason. */
 export function fixedCode(cause: string): string | null {
   for (const [pattern, code] of FIXED_CAUSES) if (pattern.test(cause)) return code;
-  const trial = trialCreditKind(cause);
-  return trial ? `trial_${trial}` : null;
+  return null;
 }
 
 export const classifiedCode = (cause: string): string => match(CODE, classifyError({ text: cause }).reason) ?? "unknown";

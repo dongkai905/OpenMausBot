@@ -12,16 +12,14 @@ export const LOGIN_HANDOFF_REQUEST = "openmausbot:login-handoff";
 export const LOGIN_HANDOFF_RESULT = "openmausbot:login-handoff-result";
 
 export type LoginHandoffWhat = { kind: "1password" } | { kind: "login"; id: string } | { kind: "secret"; id: string } | { kind: "verify-secrets"; nonce: string };
-/** For a move to the person's own Cloud: one connection's secrets, a code for that Cloud to act as this computer's
- * connected-apps account, or letting go of a sign-in that moved there (cloud-connections.ts). */
+/** For a move to the person's own Cloud: one connection's secrets, or letting go of a sign-in that moved there
+ * (cloud-connections.ts). */
 export type ConnectionHandoffWhat =
   | { kind: "connection"; id: string }
-  | { kind: "composio-share"; for: string }
   | { kind: "connection-release"; id: string; digest: string }
   | { kind: "connection-fingerprints"; nonce: string };
 export type ConnectionHandoffAnswer =
   | { ok: true; connection: object; digest?: string }
-  | { ok: true; share: { code: string } }
   | { ok: true; release: { released: true } | { changed: true } }
   | { ok: true; secrets: Record<string, string> }
   | { ok: false; error: string };
@@ -56,8 +54,7 @@ export type LoginHandoffResult = { type: typeof LOGIN_HANDOFF_RESULT; requestId:
 
 const REQUEST_ID = /^[\w-]{8,64}$/u;
 const LOGIN_ID = /^[\w-]{1,128}$/u;
-const CONNECTION_ID = /^(?:mcp:[a-z][a-z0-9_-]{0,31}|key:\w{1,40}|composio|email)$/u;
-const INSTALLATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const CONNECTION_ID = /^(?:mcp:[a-z][a-z0-9_-]{0,31}|key:\w{1,40}|email)$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 
 export function totpAddress(key: TotpKey): string {
@@ -77,7 +74,6 @@ function parse(raw: unknown): { requestId: string; what: Ask } | null {
   if (what?.kind === "login" && typeof what.id === "string" && LOGIN_ID.test(what.id)) return { requestId: message.requestId, what: { kind: "login", id: what.id } };
   if (what?.kind === "secret" && typeof what.id === "string" && LOGIN_ID.test(what.id)) return { requestId: message.requestId, what: { kind: "secret", id: what.id } };
   if (what?.kind === "connection" && typeof what.id === "string" && CONNECTION_ID.test(what.id)) return { requestId: message.requestId, what: { kind: "connection", id: what.id } };
-  if (what?.kind === "composio-share" && typeof what.for === "string" && INSTALLATION_ID.test(what.for)) return { requestId: message.requestId, what: { kind: "composio-share", for: what.for } };
   if (what?.kind === "connection-release" && typeof what.id === "string" && CONNECTION_ID.test(what.id) && typeof what.digest === "string" && DIGEST.test(what.digest)) {
     return { requestId: message.requestId, what: { kind: "connection-release", id: what.id, digest: what.digest } };
   }
@@ -119,7 +115,7 @@ export function receiveLoginHandoff(raw: unknown, store: HandoffStore, post: (me
   const ask = parse(raw);
   if (!ask) return true;
   const { requestId, what } = ask;
-  if (what.kind === "connection" || what.kind === "composio-share" || what.kind === "connection-release") {
+  if (what.kind === "connection" || what.kind === "connection-release") {
     const refused: ConnectionHandoffAnswer = { ok: false, error: "This connection could not be read on this computer." };
     const answer = connections ? connections(what).catch((): ConnectionHandoffAnswer => refused) : Promise.resolve(refused);
     void answer.then((answered) => post({ type: LOGIN_HANDOFF_RESULT, requestId, ...answered }));

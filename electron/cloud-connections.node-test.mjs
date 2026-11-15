@@ -1,23 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { adoptComposioId, collectConnections, ConnectionMoveError, parseConnections, releaseConnections, sendConnections } from "./cloud-connections.mjs";
+import { collectConnections, parseConnections, releaseConnections, sendConnections } from "./cloud-connections.mjs";
 
 const COMPUTER = { environmentId: "env-desktop-1", label: "Milind's MacBook" };
-const INSTALLATION = "0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e";
 const D1 = "1".repeat(64), D2 = "2".repeat(64);
 const linearSignIn = (refresh) => ({ url: "https://mcp.linear.app/sse", state: "signed-in", tokens: { access: `a-${refresh}`, refresh } });
 
 /** This computer's server: its list, and the private port's answers, each ask recorded. */
-function computer({ connections, answers = {}, release = () => ({ released: true }), connected = {} }) {
+function computer({ connections, answers = {}, release = () => ({ released: true }) }) {
   const asked = [];
   return {
     asked,
-    json: async (route) => (route === "/api/cloud-connections" ? { computer: COMPUTER, connections, engines: [], commands: [] } : { services: connected }),
+    json: async (route) => (route === "/api/cloud-connections" ? { computer: COMPUTER, connections, engines: [], commands: [] } : {}),
     handoff: async (what) => {
       asked.push(what);
       if (what.kind === "connection-release") return { ok: true, release: release(what) };
-      if (what.kind === "composio-share") return { ok: true, share: { code: "c".repeat(64) } };
       const answer = typeof answers[what.id] === "function" ? answers[what.id]() : answers[what.id];
       if (!answer) throw new Error("This connection could not be read on this computer.");
       return { ok: true, ...answer };
@@ -45,11 +43,10 @@ function cloud({ connections = [], engines = [], commands = ["npx", "node"], rep
 
 const writes = (target) => target.calls.filter(([method]) => method !== "GET").map(([method, route]) => `${method} ${route}`);
 
-test("moves keys first, then MCP servers with their secrets, mailboxes and connected apps, each over My Cloud's own routes", async () => {
+test("moves keys first, then MCP servers with their secrets and mailboxes, each over My Cloud's own routes", async () => {
   const local = computer({
     connections: [
       { id: "mcp:dodo", kind: "mcp", label: "dodo", launcher: "npx" },
-      { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:aaa" },
       { id: "email", kind: "email", label: "Email" },
       { id: "key:openrouter", kind: "key", label: "OpenRouter", for: ["openrouter"] },
     ],
@@ -58,39 +55,16 @@ test("moves keys first, then MCP servers with their secrets, mailboxes and conne
       email: { connection: { email: [{ address: "ana@example.test" }] } },
       "key:openrouter": { connection: { config: { openrouter: { key: "sk-or" } } } },
     },
-    connected: { gmail: { connected: true }, slack: { connected: false } },
   });
-  const target = cloud({ connections: [{ id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:bbb", installationId: INSTALLATION }],
-    engines: ["openrouter"], reply: (method, route) => (route === "/api/cloud-connections/connected-apps" ? { status: 200, body: { shared: true } } : undefined) });
+  const target = cloud({ engines: ["openrouter"] });
   const progress = [];
   const result = await sendConnections(await collectConnections(local), target, { local, onProgress: (step) => progress.push(step) });
   assert.deepEqual(result.failed, []);
-  assert.deepEqual(writes(target), ["PUT /api/cloud-connections/held-keys", "PATCH /api/config", "POST /api/mcp/servers", "PATCH /api/mcp/servers/dodo", "PUT /api/cloud-connections/email", "POST /api/cloud-connections/connected-apps"]);
-  assert.deepEqual(result.held, [], "a Cloud with no trial credit to keep runs the key at once");
+  assert.deepEqual(writes(target), ["PATCH /api/config", "POST /api/mcp/servers", "PATCH /api/mcp/servers/dodo", "PUT /api/cloud-connections/email"]);
   assert.deepEqual(target.calls.find(([, route]) => route === "/api/mcp/servers")[2], { name: "dodo", command: "npx", args: ["-y", "dodo"], env: { KEY: "k" } });
-  assert.deepEqual(target.calls.find(([, route]) => route === "/api/cloud-connections/connected-apps")[2], { share: "c".repeat(64), apps: ["gmail"] });
-  assert.deepEqual(local.asked.find((what) => what.kind === "composio-share"), { kind: "composio-share", for: INSTALLATION });
   assert.deepEqual(target.calls.find(([, route]) => route === "/api/cloud-connections/email")[2], { accounts: [{ address: "ana@example.test" }] });
-  assert.deepEqual(result.moved.map((item) => item.id), ["key:openrouter", "mcp:dodo", "email", "composio"]);
-  assert.deepEqual(progress.map((step) => `${step.done}/${step.total} ${step.label}`), ["1/4 OpenRouter", "2/4 dodo", "3/4 Email", "4/4 Connected apps"]);
-});
-
-test("a trial's Cloud keeps a moved key saved but unused while its Claude credit lasts, asked before the key is saved, and the move goes on without waiting for it", async () => {
-  const local = computer({
-    connections: [{ id: "key:openrouter", kind: "key", label: "OpenRouter", for: ["openrouter"] }, { id: "mcp:dodo", kind: "mcp", label: "dodo", launcher: "npx" }],
-    answers: {
-      "key:openrouter": { connection: { config: { openrouter: { key: "sk-or" } } } },
-      "mcp:dodo": { connection: { mcp: { name: "dodo", server: { command: "npx", args: ["-y", "dodo"], env: {}, enabled: true } } } },
-    },
-  });
-  const target = cloud({ engines: [], reply: (method, route) => (route === "/api/cloud-connections/held-keys" ? { status: 200, body: { held: true } } : undefined) });
-  const started = Date.now();
-  const result = await sendConnections(await collectConnections(local), target, { local, waitMs: 5_000 });
-  assert.ok(Date.now() - started < 2_000, "an engine kept unused is never waited for");
-  assert.deepEqual(writes(target).slice(0, 2), ["PUT /api/cloud-connections/held-keys", "PATCH /api/config"]);
-  assert.deepEqual(target.calls.find(([, route]) => route === "/api/cloud-connections/held-keys")[2], { for: ["openrouter"] });
-  assert.deepEqual(result.held, [{ id: "key:openrouter", label: "OpenRouter" }]);
-  assert.deepEqual(result.moved.map((item) => item.id), ["key:openrouter", "mcp:dodo"]);
+  assert.deepEqual(result.moved.map((item) => item.id), ["key:openrouter", "mcp:dodo", "email"]);
+  assert.deepEqual(progress.map((step) => `${step.done}/${step.total} ${step.label}`), ["1/3 OpenRouter", "2/3 dodo", "3/3 Email"]);
 });
 
 test("a server that needs this computer goes marked as running on it, and a server already on My Cloud is replaced", async () => {
@@ -218,34 +192,6 @@ test("waits for My Cloud to run the engines whose keys went, before anything tha
   assert.equal(order.filter((call) => call === "GET /api/cloud-connections").length, 3);
 });
 
-test("connected apps: the same account already, the person's own project, a Cloud not ready, and one that keeps its own", async () => {
-  const here = { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:aaa" };
-  const local = computer({ connections: [], answers: { composio: { connection: { composio: { apiKey: "ck", userId: "u1" } } } }, connected: { gmail: { connected: true } } });
-  const quiet = cloud();
-  assert.deepEqual(await adoptComposioId(quiet, { local, here, there: { ...here, installationId: INSTALLATION } }), { shared: true });
-  assert.deepEqual(quiet.calls, []);
-  await assert.rejects(adoptComposioId(quiet, { local, here, there: null }), (error) => error instanceof ConnectionMoveError && error.code === "not_ready" && !error.final);
-
-  const keeps = cloud({ reply: () => ({ status: 200, body: { kept: true, missing: ["gmail", "BAD SLUG"] } }) });
-  assert.deepEqual(await adoptComposioId(keeps, { local, here: { ...here, mode: "own", account: "own:x" }, there: null }), { kept: true, missing: ["gmail"] });
-  assert.deepEqual(keeps.calls[0], ["POST", "/api/cloud-connections/connected-apps", { apiKey: "ck", userId: "u1", apps: ["gmail"] }]);
-});
-
-test("a server of the person's own with no connected-apps service keeps MausBot's connected apps here for good, and still takes their own project", async () => {
-  const here = { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:aaa" };
-  const local = computer({ connections: [here], answers: { composio: { connection: { composio: { apiKey: "ck", userId: "u1" } } } }, connected: { gmail: { connected: true } } });
-  assert.deepEqual(parseConnections({ computer: COMPUTER, connections: [], managedApps: false }).managedApps, false);
-  assert.equal(parseConnections({ computer: COMPUTER, connections: [] }).managedApps, undefined, "an Admin's Cloud says nothing: as before");
-  const garage = cloud();
-  await assert.rejects(adoptComposioId(garage, { local, here, there: null, managedApps: false }), (error) => error.code === "no_service" && error.final === true);
-  assert.deepEqual(garage.calls, [], "nothing asked of it");
-  const listing = { status: 200, body: { computer: { environmentId: "env-garage", label: "Garage server" }, connections: [], engines: [], commands: [], managedApps: false } };
-  const moved = await sendConnections({ computer: COMPUTER, connections: [here] }, { call: async (method, route) => (method === "GET" && route === "/api/cloud-connections" ? { ok: true, ...listing } : { ok: true, status: 200, body: {} }) }, { local, waitMs: 0 });
-  assert.deepEqual(moved.failed.map((failure) => [failure.id, failure.final]), [["composio", true]], "final: the move's check leaves it out");
-  const own = cloud({ reply: () => ({ status: 200, body: { shared: true } }) });
-  assert.deepEqual(await adoptComposioId(own, { local, here: { ...here, mode: "own", account: "own:x" }, there: null, managedApps: false }), { shared: true });
-});
-
 test("a Cloud too old for connections says so; one that does not answer, too; this computer must list its own", async () => {
   const local = computer({ connections: [] });
   const old = { call: async () => ({ ok: false, status: 404, body: {} }) };
@@ -260,11 +206,12 @@ test("a server's list keeps only connections of the known shape", () => {
     { id: "mcp:dodo", kind: "mcp", label: "dodo", launcher: "npx", runsHere: true, extra: "x" },
     { id: "mcp:dodo", kind: "key", label: "mismatched kind" },
     { id: "../etc", kind: "mcp", label: "bad id" },
-    { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:a", installationId: "not-a-uuid" },
+    { id: "email", kind: "email", label: "Email" },
+    { id: "email", kind: "unknown", label: "Unknown kind" },
   ] });
   assert.deepEqual(parsed, { computer: COMPUTER, engines: ["openrouter"], commands: ["npx"], connections: [
     { id: "mcp:dodo", kind: "mcp", label: "dodo", runsHere: true, launcher: "npx" },
-    { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:a" },
+    { id: "email", kind: "email", label: "Email" },
   ] });
   assert.equal(parseConnections({ computer: { environmentId: "../x", label: "Mac" }, connections: [] }), null);
 });

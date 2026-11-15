@@ -138,7 +138,7 @@ describe("a turn's Email tools", () => {
   it("a read-only bot reads and can't send; a bot with connected apps off gets neither", async () => {
     const reader = { id: "b", name: "Ada", connectorScopes: { apps: { email: "read" as const } } };
     expect(EMAIL_TOOL_NAMES.filter((name) => emailAccess(reader, name).ok)).toEqual(EMAIL_READ_TOOL_NAMES);
-    expect(emailAllowedFor({ composio: false })).toBe(false);
+    expect(emailAllowedFor({ apps: false })).toBe(false);
     expect(emailAllowedFor({ connectorScopes: { apps: { gmail: "write" as const } } })).toBe(false);
     expect(emailAllowedFor({ connectorTools: { gmail: { tools: "*" } } })).toBe(false);
     expect(emailAllowedFor({})).toBe(true);
@@ -174,7 +174,7 @@ describe("a turn's Email tools", () => {
     expect(JSON.stringify(mount)).not.toContain(PASSWORD);
     expect(host.prompt({ id: "b", name: "A" })).toContain("me@shop.example");
     expect(host.prompt({ id: "b", name: "A" })).not.toContain(PASSWORD);
-    expect(host.prompt({ id: "b", name: "A", composio: false })).toBe("");
+    expect(host.prompt({ id: "b", name: "A", apps: false })).toBe("");
   });
 });
 

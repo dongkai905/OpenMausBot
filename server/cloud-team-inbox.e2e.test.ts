@@ -1,9 +1,9 @@
 // Each person's inbox on a Team Cloud, end to end (docs/team-cloud.md "One inbox per person"): Acme's Owner Cleo and
 // a member Ben, the synthetic Claude CLI calling message_person through the real agents MCP server, real approval
-// cards through the permission socket, and Ben's own Google Calendar on the fake connected-apps service. A bot's "tell
-// Ben", an @Ben and an approval routed to Ben land in his inbox, his chat with his Chief, with one notification
-// each; his answer reaches the bot that asked, which carries on; his assistant answers when he is free, labelled, and
-// leaves decisions and his private chats alone. The asks waiting on him are counted on his inbox, live, and each stops
+// cards through the permission socket. A bot's "tell Ben", an @Ben and an approval routed to Ben land in his inbox, his
+// chat with his Chief, with one notification each; his answer reaches the bot that asked, which carries on; his
+// assistant answers for him, labelled, and leaves decisions and his private chats alone. The asks waiting on him are
+// counted on his inbox, live, and each stops
 // waiting however he answers it: in the bot's own chat, through either respond route, or with a 👍. It proves where
 // things land and what is read, not a model's judgement.
 import { randomBytes, randomUUID } from "node:crypto";
@@ -13,7 +13,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { personKey } from "./person-key.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const CLEO = { email: "cleo@acme.test", role: "owner" as const };
@@ -40,7 +39,7 @@ type Task = { threadId: string; title: string; inbox?: true; private?: true; ope
 type Bot = { id: string; name: string; threadId: string; mainThreadId?: string; busy?: boolean; activity?: string; tasks?: Task[] };
 type Frame = { kind: string; bot?: Bot; notification?: { kind: string; botId: string; threadId: string; title: string; body: string; forPerson?: string } };
 
-let fx: CloudSendFixture, team: CloudTeamFixture, broker: BrokerFake;
+let fx: CloudSendFixture, team: CloudTeamFixture;
 let cleo = "", ben = "";
 let scout: Bot, chief: Bot, reporter: Bot;
 let cleoThread = "", benThread = "", inbox = "";
@@ -148,8 +147,7 @@ async function askedOfBen(ask: (requestId: string) => Record<string, unknown>) {
 }
 
 beforeAll(async () => {
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
   team = fx.team!;
   writeFileSync(file("release"), "");
   cleo = (await team.pair(CLEO)).token!;
@@ -170,17 +168,6 @@ beforeAll(async () => {
   script(null);
   await turn(ben, scout, benThread, `Keep this between us: I'm ${SECRET} on Thursday.`);
 
-  // Google Calendar is each person's own on Acme, and Ben connected his.
-  expect((await team.as(cleo, "PUT", "/api/team/connection-scopes", { kind: "app", id: "googlecalendar", scope: "person" })).status).toBe(200);
-  expect((await team.as(ben, "POST", "/api/team/my-connections/apps/googlecalendar/connect", {})).status).toBe(200);
-  const benUser = broker.userFor(broker.installationIds().at(-1)!);
-  broker.account(benUser, "googlecalendar", BEN.email);
-  // At noon two days on, so the busy hour never runs past midnight, which the prompt words as two days.
-  const noon = new Date(Date.now() + 2 * 24 * 60 * 60_000);
-  noon.setHours(12, 0, 0, 0);
-  const start = noon.getTime();
-  broker.calendarEvents[benUser] = [{ id: "ev1", summary: "Interview at Globex", status: "confirmed", location: "Globex HQ", attendees: [{ email: "hr@globex.test" }],
-    start: { dateTime: new Date(start).toISOString() }, end: { dateTime: new Date(start + 60 * 60_000).toISOString() } }];
   bens = listen(ben);
   cleos = listen(cleo);
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -190,7 +177,6 @@ afterAll(async () => {
   for (const socket of sockets) socket.destroy();
   for (const stream of streams) stream.abort();
   await fx?.close();
-  await broker?.close();
 });
 
 it("lands a bot's \"tell Ben\" in his inbox, his chat with his Chief, with one notification and nothing else of Cleo's chat", async () => {
@@ -256,7 +242,7 @@ it("copies an approval Ben's bot asks into his inbox, with one notification, and
   await until(idle);
 }, hostTimeout(120_000));
 
-it("has Ben's assistant answer a free/busy question itself, labelled, from busy times alone", async () => {
+it("has Ben's assistant answer a question itself, labelled", async () => {
   routes({ "free on Thursday at 3pm": '{"answer": "Ben is busy for an hour that afternoon and free after it."}' });
   const before = (await inboxLines()).length;
   await passFromScout("Are you free on Thursday at 3pm?");
@@ -264,8 +250,6 @@ it("has Ben's assistant answer a free/busy question itself, labelled, from busy 
   expect((await messages(cleo, cleoThread)).rows.find((row) => row.relay?.kind === "assistant")).toMatchObject({ role: "user",
     text: 'Ben\'s assistant answered your message ("Are you free on Thursday at 3pm?"), from what Ben shares with the team: Ben is busy for an hour that afternoon and free after it.', relay: { email: BEN.email } });
   const [prompt] = assistantPrompts();
-  expect(prompt).toMatch(/Busy times in the next 14 days \(free at every other time\): \w{3} \d{1,2} \w{3} \d\d:\d\d–\d\d:\d\d\./u);
-  expect(prompt).not.toMatch(/Globex|Interview|hr@/u);
   expect(prompt).not.toContain(SECRET);
   const line = (await inboxLines())[before]!;
   expect(line).toMatchObject({ text: "Are you free on Thursday at 3pm?", inbox: { answers: [{ by: "assistant", text: "Ben is busy for an hour that afternoon and free after it." }] } });
@@ -294,7 +278,6 @@ it("never lets the assistant decide or approve for Ben, and never shows it his p
   const prompt = assistantPrompts().at(-1)!;
   expect(prompt).toContain("Reporter");
   expect(prompt).not.toContain(SECRET);
-  expect(prompt).not.toContain("Globex");
 }, hostTimeout(180_000));
 
 it("counts the asks waiting on Ben on his inbox, live, and drops one as soon as he answers it in the bot's own chat", async () => {

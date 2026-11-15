@@ -69,30 +69,12 @@ export interface OutboundSummary {
   opaque?: true;
 }
 
-const OPAQUE_TOOL = "COMPOSIO_PROXY_EXECUTE";
-
 export function outboundSummary(card: Pick<OptionCardData, "outboundRequest" | "subtitle">): OutboundSummary | undefined {
   if (!card.outboundRequest) return undefined;
   const calls = outboundCalls(card);
   const app = outboundApp(calls);
-  if (card.outboundRequest.tool === OPAQUE_TOOL) {
-    return {
-      headline: t("approval.outbound.runCode", { app: app ?? card.outboundRequest.app ?? "Composio" }),
-      summary: "",
-      opaque: true,
-    };
-  }
   return {
     headline: app ? t("approval.outbound.sendTo", { app }) : t("approval.outbound.sendOnBehalf"),
     summary: collapseOutboundCalls(calls, app === null),
   };
-}
-
-/** Composio names its tools TOOLKIT_ACTION_WORDS, all upper case. */
-const COMPOSIO_TOOL = /^[A-Z][A-Z0-9]+_([A-Z0-9_]+)$/;
-
-export function composioActionPhrase(tool: string): string | undefined {
-  const match = COMPOSIO_TOOL.exec(tool);
-  if (!match) return undefined;
-  return match[1]!.replace(/_+/g, " ").trim().toLowerCase() || undefined;
 }

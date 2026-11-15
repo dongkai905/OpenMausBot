@@ -1,4 +1,4 @@
-import { FolderOpen, LayoutGrid, Puzzle, Rocket, Search, UsersRound, X, Zap } from "lucide-react";
+import { FolderOpen, LayoutGrid, Puzzle, Rocket, Search, UsersRound, X } from "lucide-react";
 
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { t } from "@/lib/i18n";
@@ -6,24 +6,14 @@ import { useStore } from "@/state/store";
 
 import { CloudRoomCard } from "./CloudRoomCard";
 import { CloudUsageCard } from "./CloudUsageMeter";
-import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { UpdateIndicator } from "./UpdateIndicator";
 
 /** The phone's bottom bar: a round button for the tools that are rows in the desktop sidebar, and a search pill. */
 export function SidebarPhoneBar({ query, onQuery }: { query: string; onQuery: (query: string) => void }) {
   const { state, dispatch } = useStore();
-  const automationsNeedYou = useAutomationsNeedYou();
   const filesReady = useCloudFilesReady();
   const items: SidebarMenuItem[] = [
-    {
-      key: "automations",
-      label: t("sidebar.nav.automations"),
-      icon: <Zap size={18} />,
-      active: state.activeView === "automations",
-      attention: automationsNeedYou,
-      onSelect: () => dispatch({ type: "showAutomations" }),
-    },
     {
       key: "team-map",
       label: t("sidebar.nav.teamMap"),
@@ -66,7 +56,6 @@ export function SidebarPhoneBar({ query, onQuery }: { query: string; onQuery: (q
           renderTrigger={({ open }) => (
             <span className={`relative flex size-11 items-center justify-center rounded-full border border-hairline text-ink ${open ? "bg-raised" : "bg-card"}`}>
               <LayoutGrid size={19} aria-hidden="true" />
-              {automationsNeedYou && <span aria-hidden className="absolute right-1 top-1 size-2.5 rounded-full bg-danger ring-2 ring-app" />}
             </span>
           )}
         />

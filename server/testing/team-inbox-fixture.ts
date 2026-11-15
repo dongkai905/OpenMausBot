@@ -20,7 +20,7 @@ export const CARL = { email: "carl@acme.test", role: "member" as const, name: "C
 
 export const session = (email: string) => ({ kind: "session", scopes: ["client"], session: { id: email, email } }) as unknown as RequestAuth;
 
-type Task = { threadId: string; title: string; archivedAt?: number; activity?: string; routineRunId?: string };
+type Task = { threadId: string; title: string; archivedAt?: number; activity?: string };
 type Bot = Partial<Omit<BotRecord, "tasks">> & { id: string; name: string; threadId: string; tasks: Task[] };
 
 export function teamInbox(options: { team?: boolean; representative?: TeamMessagesDeps["inbox"]["representative"]; noChiefFor?: string[]; handed?: Record<string, string>; confined?: string[] } = {}) {
@@ -118,7 +118,6 @@ export function teamInbox(options: { team?: boolean; representative?: TeamMessag
       continueTurn: (botId, threadId, text, from, relay) => { continued.push({ botId, threadId, text, from, relay }); },
       changed: (threadId) => { changed.push(threadId); },
       handedFrom: (threadId) => options.handed?.[threadId] ?? null,
-      notes: (botId) => ({ reporter: "The Q4 report draft is due on Nov 3.", scout: "Cleo's notes.", "bens-mausbot": "Notes only Ben sees." })[botId] ?? "",
       ...(options.representative ? { representative: options.representative } : {}),
     },
   });

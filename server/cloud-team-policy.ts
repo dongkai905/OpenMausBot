@@ -12,7 +12,7 @@ import { z } from "zod";
 import { writeFileAtomic } from "./atomic.ts";
 import type { CloudHomeConfig } from "./cloud-home.ts";
 import type { CloudTeam } from "./cloud-team.ts";
-import type { ManagedDesktopPolicy, ManagedPolicy } from "./managed-policy.ts";
+import type { ManagedPolicyEngine, ManagedPolicy } from "./managed-policy.ts";
 import { TEAM_PHONE_PAIRING_PATH } from "./routes/team-phone.ts";
 import type { SessionRegistry } from "./sessions.ts";
 
@@ -77,7 +77,7 @@ export function teamManagedPolicy(document: TeamPolicyDocument, team: Pick<Cloud
     allowedEngines,
     mcp: allowedMcpServers === "all" || allowedMcpServers === "team" ? { allowCustom: true, allowlist: [] } : { allowCustom: false, allowlist: allowedMcpServers },
     apps: allowedApps === "all" ? { allowAll: true, allowlist: [] } : { allowAll: false, allowlist: allowedApps },
-    computers: { thisComputer: computer("memberComputer"), localVm: computer("memberComputer"), box: computer("cloudDesktop"), vps: computer("vps") },
+    computers: { thisComputer: computer("memberComputer"), localVm: computer("memberComputer"), vps: computer("vps") },
     remoteAccess: remoteAccess !== "off",
     team: { requireFresh: requireFreshPolicy, ownMcpOnly: allowedMcpServers === "team" },
   };
@@ -275,7 +275,7 @@ export function startTeamPolicyClient(options: TeamPolicyClientOptions): TeamPol
 let cloudTeam: TeamPolicyClient | null = null;
 
 /** A Team Cloud only; a My Cloud has no team, no rules and no fetch. */
-export function startCloudTeamPolicy(input: { cloudHome: CloudHomeConfig | null; dataDir: string; managed: ManagedDesktopPolicy; sessions: Pick<SessionRegistry, "closeMemberPhones" | "closeMemberBrowsers"> }): void {
+export function startCloudTeamPolicy(input: { cloudHome: CloudHomeConfig | null; dataDir: string; managed: ManagedPolicyEngine; sessions: Pick<SessionRegistry, "closeMemberPhones" | "closeMemberBrowsers"> }): void {
   const { cloudHome, managed, sessions } = input;
   if (!cloudHome?.team || cloudTeam) return;
   cloudTeam = startTeamPolicyClient({

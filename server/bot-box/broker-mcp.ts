@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 
 import { listNames } from "../../shared/place-view.ts";
 import type { McpServerSpec } from "../contracts.ts";
-import type { McpServerApp } from "../mcp-server-app.ts";
 import { serverLine } from "../server-lines.ts";
 import { botBox, type BoxBroker } from "./box.ts";
 import { brokerUrl } from "./broker.ts";
@@ -29,24 +28,21 @@ export function mcpGrantName(name: string): string {
 /** Test seam: forget every remembered token. */
 export function forgetBrokeredMcp(): void { remembered.clear(); }
 
-/** The turn's custom servers with every URL server's headers moved to the broker; unchanged when the broker is off.
- * `appFor`: the connected app a sign-in refusal points to instead, for a server sent no credentials (broker-mcp-refusal.ts). */
+/** The turn's custom servers with every URL server's headers moved to the broker; unchanged when the broker is off. */
 export function brokerRemoteMcp(
   custom: Record<string, McpServerSpec>,
   turn: BrokerTurn,
   broker: BoxBroker | null = botBox.broker(),
-  appFor?: (name: string, url: string) => McpServerApp | null,
 ): Record<string, McpServerSpec> {
   if (!broker) return custom;
   // A turn starting on this conversation keeps its earlier grants alive (a long-lived engine process reuses them).
   broker.touchThread(turn.threadId);
   const out: Record<string, McpServerSpec> = {};
-  const grants: Record<string, { upstream: string; headers: Record<string, string>; mcpServer: string; mcpApp?: McpServerApp }> = {};
+  const grants: Record<string, { upstream: string; headers: Record<string, string>; mcpServer: string }> = {};
   const brokered: string[] = [];
   for (const [name, server] of Object.entries(custom)) {
     if (!("url" in server) || typeof server.url !== "string" || !NAME.test(name)) { out[name] = server; continue; }
-    const app = Object.values(server.headers ?? {}).some((value) => value !== "") ? null : appFor?.(name, server.url);
-    grants[mcpGrantName(name)] = { upstream: server.url, headers: { ...server.headers }, mcpServer: name, ...(app ? { mcpApp: app } : {}) };
+    grants[mcpGrantName(name)] = { upstream: server.url, headers: { ...server.headers }, mcpServer: name };
     brokered.push(name);
   }
   if (!brokered.length) return custom;

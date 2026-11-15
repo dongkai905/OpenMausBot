@@ -49,11 +49,6 @@ function mount(element: ReturnType<typeof createElement>) {
   flushSync(() => root!.render(element));
   return container;
 }
-const button = (container: HTMLElement, label: string) => {
-  const found = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === label);
-  if (!found) throw new Error(`no ${label} button in ${container.innerHTML}`);
-  return found;
-};
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 /** What the app already knows and what the next poll answers. */
 const serve = (engines: EngineLimit[]) => {

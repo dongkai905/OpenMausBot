@@ -5,7 +5,7 @@ import { inboxNoteWords } from "./inbox-words.ts";
 // and Caption nodes only, and a link becomes a button only when it is an https link with no username or password.
 import { WEB_URL_MAX, WIDGET_LIMITS, type WidgetRoot } from "../../shared/widget.ts";
 import type { WidgetMoment, WidgetText, WidgetTextFields } from "../../shared/widget-text.ts";
-import type { CalendarEvent } from "../connected-reads.ts";
+import type { CalendarEvent } from "../mail-facts.ts";
 import { intlLocale } from "../language.ts";
 import { briefWords, type BriefWords } from "./brief-words.ts";
 import { localDate, validZone } from "./check-plan.ts";

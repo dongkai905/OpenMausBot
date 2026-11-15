@@ -13,7 +13,6 @@ export const WORKSPACE_CREDENTIALS = [
   { section: "deepseek", field: "key", name: "deepseekApiKey", env: "OMB_DEEPSEEK_API_KEY" },
   { section: "openaiCompat", field: "key", name: "openaiCompatApiKey", env: "OPENAI_COMPAT_API_KEY" },
   { section: "xai", field: "key", name: "xaiApiKey", env: "XAI_API_KEY" },
-  { section: "box", field: "token", name: "boxToken", env: "BOX_TOKEN" },
   { section: "tts", field: "key", name: "ttsKey", env: "OMB_TTS_KEY" },
   { section: "tts", field: "fishKey", name: "fishAudioKey", env: "OMB_FISH_AUDIO_API_KEY" },
   { section: "tts", field: "geminiKey", name: "geminiTtsKey", env: "OMB_GEMINI_API_KEY" },

@@ -123,7 +123,6 @@ describe("old links", () => {
     expect(where("logins")).toEqual({ page: "vault" });
     expect(where("cloudAccount")).toEqual({ page: "plan", anchor: "plan" });
     expect(resolveSettingsTarget("cloudAccount", fullContext({ plan: false }))).toEqual({ page: "account" });
-    expect(where("organization")).toEqual({ page: "account", anchor: "organization" });
     expect(where("desktopWorkspaces")).toEqual({ page: "app", anchor: "your-computers" });
     expect(where("backups")).toEqual({ page: "data", anchor: "backups" });
     expect(where("import")).toEqual({ page: "data", anchor: "bring-in" });

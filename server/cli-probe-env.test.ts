@@ -11,12 +11,10 @@ import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-// Every shared-list name plus one more under OMB_CLOUD_, so a credential added later is covered. Not the hosted model pair:
-// a desktop holding either refuses to boot unless it is a complete portal-managed workspace.
-const HOSTED_ONLY = ["OMB_HOSTED_MODELS", "OMB_HOSTED_MODEL_TOKEN"];
+// Every shared-list name plus one more under OMB_CLOUD_, so a credential added later is covered.
 const secretNames = [...new Set<string>([
   ...WORKSPACE_CREDENTIAL_ENV, ...PROVIDER_CREDENTIAL_ENV, ...CONTROL_PLANE_ENV, "OMB_CLOUD_FIXTURE_TOKEN",
-])].filter((name) => !HOSTED_ONLY.includes(name));
+])];
 const secrets: Record<string, string> = Object.fromEntries(secretNames.map((name) => {
   const unique = randomBytes(12).toString("hex");
   return [name, name.endsWith("_URL") ? `https://fixture-${unique}.example.test/v1` : `fixture-${name.toLowerCase()}-${unique}`];

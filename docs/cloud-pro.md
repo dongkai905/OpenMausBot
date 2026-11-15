@@ -1537,26 +1537,6 @@ computers belong to this machine on every request.
   does what it would without it (its lead answers). Only **Test** shows it,
   as a fixed sentence.
 
-### Included connected apps
-
-Connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and the rest of the
-catalog) come with the plan through OpenMausBot's managed connection service,
-the same one the packaged desktop app uses. The Admin sets nothing for it: at
-every start the server registers the Cloud's own installation if it has none,
-keeps the token owner-only in `/data/.openmausbot/connected-apps-installation.json`
-(never in a backup, a move or `config.json`), checks it with the service, and
-retries with backoff while the service is down, without holding up the start.
-An owner's own Composio project key still wins. The details are in
-[composio.md](composio.md#mausbot-cloud). `OMB_COMPOSIO_BROKER_URL` (env, not
-secret, optional) points a Cloud at another service, such as a staging one.
-
-For a paid plan the Admin also sets `OMB_CLOUD_CONNECTED_APPS_GRANT` (secret):
-a grant it signs for the machine id, which the server presents to the service
-once it holds its token. The service then gives this installation a paid
-Cloud's app-event limit (2,000 a day instead of a desktop's 500). Without it a
-Cloud gets the desktop limit. The grant's format is in
-[the broker's README](../cloudflare/composio-broker/README.md#paid-clouds).
-
 ### Trial Claude credit
 
 A free trial may come with a one-time Claude credit (the Admin's
@@ -2237,8 +2217,6 @@ sleeps: true}`; `cloud.state` stays `ready`. Without `cloud.power`, nothing belo
   wake never causes a needless new pairing.
 - **Copy:** the menu and the server switcher say "Sleeps when idle" instead of "Always on" for such a Cloud; the buy sheet
   shows the line for a plan whose allowances say `sleeps`.
-- **App events:** the connected-apps broker asks the Admin to wake a Cloud when it queues an event for one that isn't
-  polling (`cloudflare/composio-broker`, off until `CLOUD_ADMIN_URL` and `CLOUD_GRANT_SECRET` are set).
 
 ### Usage meter: how close the plan is to its limits, and Upgrade
 

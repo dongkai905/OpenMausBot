@@ -5,7 +5,6 @@ import { parseBotProfilePatch } from "../bot-profile.ts";
 import { parseVisibility } from "../bot-visibility.ts";
 import type { AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
-import type { hostedModelPolicy } from "../hosted-models.ts";
 import { MAX_MCP_SERVERS, mcpServerNameError } from "../mcp-registry.ts";
 import { resolveBotCreationDefaults } from "../new-bot-defaults.ts";
 import { PRESET_UNAVAILABLE_MESSAGE, applyPresetToBot, presetOffered, type OrgInstallStatus, type PresetStore } from "../presets.ts";
@@ -31,7 +30,6 @@ export interface BotCreateRouteDeps {
   maxWorkspaceBots: number;
   /** Whether this bot is paused: a Starter Cloud keeps only so many awake, and one made past them starts paused. */
   paused(botId: string): boolean;
-  hostedModels: ReturnType<typeof hostedModelPolicy>;
   storedAvatarExists(avatarUrl: string): boolean;
   defaultSelection(): Promise<ModelSelection>;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
@@ -72,8 +70,7 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
     store, cfg, presetStore, orgInstallStatuses,
     hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
     maxWorkspaceBots: MAX_WORKSPACE_BOTS,
-    hostedModels,
-    storedAvatarExists, defaultSelection, checkedModelSelection, wireBot,
+      storedAvatarExists, defaultSelection, checkedModelSelection, wireBot,
   } = deps;
   return async ({ req, res, path, method, auth, json, readBody }) => {
     if (method === "POST" && path === "/api/bots") {
@@ -173,7 +170,6 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         if (!checked.ok) return json(res, checked.status, refusalBody(checked));
         selection = checked.selection;
       }
-      if (hostedModels && !hostedModels.allows(selection)) return json(res, 400, { error: hostedModels.error() });
       // The capacity check sits beside the synchronous write, after every await.
       if (store.bots.length >= MAX_WORKSPACE_BOTS) {
         return json(res, 409, { error: `this workspace is limited to ${MAX_WORKSPACE_BOTS} bots` });

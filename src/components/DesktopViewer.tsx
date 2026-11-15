@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, Clipboard, Keyboard, Maximize, Minimize, Monitor, RefreshCw, Send, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+/// <reference path="./novnc.d.ts" />
 import type RFB from "@novnc/novnc";
 import { connectDesktop, DesktopUnreachable, typeOnDesktop } from "@/lib/desktop-connection";
 import { t } from "@/lib/i18n";
