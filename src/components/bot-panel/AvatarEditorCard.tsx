@@ -12,7 +12,7 @@ import { FESTIVAL_IDS, FESTIVALS, isCarvedBody, type BotBodyId } from "../../../
 import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { MausAvatar } from "../Avatar";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
-import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
+import { AvatarFraming, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
 import { Segmented } from "./rows";
 import { MascotFaceColorPicker } from "../MascotFaceColorPicker";
 
@@ -218,7 +218,6 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
 
         {tab === "upload" && (
           <>
-            <OrganizationAvatarIcons busy={busy} onUpload={(file) => void upload(file)} />
             {showsImage && <AvatarFraming bot={bot} disabled={busy} onPatch={onPatch} />}
             <input
               ref={fileRef}

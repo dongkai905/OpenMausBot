@@ -26,8 +26,8 @@ type OneHomePhase =
   | { phase: "finishing"; checking?: OneHomeChecking; slow?: OneHomeSlow; failing?: OneHomeFailing }
   /** No move has started: the person is asked which bots go. */
   | { phase: "choose" }
-  /** What arrived, checked on both sides; `at`: when the move was done; `phone`: a phone was paired with this computer; `held`: keys a trial's Cloud keeps unused while its Claude credit lasts; `left`: what My Cloud refused for good, which stayed where it was; `stayed`: connectors that work only on this computer (`needs`: a program My Cloud lacks). */
-  | { phase: "done"; at?: number; counts?: OneHomeCounts; phone: boolean; held: string[]; left?: OneHomeNotCarried[]; stayed?: OneHomeStayed[] }
+  /** What arrived, checked on both sides; `at`: when the move was done; `phone`: a phone was paired with this computer; `left`: what My Cloud refused for good, which stayed where it was; `stayed`: connectors that work only on this computer (`needs`: a program My Cloud lacks). */
+  | { phase: "done"; at?: number; counts?: OneHomeCounts; phone: boolean; left?: OneHomeNotCarried[]; stayed?: OneHomeStayed[] }
   /** This computer's bots are on their way home from a My Cloud that goes on, because the person keeps them here;
    * `updating`: My Cloud is too old to take the bots back and updates first. */
   | { phase: "keeping"; updating?: true }

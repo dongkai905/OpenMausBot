@@ -14,7 +14,7 @@ export const TWO_PLACES_NOTICE = "two-places";
 export const PRODUCT_HUNT_NOTICE = "product-hunt-launch-2026-10";
 export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/mausbot";
 export const PRODUCT_HUNT_UNTIL = Date.UTC(2026, 10, 1);
-export const BOAT_OFFER_NOTICE = "boat-credit-2026-11";
+export const CREDIT_OFFER_NOTICE = "credit-offer-2026-11";
 /** Update MausBot on your phone: once per phone with an older app after this computer's secure link ended. */
 export const PHONE_UPDATE_NOTICE = "phone-app-update";
 /** A card from the project's announcements file (src/lib/announcements.ts keeps which ones each person saw, and allows one a
@@ -36,7 +36,7 @@ export const NOTICES = [
   CLOUD_INTRO,
   CLOUD_TRIAL_NOTICE,
   CLOUD_NOTICE,
-  BOAT_OFFER_NOTICE,
+  CREDIT_OFFER_NOTICE,
   ANNOUNCEMENT_NOTICE,
   STAR_NOTICE,
 ] as const;

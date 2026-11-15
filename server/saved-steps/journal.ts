@@ -1,10 +1,10 @@
 import type { JournalEntry } from "./driver-wire.ts";
 
 export interface JournalScope { botId: string; threadId: string; generation: string }
-export type JournalCapability = JournalScope & { kind: string; localVmTarget?: unknown; boxId?: string | null; teamComputerId?: string };
+export type JournalCapability = JournalScope & { kind: string; localVmTarget?: unknown; teamComputerId?: string };
 
 export function hostScope(capability: JournalCapability): JournalScope | null {
-  if (capability.kind !== "computer" || capability.localVmTarget || capability.boxId !== undefined || capability.teamComputerId) return null;
+  if (capability.kind !== "computer" || capability.localVmTarget || capability.teamComputerId) return null;
   return { botId: capability.botId, threadId: capability.threadId, generation: capability.generation };
 }
 

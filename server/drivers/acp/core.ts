@@ -1648,7 +1648,6 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             agentsMcp: true,
         customMcp: true,
             computerMcp: true,
-            composioMcp: true,
             browserMcp: true,
             dataMcp: true, emailMcp: true, deviceMcp: true,
             images: support.images !== false,

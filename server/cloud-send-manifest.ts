@@ -25,7 +25,7 @@ export interface CloudSendManifest {
   forgotten: string[];
   teams: Array<{ section: string; context: string[] | null; memory: string[] }>;
   rooms: Array<{ id: string; name: string; members: string[]; threads: string[] }>;
-  /** "mcp:<name>", "key:<provider>", "composio" or "email". */
+  /** "mcp:<name>", "key:<provider>" or "email". */
   connections: string[];
   conversations: ManifestConversation[];
   /** The stored attachments the conversations' rows name; left out when not asked for. */

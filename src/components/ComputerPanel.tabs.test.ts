@@ -33,7 +33,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: async (path: string) => {
     if (path.startsWith("/api/bots/scout/computer/control")) return { held: false, helpReason: null };
-    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "box", configured: true, box: { boxId: "bx_23456789", state: "ready" } };
+    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "vps", configured: true, ready: true, container: "running", managed: true, imageMatches: true, problem: null };
     return {};
   },
 }));
@@ -58,7 +58,7 @@ const makeBot = (patch: Partial<Bot> = {}): Bot => ({
 
 let root: Root | null = null;
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude"), engine("agent-two")], config: { box: { configured: true },
+  state: { ...initialState, instances: [engine("claude"), engine("agent-two")], config: { vps: { configured: true, sshAlias: "" }, rooms: { turnTimeoutMinutes: 0 },
     ...(fixture.browser ? { features: { browser: true }, browserEngine: { kind: "engine" } } : {}) } as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
@@ -154,11 +154,11 @@ describe("Computer panel tab", () => {
 
   it("marks the selected trigger and only that one", async () => {
     await open(makeBot());
-    expect(tabs().map((candidate) => candidate.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
+    expect(tabs().map((candidate) => candidate.getAttribute("aria-selected"))).toEqual(["true", "false", "false"]);
 
     flushSync(() => tab("Data").click());
     await settle();
-    expect(tabs().map((candidate) => candidate.getAttribute("aria-selected"))).toEqual(["false", "false", "false", "true"]);
+    expect(tabs().map((candidate) => candidate.getAttribute("aria-selected"))).toEqual(["false", "false", "true"]);
   });
 
   it("keeps one Tab stop and moves it with the arrow, Home and End keys", async () => {
@@ -167,11 +167,11 @@ describe("Computer panel tab", () => {
 
     press("Screen", "ArrowRight");
     await settle();
-    expect(selected()).toBe("Routines");
-    expect(tabStops()).toEqual(["Routines"]);
-    expect(document.activeElement).toBe(tab("Routines"));
+    expect(selected()).toBe("Browser");
+    expect(tabStops()).toEqual(["Browser"]);
+    expect(document.activeElement).toBe(tab("Browser"));
 
-    press("Routines", "ArrowLeft");
+    press("Browser", "ArrowLeft");
     await settle();
     expect(selected()).toBe("Screen");
     expect(document.activeElement).toBe(tab("Screen"));
@@ -207,8 +207,8 @@ describe("Computer panel tab", () => {
   it("moves over an Android tab that appeared", async () => {
     fixture.android = true;
     await open(makeBot());
-    expect(tabLabels()).toEqual(["Screen", "Routines", "Android", "Browser", "Data"]);
-    press("Routines", "ArrowRight");
+    expect(tabLabels()).toEqual(["Screen", "Android", "Browser", "Data"]);
+    press("Screen", "ArrowRight");
     await settle();
     expect(selected()).toBe("Android");
   });
@@ -238,7 +238,7 @@ describe("Computer panel tab", () => {
 
   it("points every selected trigger at its panel and the panel back", async () => {
     await open(makeBot());
-    for (const label of ["Screen", "Routines", "Browser", "Data"]) {
+    for (const label of ["Screen", "Browser", "Data"]) {
       flushSync(() => tab(label).click());
       await settle();
       const trigger = tab(label);
@@ -250,7 +250,7 @@ describe("Computer panel tab", () => {
 
   it("puts every selected panel in the tab sequence", async () => {
     await open(makeBot());
-    for (const label of ["Screen", "Routines", "Browser", "Data"]) {
+    for (const label of ["Screen", "Browser", "Data"]) {
       flushSync(() => tab(label).click());
       await settle();
       const panel = document.getElementById(tab(label).getAttribute("aria-controls")!);

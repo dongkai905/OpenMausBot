@@ -2,7 +2,7 @@ import { Children, createElement, isValidElement, type EffectCallback, type Reac
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudAccountState, CloudCheckoutResult } from "../../electron/cloud-account.mjs";
-import type { CloudCredit, CloudOffer, CloudTeam, CloudTrial } from "../../electron/cloud-home.mjs";
+import type { CloudOffer, CloudTeam, CloudTrial } from "../../electron/cloud-home.mjs";
 import { parseCloudOffer } from "../../electron/cloud-home.mjs";
 import { setLocale } from "@/lib/i18n";
 
@@ -32,13 +32,12 @@ const PLANS = [
   { tier: "pro", label: "Pro", amount: 4900, allowances: allowances(4, 100, 15, 300, 60_000), trialDays: 7 },
   { tier: "max", label: "Max", amount: 9900, allowances: allowances(8, 100, 15, 800, 180_000), trialDays: 7 },
 ];
-const TRIAL: CloudOffer = { plans: PLANS, recommended: "pro", creditUsd: 5, reminderDays: 2, refundDays: 14 };
+const TRIAL: CloudOffer = { plans: PLANS, recommended: "pro", reminderDays: 2, refundDays: 14 };
 const PLAIN: CloudOffer = { plans: PLANS.map(({ trialDays: _days, ...plan }) => plan), recommended: "pro", refundDays: 14 };
 const EMAIL = "person@example.test";
 const free: CloudAccountState = { status: "connected", account: { id: "a", email: EMAIL }, entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 1 } };
 const paid = (extra: Partial<CloudAccountState> = {}): CloudAccountState => ({ ...free, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, ...extra });
 const trial = (extra: Partial<CloudTrial> = {}): CloudTrial => ({ state: "active", tier: "pro", endsAt: NOW + 7 * DAY, amount: 4900, chargeAt: NOW + 7 * DAY, holdUntil: null, deleteAt: null, keep: "none", ...extra });
-const credit: CloudCredit = { grantedUsd: 5, remainingUsd: 5, state: "active" };
 const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
 const acme = (machine: CloudTeam["machine"] = { status: "ready", origin: "https://omb-t-2.fly.dev" }): CloudTeam => ({ id: "team-acme", name: "Acme", role: "owner", machine });
 const onTeam = (machine?: CloudTeam["machine"]): CloudAccountState => paid({ entitlement: { plan: "pro", tier: "team", status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, teams: [acme(machine)] });
@@ -78,23 +77,23 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); setLocale("en"); })
 describe("each screen of the sheet says one thing and offers one next step", () => {
   it("Choose: MausBot Cloud in a line, then one card per plan with only what sets it apart and its own button; Most popular on the Admin's recommended plan; the money and what every plan includes once", () => {
     const { html, tree, handlers } = panel({ kind: "offer", offer: TRIAL, signedOut: true, notice: null });
-    const card = (hours: number, max: number, voice: string, cpus: number, swap: number) => [`${hours} cloud desktop hours a month`, `10 GB storage, grows to ${max} GB`,
-      `Voice replies: ${voice}`, "Always on, around the clock", "Cloud desktops: as many as your bots need", "Fair use: up to 15 at once", `${cpus} shared CPUs · ${cpus} GB memory`,
+    const card = (max: number, voice: string, cpus: number, swap: number) => [`10 GB storage, grows to ${max} GB`,
+      `Voice replies: ${voice}`, "Always on, around the clock", `${cpus} shared CPUs · ${cpus} GB memory`,
       `Plus ${swap} GB of swap`, "Daily backups, kept 14 days", "Start free trial"];
     inOrder(text(html), ["MausBot Cloud", "Your bots, always on.", "Runs your bots 24/7 in the cloud, even when this computer is off.", "Compare plans", "Choose your plan",
-      "Starter", "$15", "/month", "Your bots keep working with your laptop closed, at the lowest price.", ...card(100, 20, "about 30 minutes of speech a month", 2, 3),
+      "Starter", "$15", "/month", "Your bots keep working with your laptop closed, at the lowest price.", ...card(20, "about 30 minutes of speech a month", 2, 3),
       "Free for 7 days, then $15/month + tax",
-      "Pro", "Most popular", "$49", "/month", "Your bots keep working 24/7, even when your laptop is closed.", ...card(300, 100, "about an hour of speech a month", 4, 4),
+      "Pro", "Most popular", "$49", "/month", "Your bots keep working 24/7, even when your laptop is closed.", ...card(100, "about an hour of speech a month", 4, 4),
       "Free for 7 days, then $49/month + tax",
-      "Max", "$99", "/month", "The biggest cloud machine, for bots that use computers all day.", ...card(800, 100, "about 3 hours of speech a month", 8, 4),
+      "Max", "$99", "/month", "The biggest cloud machine, for bots that use computers all day.", ...card(100, "about 3 hours of speech a month", 8, 4),
       "Free for 7 days, then $99/month + tax",
-      "Today", "Trial starts, with $5 of Claude credit", "Oct 13", "Reminder email", "Oct 15", "First payment",
+      "Today", "Trial starts", "Oct 13", "Reminder email", "Oct 15", "First payment",
       "Card needed, nothing charged until your trial ends. Cancel in the app any time.", "14-day money-back",
       "Every plan includes", "Works while you're away", "Routines, long jobs and replies keep going around the clock.", "Private to you", "Reach it from anywhere",
       "A real browser and desktop", "Bring everything over", "Your bots, chats and memory move across in about a minute.",
       "Secure checkout in your browser", "Apple Pay", "G Pay", "Card", "Cancel in two clicks", "Already have a plan? Sign in"]);
     expect(html, "the night card holds the title, the line and Compare plans").toMatch(/<div data-night-card=""><h2 id="cloud-add-title"[^]*Compare plans[^]*<\/div><\/div><section/);
-    expect(html.match(/data-plan-row="(hours|storage|voice)"/g), "what sets the cards apart, three rows on each").toHaveLength(9);
+    expect(html.match(/data-plan-row="(storage|voice)"/g), "what sets the cards apart, two rows on each").toHaveLength(6);
     expect(tree.filter(node => node.props.id?.startsWith?.("cloud-plan-details-")).map(node => node.props.hidden), "the rest waits for Compare plans").toEqual([true, true, true]);
     expect(tree.filter(node => node.props["data-plan-buy"]).map(node => node.props.className.includes("ui-button-primary")), "one primary action, on the recommended plan")
       .toEqual([false, true, false]);
@@ -122,12 +121,12 @@ describe("each screen of the sheet says one thing and offers one next step", () 
     expect(html.indexOf("data-plan-mine")).toBeGreaterThan(html.indexOf('data-plan="pro"'));
     expect(html.indexOf("data-plan-mine")).toBeLessThan(html.indexOf('data-plan="max"'));
     expect(tree.filter(node => node.props["data-plan-buy"]).map(node => node.props["data-plan-buy"])).toEqual(["starter", "max"]);
-    inOrder(text(html), ["Pro", "Most popular", "$49", "300 cloud desktop hours a month", "Always on, around the clock", "Your plan", "Max"]);
+    inOrder(text(html), ["Pro", "Most popular", "$49", "Always on, around the clock", "Your plan", "Max"]);
     expect(text(html)).not.toContain("Free for 7 days, then $49/month + tax");
     const personal = { ...PLANS[0]!, tier: "personal", label: "Personal", amount: 2900 };
     const mine = renderToStaticMarkup(createElement(ChooseScreen, { offer: TRIAL, current: "personal", own: personal, now: NOW, busy: false, signedOut: false, notice: null,
       onStart: vi.fn(), onSignIn: vi.fn() }));
-    inOrder(text(mine), ["Starter", "$15", "Start free trial", "Personal", "$29", "/month", "100 cloud desktop hours a month", "Your plan", "Pro", "Most popular", "$49", "Start free trial", "Max"]);
+    inOrder(text(mine), ["Starter", "$15", "Start free trial", "Personal", "$29", "/month", "Your plan", "Pro", "Most popular", "$49", "Start free trial", "Max"]);
     expect(mine.match(/data-plan-mine/g)).toHaveLength(1);
     expect(mine.match(/data-plan-buy=/g)).toHaveLength(3);
     const theirs = renderToStaticMarkup(createElement(ChooseScreen, { offer: TRIAL, current: null, own: personal, now: NOW, busy: false, signedOut: false, notice: null,
@@ -146,8 +145,7 @@ describe("each screen of the sheet says one thing and offers one next step", () 
       expect(html.match(/data-plan-buy="[a-z]+"/g), why).toEqual(['data-plan-buy="starter"', 'data-plan-buy="pro"', 'data-plan-buy="max"']);
       expect(html.match(/Most popular/g), why).toHaveLength(1);
       expect(html.indexOf("data-plan-popular"), why).toBeGreaterThan(html.indexOf('data-plan="pro"'));
-      expect(html.match(/data-plan-row="hours"/g), why).toHaveLength(3);
-      inOrder(text(html), ["Starter", "$15", "100 cloud desktop hours a month", "Pro", "Most popular", "$49", "300 cloud desktop hours a month", "Max", "$99", "800 cloud desktop hours a month"]);
+      inOrder(text(html), ["Starter", "$15", "Pro", "Most popular", "$49", "Max", "$99"]);
     }
   });
 
@@ -261,10 +259,10 @@ describe("each screen of the sheet says one thing and offers one next step", () 
     expect(text(panel({ ...waiting, browser: "signin", link: false }).html)).toContain("Your browser shows the next step.");
   });
 
-  it("Setting up: the badge (trial, credit, or paid), the Admin's steps, a name, a colour and the switcher preview; Open waits for ready", () => {
-    const starting: CloudAddView = { kind: "starting", tier: "pro", trial: trial(), credit, step: "storage", slow: false, received: false };
+  it("Setting up: the badge (trial or paid), the Admin's steps, a name, a colour and the switcher preview; Open waits for ready", () => {
+    const starting: CloudAddView = { kind: "starting", tier: "pro", trial: trial(), step: "storage", slow: false, received: false };
     const { html, tree, handlers } = panel(starting);
-    inOrder(text(html), ["Pro trial started · $5 Claude credit added", "Setting up your new Cloud", "About 2 minutes. Keep working if you like, it opens when it's ready.",
+    inOrder(text(html), ["Pro trial started", "Setting up your new Cloud", "About 2 minutes. Keep working if you like, it opens when it's ready.",
       "Reserving your machine", "Preparing storage", "Starting Studio", "Checking it's ready", "Name it", "Pick a colour", "In your switcher", "Studio", "Pro · always on", "Open Studio"]);
     expect(html).toContain('aria-valuenow="25"');
     expect(button(tree, "Open Studio")!.props.disabled).toBe(true);
@@ -276,15 +274,14 @@ describe("each screen of the sheet says one thing and offers one next step", () 
       ["blue", "Blue", false], ["teal", "Teal", true], ["purple", "Purple", false], ["orange", "Orange", false], ["red", "Red", false], ["yellow", "Yellow", false]]);
     swatches[4]!.props.onClick(); expect(handlers.color).toHaveBeenCalledWith("red");
     expect(swatches[0]!.props.style.background).toBe("var(--identity-blue)");
-    expect(text(panel({ ...starting, trial: null, credit: null }).html)).toContain("Pro started");
-    expect(text(panel({ ...starting, credit: null }).html)).toMatch(/Pro trial started (?!·)/);
-    const received = text(panel({ ...starting, trial: null, credit: null, received: true, step: null }).html);
+    expect(text(panel({ ...starting, trial: null }).html)).toContain("Pro started");
+    const received = text(panel({ ...starting, trial: null, received: true, step: null }).html);
     inOrder(received, ["Payment received", "Setting up your new Cloud", "We're linking your payment to this account"]);
     expect(text(panel({ ...starting, slow: true }).html)).toContain("This is taking longer than usual.");
   });
 
   it("Ready: it opens by itself in 3 seconds unless Not now; otherwise Open {name}", () => {
-    const view: CloudAddView = { kind: "ready", tier: "pro", trial: trial(), credit };
+    const view: CloudAddView = { kind: "ready", tier: "pro", trial: trial() };
     const { html, tree, handlers } = panel(view, { counting: 3 });
     inOrder(text(html), ["Studio is ready", "It keeps your bots running 24/7, even when this computer is off.", "Opening in 3…", "Not now", "Open Studio"]);
     expect(html).toContain('aria-valuenow="100"');
@@ -512,7 +509,7 @@ describe("the sheet", () => {
 
   it("ready while open in the focused window: Opening in 3…, then the Cloud opens; Not now stops it; unfocused, Open {name}", async () => {
     vi.useFakeTimers();
-    account = paid({ trial: trial(), credit, machine: ready, checkout: { plan: "pro", startedAt: NOW - 120_000, link: true } });
+    account = paid({ trial: trial(), machine: ready, checkout: { plan: "pro", startedAt: NOW - 120_000, link: true } });
     expect(await settle()).toContain("Opening in 3…");
     expect(bridge.look).toHaveBeenCalled();
     expect(await settle()).toContain("Open My Cloud");
@@ -547,7 +544,7 @@ describe("the sheet", () => {
     const hide = showWelcome();
     try {
       f.state = { cloudAdd: { source: "app_onboarding" }, config: {} };
-      account = paid({ trial: trial(), credit, machine: ready, checkout: { plan: "pro", startedAt: NOW - 120_000, link: true } });
+      account = paid({ trial: trial(), machine: ready, checkout: { plan: "pro", startedAt: NOW - 120_000, link: true } });
       const html = await settle();
       expect(html).toContain("My Cloud is ready"); expect(html).toContain("Open My Cloud"); expect(html).not.toContain("Opening in");
       vi.advanceTimersByTime(10_000); await settle();

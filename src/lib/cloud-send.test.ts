@@ -46,7 +46,7 @@ describe("choosing which bots move", () => {
 
 describe("the one-time move's line", () => {
   it("never says everything is here when a connector stayed on this computer, and says why", () => {
-    const done = { phase: "done" as const, phone: false, held: [], counts: { bots: 13, skills: 0, logins: 0, onePassword: false, chats: 0, routines: 0 } };
+    const done = { phase: "done" as const, phone: false, counts: { bots: 13, skills: 0, logins: 0, onePassword: false, chats: 0, routines: 0 } };
     expect(moveLine(done, "cloud")?.text).toContain("Everything from this computer is here");
     const line = moveLine({ ...done, stayed: [{ name: "fetch", needs: "uvx" }, { name: "easy" }] }, "cloud");
     expect(line).toMatchObject({ kind: "done", text: "Everything else from this computer is here. These stayed on it:" });
@@ -98,7 +98,7 @@ describe("the one-time move's line", () => {
       .toMatchObject({ kind: "failed", text: "Your bots couldn't move to Garage server yet: Garage server has other people on it now, so your bots can't move there.", retry: true, place });
     expect(moveLine({ phase: "finishing", failing: { error: null }, place }, "local")).toMatchObject({ kind: "failed", text: "Your bots couldn't move to Garage server yet.", retry: true });
     expect(moveLine({ phase: "copy", place }, "cloud"), "only this computer's page hears of it").toBeNull();
-    expect(moveLine({ phase: "done", phone: true, held: [], place }, "local"), "once done the window shows Garage server").toBeNull();
+    expect(moveLine({ phase: "done", phone: true, place }, "local"), "once done the window shows Garage server").toBeNull();
     expect(JSON.stringify(moveLine({ phase: "copy", place }, "local"))).not.toContain("My Cloud");
   });
 
@@ -132,17 +132,17 @@ describe("the one-time move's line", () => {
     expect(moveLine({ phase: "copy", failing: { error: "Some of this computer's things did not reach My Cloud.", items } }, "local")).toMatchObject({ kind: "failed", retry: true, extra: lines });
     expect(moveLine({ phase: "copy", failing: { error: null, items }, place: "Garage server" }, "local")).toMatchObject({ kind: "failed", retry: true, extra: lines, place: "Garage server" });
     const left = items.slice(1);
-    expect(moveLine({ phase: "done", phone: false, held: [], left }, "cloud")).toMatchObject({ kind: "done", text: "Everything else from this computer is here. These stayed on it:", extra: lines.slice(1) });
-    expect(moveLine({ phase: "done", phone: false, held: [], left, place: "Garage server" }, "cloud")).toMatchObject({ kind: "done", extra: lines.slice(1), place: "Garage server" });
-    expect(moveLine({ phase: "done", phone: false, held: [], left, place: "Garage server" }, "local")).toBeNull();
+    expect(moveLine({ phase: "done", phone: false, left }, "cloud")).toMatchObject({ kind: "done", text: "Everything else from this computer is here. These stayed on it:", extra: lines.slice(1) });
+    expect(moveLine({ phase: "done", phone: false, left, place: "Garage server" }, "cloud")).toMatchObject({ kind: "done", extra: lines.slice(1), place: "Garage server" });
+    expect(moveLine({ phase: "done", phone: false, left, place: "Garage server" }, "local")).toBeNull();
   });
 
-  it("says once on My Cloud's page what arrived, a key kept for after the trial, and the phone to pair; on this computer, coming home", () => {
-    const done = moveLine({ phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true, held: ["OpenRouter"] }, "cloud");
+  it("says once on My Cloud's page what arrived and the phone to pair; on this computer, coming home", () => {
+    const done = moveLine({ phase: "done", counts: { bots: 4, skills: 2, logins: 2, onePassword: true, chats: 148, routines: 2 }, phone: true }, "cloud");
     expect(done).toMatchObject({ kind: "done", text: "Everything from this computer is here: 4 bots, 2 skills, 2 logins, 1Password, 148 chats, and 2 routines.", phone: true,
-      extra: ["Your OpenRouter key is saved on My Cloud. Your bots use it once the trial's Claude credit runs out."] });
-    expect(moveLine({ phase: "done", phone: false, held: [] }, "cloud")).toMatchObject({ text: "Everything from this computer is here.", extra: [] });
-    expect(moveLine({ phase: "done", phone: true, held: [] }, "local"), "the done line is My Cloud's").toBeNull();
+      extra: [] });
+    expect(moveLine({ phase: "done", phone: false }, "cloud")).toMatchObject({ text: "Everything from this computer is here.", extra: [] });
+    expect(moveLine({ phase: "done", phone: true }, "local"), "the done line is My Cloud's").toBeNull();
     expect(moveLine({ phase: "home-again" }, "local")?.text).toContain("your bots are back on this computer");
     expect(moveLine({ phase: "back", lost: true }, "local")?.text).toContain("couldn't come back");
     expect(moveLine({ phase: "back" }, "cloud")).toBeNull();

@@ -1,7 +1,7 @@
 // Whether an engine can work on the cloud computer is one rule over one fact: it has computer tools (computerMcp).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { canWorkOnCloud } from "../../shared/cloud-computer.ts";
+import { canWorkOnRemote } from "../../shared/remote-computer.ts";
 import { ensureDirs } from "../config.ts";
 import type { ProviderInstance } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "./builtIn.ts";
@@ -9,7 +9,7 @@ import { CustomAcpDriver } from "./acp/custom.ts";
 
 const created: ProviderInstance[] = [];
 const onBoat = (instance: ProviderInstance) =>
-  canWorkOnCloud({ computerMcp: instance.adapter.capabilities.computerMcp });
+  canWorkOnRemote({ computerMcp: instance.adapter.capabilities.computerMcp });
 const keep = async (promise: Promise<ProviderInstance>): Promise<ProviderInstance> => {
   const instance = await promise;
   created.push(instance);

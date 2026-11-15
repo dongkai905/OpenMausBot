@@ -41,11 +41,9 @@ of a real provider's planning quality or authentication.
 - An expired turn token is refused, and Full does not authorize changes to
   an existing bot outside the Chief's team scope.
 
-Connected-app sends follow **Sending on your behalf** at Full access:
+Sends on the person's behalf follow **Sending on your behalf** at Full access:
 **Ask every time** waits for consent, and **Send without asking** or no
-setting at all sends with no daily limit. The
-[Gmail and outbound fixture](gmail-drafts.md) verifies both policies, opaque
-execution, delegation and changes before dispatch.
+setting at all sends with no daily limit.
 
 ## Evidence and limits
 

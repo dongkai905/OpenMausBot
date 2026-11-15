@@ -14,7 +14,7 @@ const view = (connector: Partial<NonNullable<Message["connector"]>>) => renderTo
     role: "bot",
     kind: "connector",
     at: 1,
-    connector: { slug: "github", label: "GitHub", description: "Read pull requests", status: "required", resumeKey: "resume1", ...connector },
+    connector: { source: "mcp", slug: "linear", label: "Linear", description: "Read issues", status: "required", resumeKey: "resume1", ...connector },
   },
 }));
 
@@ -25,7 +25,8 @@ describe("ConnectorCard ask card", () => {
     expect(html).toContain('data-tour="connector"');
     expect(html).toMatch(/font-medium leading-\[22px\] text-ink"><bdi dir="auto">/);
     expect(html).not.toContain("text-accent-text\"><bdi");
-    expect(html).toContain(t("connectors.card.connectSecurely"));
+    expect(html).toContain(t("connectors.card.signInTo", { label: "Linear" }));
+    expect(html).toContain(t("connectors.card.signIn"));
     expect(html).toContain(`aria-label="${t("connectors.card.notNow")}"`);
   });
 
@@ -34,7 +35,7 @@ describe("ConnectorCard ask card", () => {
     expect(html).toContain('data-ask-card="settled"');
     expect(html).toContain(t("connectors.card.connected"));
     expect(html).toContain(t("connectors.card.continuing"));
-    expect(html).not.toContain(t("connectors.card.connectSecurely"));
+    expect(html).not.toContain(t("connectors.card.signIn"));
     expect(html).not.toContain(t("connectors.card.notNow"));
   });
 
@@ -44,38 +45,18 @@ describe("ConnectorCard ask card", () => {
     expect(html).toContain(t("connectors.card.continueTask"));
   });
 
-  it("asks for a label instead of retrying the same request when the app needs one", () => {
-    const html = view({ status: "failed", error: "Add an account alias so the existing connection is not replaced" });
-    expect(html).toContain(`aria-label="${t("connectors.aliasAriaAnother", { service: "GitHub" })}"`);
-    expect(html).toContain(t("connectors.aliasNeeded"));
-    expect(html).not.toContain("Add an account alias");
-    expect(html.match(/<button[^>]*>(?:(?!<\/button>)[^])*Try again/)?.[0]).toContain('disabled=""');
-
-    const taken = view({ status: "failed", alias: "work", error: 'Account alias "work" is already in use for github' });
-    expect(taken).toContain(t("connectors.aliasTaken"));
-    expect(taken).toContain("<input");
-
-    const other = view({ status: "failed", error: "Connection FAILED" });
-    expect(other).toContain("Connection FAILED");
-    expect(other).not.toContain("<input");
+  it("says what went wrong on a card that failed", () => {
+    const html = view({ status: "failed", error: "Connection FAILED" });
+    expect(html).toContain("Connection FAILED");
+    expect(html).toContain(t("connectors.card.tryAgain"));
   });
 
-  it("reads as a sign-in for an MCP server and as today for a Composio app", () => {
-    const mcp = view({ source: "mcp", slug: "linear", label: "Linear" });
-    expect(mcp).toContain("Sign in to Linear");
-    expect(mcp).toMatch(/<button[^>]*>(?:(?!<\/button>)[^])*Sign in<\/button>/);
-    expect(mcp).not.toContain(t("connectors.card.connectSecurely"));
-    expect(mcp).toContain(t("connectors.card.mcpSignInHint"));
-    expect(mcp).not.toContain(t("connectors.card.signInHint"));
-    const composio = view({ source: "composio" });
-    expect(composio).toContain(t("connectors.card.connectSecurely"));
-    expect(composio).not.toContain("Sign in to");
-    expect(composio).toContain(t("connectors.card.signInHint"));
-    expect(composio).not.toContain(t("connectors.card.mcpSignInHint"));
+  it("draws nothing for a card that is not an MCP sign-in", () => {
+    expect(view({ source: undefined })).toBe("");
   });
 
   it("draws nothing once superseded", () => {
-    expect(view({ source: "mcp", superseded: true })).toBe("");
+    expect(view({ superseded: true })).toBe("");
   });
 
   it("draws nothing once dismissed", () => {

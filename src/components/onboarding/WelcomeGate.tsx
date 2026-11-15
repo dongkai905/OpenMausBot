@@ -65,7 +65,7 @@ export function WelcomeGate({ viewer }: { viewer: WelcomeViewer | null }) {
       canSave: viewer.canSave,
       cloudHome: viewer.cloudHome,
     });
-  if (state.appSettingsOpen && (["desktopWorkspaces", "organization"].includes(state.appSettingsSection) ||
+  if (state.appSettingsOpen && (state.appSettingsSection === "desktopWorkspaces" ||
     (state.appSettingsSection === "cloudAccount" && state.appSettingsCloudLink > 0))) return null;
   if (!state.welcomeOpen && !due) return null;
   const fallback = state.bots.find((b) => !b.hidden && b.chiefOfStaff) ?? state.bots.find((b) => !b.hidden) ?? null;

@@ -1,10 +1,9 @@
 // Which business outcome a finished app tool call is, and how many minutes a
 // person would spend on one by hand. Connected-app tools are named
-// APP_VERB_NOUN (Composio's GMAIL_SEND_EMAIL, an MCP server's
+// APP_VERB_NOUN (an app's GMAIL_SEND_EMAIL, an MCP server's
 // mcp__notion__notion-create-pages); built-in tools and the app's own
 // coordination tools are not outcomes and classify as nothing.
-import { connectorCallsIn, isOutboundTool } from "./outbound.ts";
-import { isConnectedAppsServer } from "./own-apps.ts";
+import { isOutboundTool } from "./outbound.ts";
 
 export const OUTCOME_CATEGORIES = ["emailRead", "draft", "emailSent", "message", "doc", "report", "lead", "other"] as const;
 export type OutcomeCategory = (typeof OUTCOME_CATEGORIES)[number];
@@ -54,8 +53,6 @@ const LEAD_VERBS = new Set(["CREATE", "ADD", "UPDATE", "UPSERT", "ENRICH", "SEAR
 
 /** The app's own MCP servers: coordination, computers and the permission bridge, never a business outcome. */
 const OWN_SERVERS = new Set(["agents", "computer", "localComputer", "phone", "device", "browser", "dweb", "ogb"]);
-const COMPOSIO_META = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_MANAGE_CONNECTIONS", "COMPOSIO_WAIT_FOR_CONNECTIONS", "COMPOSIO_CHECK_ACTIVE_CONNECTION", "COMPOSIO_INITIATE_CONNECTION"]);
-const MULTI_EXECUTE = "COMPOSIO_MULTI_EXECUTE_TOOL";
 const APP_TOOL = /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/;
 
 const words = (text: string): string[] => text.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
@@ -68,7 +65,6 @@ export function appTool(name: string): AppTool | null {
   if (name.startsWith("mcp__")) {
     const [, server = "", ...rest] = name.split("__");
     const action = rest.join("__");
-    if (isConnectedAppsServer(server)) return appTool(action);
     if (OWN_SERVERS.has(server) || !action) return null;
     const app = words(server.replace(/^claude_ai_/, "")).join("");
     const tokens = words(action);
@@ -82,13 +78,12 @@ export function appTool(name: string): AppTool | null {
     : { app: tokens[0]!, action: tokens.slice(1) };
 }
 
-/** Composio's toolkit name for display: GOOGLESHEETS stays one word, the rest read as written. */
+/** The app's toolkit name for display: GOOGLESHEETS stays one word, the rest read as written. */
 export function appName(name: string): string | null {
   return appTool(name)?.app ?? null;
 }
 
 function classifyAction({ app, action }: AppTool, name: string): OutcomeCategory | null {
-  if (app === "COMPOSIO") return COMPOSIO_META.has(name) ? null : "other";
   const first = action[0] ?? "";
   if (action.includes("DRAFT") || action.includes("DRAFTS")) {
     if (action.includes("SEND")) return "emailSent";
@@ -110,43 +105,24 @@ function classifyAction({ app, action }: AppTool, name: string): OutcomeCategory
   return "other";
 }
 
-const SLUG_IN_PREVIEW = /"(?:tool_slug|slug)"\s*:\s*"([A-Z][A-Z0-9_]+)"/g;
-
-/** The app tools one multi-execute call ran, read from its recorded input preview. */
-function executedSlugs(input: string | undefined): string[] {
-  if (!input) return [];
-  try {
-    const slugs = connectorCallsIn(MULTI_EXECUTE, JSON.parse(input)).map((call) => call.slug);
-    if (!slugs.includes("COMPOSIO_PROXY_EXECUTE")) return slugs;
-  } catch {}
-  return [...input.matchAll(SLUG_IN_PREVIEW)].map((match) => match[1]!);
-}
-
 /**
  * The outcomes one finished tool call produced: one per app tool it ran. A
  * multi-execute call is read through its recorded input; when that names no
  * tool it counts once, as "other".
  */
-export function classifyToolCall(name: string, input?: string): OutcomeCategory[] {
+export function classifyToolCall(name: string): OutcomeCategory[] {
   const tool = appTool(name);
   if (!tool) return [];
-  const bare = tool.app === "COMPOSIO" ? `COMPOSIO_${tool.action.join("_")}` : name;
-  if (bare === MULTI_EXECUTE) {
-    const slugs = executedSlugs(input);
-    if (!slugs.length) return ["other"];
-    return slugs.flatMap((slug) => classifyToolCall(slug));
-  }
+  const bare = name;
   const category = classifyAction(tool, bare.startsWith("mcp__") ? [tool.app, ...tool.action].join("_") : bare);
   return category ? [category] : [];
 }
 
 /** The apps a tool call touched, for naming a broken connection. */
-export function toolApps(name: string, input?: string): string[] {
+export function toolApps(name: string): string[] {
   const tool = appTool(name);
   if (!tool) return [];
-  if (tool.app !== "COMPOSIO") return [tool.app];
-  if (`COMPOSIO_${tool.action.join("_")}` !== MULTI_EXECUTE) return [];
-  return [...new Set(executedSlugs(input).flatMap((slug) => appTool(slug)?.app ?? []))];
+  return [tool.app];
 }
 
 const REPORT_NAME = /\b(?:brief|briefing|report|summary|digest|recap|round-?up|overview|stand-?up|kpis?|metrics|newsletter|analytics|insights)s?\b/i;

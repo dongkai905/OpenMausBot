@@ -1,23 +1,18 @@
 import { useEffect, useRef, type Ref } from "react";
-import { Check, CircleAlert, FolderOpen, Plug } from "lucide-react";
+import { Check, FolderOpen, Plug } from "lucide-react";
 import { useCloudEngineChoices } from "@/components/CloudEngineSignIn";
-import { useCloudPlanSnapshot } from "@/components/CloudTrialNotice";
 import { engineReady } from "@/components/EngineLibrary";
-import { usd } from "@/lib/cloud-plan";
-import { welcomeCredit } from "@/lib/cloud-welcome";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { useStore, type Bot } from "@/state/store";
 import { CARD, CARD_IDLE, CardIcon, Footer, PRIMARY, QUIET, SECONDARY, StepHeading } from "./parts";
 
-/** Connecting an AI: an AI that already works when the step opens (one signed in here, or the plan's credit) is used as
+/** Connecting an AI: an AI that already works when the step opens (one signed in here) is used as
  * it is and the step finishes itself; otherwise one recommended sign-in, every other way folded under it. */
 export function WelcomeEngine({ name, headingRef, onFinish }: { name: string; headingRef: Ref<HTMLHeadingElement>; onFinish: () => void }) {
   const engines = useCloudEngineChoices();
-  const plan = useCloudPlanSnapshot(window.ogb?.cloudPlan);
-  const own = engines.instances.some((instance) => !instance.trialCredit && engineReady(instance));
-  const credit = own ? null : welcomeCredit(engines.instances, plan);
-  const readyOnOpen = useRef(own || credit?.state === "active");
+  const own = engines.instances.some((instance) => engineReady(instance));
+  const readyOnOpen = useRef(own);
   useEffect(() => {
     if (readyOnOpen.current) onFinish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -25,20 +20,10 @@ export function WelcomeEngine({ name, headingRef, onFinish }: { name: string; he
   if (readyOnOpen.current) return null;
   return <section aria-labelledby="cloud-welcome-step" data-welcome-step="engine" className="flex flex-col">
     <StepHeading headingRef={headingRef} title={t("cloudSetup.engine.title")} sub={t("cloudWelcome.engine.sub", { name })} />
-    {credit?.state === "active" && <p role="status" data-welcome-credit className="mt-5 flex items-start gap-2.5 rounded-xl bg-success/12 px-3.5 py-3 text-[13px] leading-relaxed text-ink">
-      <Check size={16} strokeWidth={2.5} aria-hidden="true" className="mt-px shrink-0 text-success" />
-      <span>{credit.left !== null ? t("cloudWelcome.engine.credit", { amount: usd(credit.left) }) : t("cloudWelcome.engine.creditPlain")}</span>
-    </p>}
-    {credit && credit.state !== "active" && <p role="status" data-welcome-credit={credit.state} className="mt-5 flex items-start gap-2.5 rounded-xl bg-warning/10 px-3.5 py-3 text-[13px] leading-relaxed text-ink">
-      <CircleAlert size={16} aria-hidden="true" className="mt-px shrink-0 text-warning" />
-      <span>{t(credit.state === "used_up" ? "cloudSignIn.creditUsedUp" : "cloudSignIn.creditEnded")}</span>
-    </p>}
     <Footer className="mt-7">
       {own
         ? <button type="button" className={PRIMARY} onClick={onFinish}>{t("onboarding.continue")}</button>
-        : credit?.state === "active"
-          ? <button type="button" className={PRIMARY} onClick={onFinish}>{t("cloudWelcome.engine.useCredit")}</button>
-          : <button type="button" className={QUIET} onClick={onFinish}>{t("cloudIntent.skip")}</button>}
+        : <button type="button" className={QUIET} onClick={onFinish}>{t("cloudIntent.skip")}</button>}
     </Footer>
   </section>;
 }

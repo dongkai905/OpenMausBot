@@ -439,7 +439,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
     return [...ctx.cloudBots].filter((id) => bots.has(id) && ctx.localItems.has(itemKey.bot(id))).map((id) => ({ id, name: bots.get(id).name }));
   }
 
-  /** This computer's apps and keys, MCP servers, mailboxes and connected apps, over the move's session. A sign-in that
+  /** This computer's apps and keys, MCP servers and mailboxes, over the move's session. A sign-in that
    * refreshes itself goes only in the final pass; this computer then lets go of its copy once My Cloud has it, and one it
    * could not let go of yet is kept and let go of on the next final pass. */
   async function moveConnections(origin, session, result, final) {
@@ -456,7 +456,6 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
       onProgress: (step) => { progress = { done: step.done, total: step.total }; publish(); } });
     result.connections += moved.moved.length + moved.runsHere.length;
     for (const failure of moved.failed) failed(failure.id, failure.label, failure.message, failure.final);
-    for (const held of moved.held ?? []) result.notes.push({ kind: "held", connection: held.label });
     for (const stayed of moved.runsHere) if (!stayed.off) result.notes.push({ kind: "stayed", connection: stayed.label, ...(stayed.needs ? { needs: stayed.needs } : {}) });
     if (moved.release.length) {
       kept.release = [...kept.release.filter((held) => !moved.release.some((next) => next.id === held.id)), ...moved.release];

@@ -28,8 +28,8 @@ describe("TurnStops", () => {
   it("keeps the engine's own flags on the turn's error, which decide whether a retry could help", () => {
     const stops = new TurnStops();
     stops.note(event({ type: "turn.started", turnId: "turn-1" }));
-    stops.note(event({ type: "runtime.error", turnId: "turn-1", message: "The trial Claude credit is used up.", setup: true, trialCredit: "used_up" }));
-    expect(stops.read("t1", "turn-1")?.flags).toEqual({ setup: true, trialCredit: "used_up" });
+    stops.note(event({ type: "runtime.error", turnId: "turn-1", message: "The engine is not installed.", setup: true }));
+    expect(stops.read("t1", "turn-1")?.flags).toEqual({ setup: true });
     stops.note(event({ type: "turn.started", turnId: "turn-2" }));
     expect(stops.read("t1", "turn-2")).toBeUndefined();
   });

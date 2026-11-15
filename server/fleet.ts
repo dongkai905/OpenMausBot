@@ -248,35 +248,15 @@ export interface WorkspaceSeed {
   admins: string[];
   members: string[];
   anthropicKey?: string;
-  anthropicUrl?: string;
-  openrouterKey?: string;
-  openrouterUrl?: string;
-  openrouterModels?: string[];
-  openrouterDefault?: boolean;
   /** Root-owned hosted portal address; never configurable by a tenant. */
   portalUrl?: string;
   monthlyCapUsd?: number;
   brandJson?: string;
 }
 
-export const MANAGED_OPENROUTER = "omb-managed-openrouter";
-
-/** The gateway validates assignments too; keep filesystem seeds bounded and literal. */
-export function openRouterModelIds(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > 100 || value.some((id) => typeof id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,159}$/.test(id))) {
-    throw new Error("OpenRouter models must be an array of at most 100 valid model IDs");
-  }
-  return [...new Set(value as string[])];
-}
-
-export function managedOpenRouterModels(models: unknown): Record<string, { name: string }> {
-  return Object.fromEntries(openRouterModelIds(models).map((id) => [id, { name: id }]));
-}
-
 export function initialConfig(seed: WorkspaceSeed): string {
   const config: Record<string, unknown> = { signIn: { admins: seed.admins, members: seed.members } };
-  if (seed.anthropicKey) config.anthropic = { key: seed.anthropicKey, ...(seed.anthropicUrl ? { url: seed.anthropicUrl } : {}) };
-  if (seed.openrouterDefault && seed.openrouterModels?.length) config.defaultModelSelection = { instanceId: "openrouter", model: `${MANAGED_OPENROUTER}/${seed.openrouterModels[0]}` };
+  if (seed.anthropicKey) config.anthropic = { key: seed.anthropicKey };
   if (seed.monthlyCapUsd !== undefined) config.budgets = { monthlyUsd: seed.monthlyCapUsd };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
@@ -335,13 +315,6 @@ export function createPlan(input: {
     const portal = new URL(input.seed.portalUrl);
     if (portal.protocol !== "https:" || portal.origin !== input.seed.portalUrl) throw new Error("portalUrl must be an HTTPS origin without a path or credentials");
     if (portal.hostname === `${input.slug}.${input.registry.domain}`) throw new Error("this workspace name is reserved for the admin portal");
-    if (input.seed.anthropicUrl && input.seed.anthropicUrl !== `${portal.origin}/api/gateway/${input.slug}/anthropic`) throw new Error("managed provider URL must belong to this workspace's portal gateway");
-  } else if (input.seed.anthropicUrl) throw new Error("a managed provider URL requires portalUrl");
-  if (input.seed.openrouterKey !== undefined || input.seed.openrouterUrl !== undefined || input.seed.openrouterModels !== undefined || input.seed.openrouterDefault) {
-    if (!input.seed.portalUrl || input.seed.openrouterUrl !== `${input.seed.portalUrl}/api/gateway/${input.slug}/openrouter/v1`) throw new Error("managed OpenRouter URL must belong to this workspace's portal gateway");
-    if (!input.seed.openrouterKey || !/^[!-~]+$/.test(input.seed.openrouterKey)) throw new Error("managed OpenRouter requires a non-empty workspace credential without whitespace");
-    const models = openRouterModelIds(input.seed.openrouterModels ?? []);
-    if (input.seed.openrouterDefault && !models.length) throw new Error("a default OpenRouter model requires a model assignment");
   }
   if (input.registry.workspaces[input.slug]) throw new Error(`workspace "${input.slug}" already exists`);
   if (!input.seed.admins.length) throw new Error("a workspace needs at least one admin email (--admin)");
@@ -372,15 +345,6 @@ export function createPlan(input: {
     { kind: "write", path: layout.registryFile, content: `${JSON.stringify(reserved(true), null, 2)}\n`, mode: 0o600 },
     { kind: "mkdir", path: dataDir, mode: 0o700, owner: user },
     { kind: "write", path: join(dataDir, "config.json"), content: initialConfig(input.seed), mode: 0o600, owner: user },
-    ...(input.seed.openrouterKey ? [
-      { kind: "mkdir" as const, path: join(home, ".config"), mode: 0o700, owner: user },
-      { kind: "mkdir" as const, path: join(home, ".config", "opencode"), mode: 0o700, owner: user },
-      { kind: "write" as const, path: join(home, ".config", "opencode", "opencode.json"), mode: 0o600, owner: user, content: `${JSON.stringify({ provider: { [MANAGED_OPENROUTER]: {
-        npm: "@ai-sdk/openai-compatible", name: "Managed OpenRouter",
-        options: { baseURL: input.seed.openrouterUrl, apiKey: input.seed.openrouterKey },
-        models: managedOpenRouterModels(input.seed.openrouterModels ?? []),
-      } } }, null, 2)}\n` },
-    ] : []),
     ...(input.seed.brandJson ? [{ kind: "write" as const, path: join(dataDir, "brand.json"), content: input.seed.brandJson, mode: 0o600, owner: user }] : []),
     { kind: "write", path: join(layout.instancesDir, `${workspace.slug}.env`), content: instanceEnv({ workspace, dataDir, licenseKey: input.licenseKey, portalUrl: input.seed.portalUrl }), mode: 0o600 },
     ...(input.memoryMax

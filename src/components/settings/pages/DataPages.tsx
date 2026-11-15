@@ -3,7 +3,6 @@ import { ActivitySection } from "../../ActivitySection";
 import { AdminOnly } from "../../AdminOnly";
 import { AttachmentStorageSettings } from "../../AttachmentStorageSettings";
 import { AccessOverview } from "../../bot-access/AccessOverview";
-import { CompanyBackupSettings } from "../../CompanyBackupSettings";
 import { ImportSettings } from "../../ImportSettings";
 import { PeopleSection } from "../../PeopleSection";
 import { SettingsGroup, SettingsRows } from "../../SettingsPrimitives";
@@ -27,7 +26,7 @@ export function DataPage() {
   const { ctx } = useSettingsShell();
   return <>
     <SettingsGroup label={t("settings.section.backups")} block="backups">
-      <AdminOnly><WorkspaceBackupSettings /><CompanyBackupSettings /></AdminOnly>
+      <AdminOnly><WorkspaceBackupSettings /></AdminOnly>
     </SettingsGroup>
     <SettingsGroup label={t("settings.data.bringIn")} block="bring-in">
       <AdminOnly><ImportSettings /></AdminOnly>

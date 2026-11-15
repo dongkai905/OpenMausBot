@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { readAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
-import { ANCHOR_EFFECTS, currentStep, stepNumber, TOUR_STEPS, withTourFinished, type TourEffect, type TourStep } from "@/lib/guided-tour";
+import { useAdvancedMode } from "@/lib/interface-mode";
+import { ANCHOR_EFFECTS, TOUR_STEPS, tourSteps, withTourFinished, type TourEffect, type TourStep } from "@/lib/guided-tour";
 import { t } from "@/lib/i18n";
 import type { MausState } from "@/lib/mascot";
 import { hintSeenPatch } from "@/lib/onboarding";
@@ -22,7 +22,17 @@ const MASCOT: Record<TourStep["id"], MausState> = {
   "tour.done": "celebrate",
 };
 
+/** The Automations page is gone, so the tour stops at the places that are left. */
+const GONE_STEPS = new Set(["tour.automations", "tour.automations-page"]);
+
 const copy = (step: TourStep, key: string) => t(step.copy ?? (`onboarding.tour.${step.id.slice(5)}` as LocaleKey), { key });
+
+/** The step's place among the steps this tour walks, the closing card aside. */
+function stepNumber(step: TourStep, steps: TourStep[]): { current: number; total: number } {
+  const visible = steps.filter((candidate) => candidate.id !== "tour.done");
+  const index = visible.findIndex((candidate) => candidate.id === step.id);
+  return { current: index < 0 ? visible.length : index + 1, total: visible.length };
+}
 
 function visible(anchor: string): HTMLElement | null {
   const all = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${anchor}"]`));
@@ -43,7 +53,8 @@ function press(anchor: string): boolean {
 export function GuidedTour() {
   const { state, dispatch } = useStore();
   const record = state.config?.onboarding;
-  const step = currentStep(record, useAdvancedMode());
+  const steps = tourSteps(useAdvancedMode()).filter((candidate) => !GONE_STEPS.has(candidate.id));
+  const step = steps.find((candidate) => !(record?.hintsSeen ?? []).includes(candidate.id)) ?? null;
   const saving = useRef(false);
   const pending = useRef<Promise<unknown>>(Promise.resolve());
   const latestRecord = useRef(record);
@@ -81,9 +92,6 @@ export function GuidedTour() {
           return;
         case "closeApps":
           dispatch({ type: "togglePlugins", open: false });
-          return;
-        case "openAutomations":
-          if (!press("nav-automations") && readAdvancedMode()) dispatch({ type: "showAutomations" });
           return;
         case "backToChat":
           dispatch({ type: "showChat" });
@@ -167,7 +175,7 @@ export function GuidedTour() {
   }, [active, step, advance, run]);
 
   useEffect(() => {
-    if (!active || !step?.anchor || step.id === "tour.apps-panel" || step.id === "tour.automations-page" || step.id === "tour.done") return;
+    if (!active || !step?.anchor || step.id === "tour.apps-panel" || step.id === "tour.done") return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(`[data-tour="${step.anchor}"]`)) advance(true);
@@ -179,7 +187,7 @@ export function GuidedTour() {
   if (!active || !step) return null;
   if (window.ogb?.remoteClient?.active === true) return null;
 
-  const { current, total } = stepNumber(step);
+  const { current, total } = stepNumber(step, steps);
   const closing = step.id === "tour.done";
   const anchor = fallback === step.id && step.fallbackAnchor ? step.fallbackAnchor : step.anchor;
   return (

@@ -45,7 +45,7 @@ function world({ cloud = {}, checks = [], moves = [], busy = [] } = {}) {
           },
           // A check answers `true`/`false`, or a whole report (cloud-send.mjs `check`).
           async check() { w.checked++; const next = checks.shift(); return next && typeof next === "object" ? next : { ok: next ?? true }; },
-          snapshot: () => ({ running: w.running ?? null, whole: { result: { notes: w.notes ?? [{ kind: "held", connection: "OpenRouter" }], failed: w.failed ?? [] } } }),
+          snapshot: () => ({ running: w.running ?? null, whole: { result: { notes: w.notes ?? [], failed: w.failed ?? [] } } }),
         },
         local: {
           async freeze() {
@@ -110,7 +110,7 @@ test("a new buyer's move runs every phase and ends with home on My Cloud, this c
   assert.equal(w.phone.stopped, 0, "a phone paired here hears from the frozen copy where its bots went, and reaches a workspace of this computer's own once one is open");
   assert.deepEqual(w.opened, ["cloud"]);
   assert.equal(w.home.away(), true);
-  assert.deepEqual(w.home.view(), { phase: "done", at: w.journal.doneAt, counts: { bots: 2, skills: 0, logins: 1, onePassword: false, chats: 1 }, phone: true, held: ["OpenRouter"] });
+  assert.deepEqual(w.home.view(), { phase: "done", at: w.journal.doneAt, counts: { bots: 2, skills: 0, logins: 1, onePassword: false, chats: 1 }, phone: true });
   assert.equal(w.home.seen(), null, "the done line shows until it is closed");
 
   await w.relaunch().kick();
@@ -206,11 +206,10 @@ test("a check that still finds things missing after three passes says so at once
 
 test("a move done while a connector stayed on this computer names it on the done line, with what it needs", async () => {
   const w = world();
-  w.notes = [{ kind: "stayed", connection: "fetch", needs: "uvx" }, { kind: "stayed", connection: "easy" }, { kind: "held", connection: "OpenRouter" }];
+  w.notes = [{ kind: "stayed", connection: "fetch", needs: "uvx" }, { kind: "stayed", connection: "easy" }];
   await w.home.kick();
   assert.equal(w.journal.phase, "done");
   assert.deepEqual(w.home.view().stayed, [{ name: "fetch", needs: "uvx" }, { name: "easy" }]);
-  assert.deepEqual(w.home.view().held, ["OpenRouter"]);
   w.notes = [];
   assert.deepEqual(w.home.view().stayed, [{ name: "fetch", needs: "uvx" }, { name: "easy" }], "kept with the move, not read again");
 });

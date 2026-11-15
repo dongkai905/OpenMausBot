@@ -33,9 +33,7 @@ beforeEach(() => { vi.stubGlobal("window", {}); fixture.instances = []; fixture.
 afterEach(() => vi.unstubAllGlobals());
 
 describe("connected apps in bot settings", () => {
-  it("lets the engine use connected apps through either Composio's MCP or the native Email one", () => {
-    fixture.instances = engine({ composioMcp: true });
-    expect(derive().canUseConnectedApps).toBe(true);
+  it("lets the engine use the workspace's apps through its own app mount", () => {
     fixture.instances = engine({ emailMcp: true });
     expect(derive().canUseConnectedApps).toBe(true);
     fixture.instances = engine({ dataMcp: true });
@@ -44,9 +42,12 @@ describe("connected apps in bot settings", () => {
     expect(derive().canUseConnectedApps).toBe(false);
   });
 
-  it("counts connected apps as configured once the Composio service is", () => {
-    expect(derive().connectedAppsConfigured).toBe(false);
-    fixture.config = { composio: { configured: true } };
-    expect(derive().connectedAppsConfigured).toBe(true);
+  it("reads the bot's own switch, which is off only when it says so", () => {
+    expect(derive().connectedAppsEnabled).toBe(true);
+    const off = { ...bot, apps: false };
+    let derived!: ReturnType<typeof useBotSettingsDerived>;
+    function Capture() { derived = useBotSettingsDerived(off as unknown as Bot); return null; }
+    renderToStaticMarkup(createElement(Capture));
+    expect(derived.connectedAppsEnabled).toBe(false);
   });
 });

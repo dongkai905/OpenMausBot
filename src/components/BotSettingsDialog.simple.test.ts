@@ -186,7 +186,7 @@ const derived = () => fixture.derived as never;
 const panel = (bot: Bot, linkedSection: BotSettingsSection | null = null) =>
   capture(() => BotPanel({ bot, derived: derived(), linkedSection, onClose }));
 const dialog = (bot: Bot) => capture(() => BotSettingsDialog({ bot }));
-const botTab = (bot: Bot) => capture(() => DetailsTab({ bot, derived: derived(), onOpen }));
+const botTab = (bot: Bot) => capture(() => DetailsTab({ bot }));
 const settingsPage = (bot: Bot, editingInstructions = false) =>
   capture(() => SettingsPage({ bot, derived: derived(), onOpen, editingInstructions, onEditInstructions }));
 const library = (bot: Bot) => capture(() => LibraryTab({ bot, onOpen }));
@@ -1032,11 +1032,11 @@ describe("the drill-in pages", () => {
   it("switching an app on while apps are off for the bot turns them on with only that app", () => {
     fixture.derived.connectedAppsEnabled = false;
     fixture.apps = { phase: "ready", connectedSlugs: ["gmail", "slack"], apps: [app("gmail", null), app("slack", null)] };
-    click(find(body("apps", makeBot({ composio: false })), "aria-label", "Scout can use Gmail"));
-    expect(patch).toHaveBeenLastCalledWith({ connectorScopes: { apps: { gmail: "write" } }, composio: true });
+    click(find(body("apps", makeBot({ apps: false })), "aria-label", "Scout can use Gmail"));
+    expect(patch).toHaveBeenLastCalledWith({ connectorScopes: { apps: { gmail: "write" } }, apps: true });
     patch.mockReset();
-    click(find(body("apps", makeBot({ composio: false, connectorScopes: { apps: { slack: "write" } } })), "aria-label", "Scout can use Gmail"));
-    expect(patch).toHaveBeenLastCalledWith({ connectorScopes: { apps: { slack: "write", gmail: "write" } }, composio: true });
+    click(find(body("apps", makeBot({ apps: false, connectorScopes: { apps: { slack: "write" } } })), "aria-label", "Scout can use Gmail"));
+    expect(patch).toHaveBeenLastCalledWith({ connectorScopes: { apps: { slack: "write", gmail: "write" } }, apps: true });
   });
 
   it("says what it knows about the apps: checking, unreadable, empty or unusable, and leads to the catalog", () => {

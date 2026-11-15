@@ -199,10 +199,6 @@ export function CanvasComputers({ open, createRequest, drop, sections, onClose, 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         <p className="text-[12px] leading-relaxed text-ink-secondary">{t("canvasComputers.hint")}</p>
         {(error || readError || inventory?.problem) && <p role="alert" className="rounded-lg bg-danger/10 p-3 text-[12px] text-danger">{error || readError || inventory?.problem}</p>}
-        {inventory && !inventory.configured && <div className="rounded-xl border border-hairline/50 p-3 text-[12px]">
-          <p className="text-ink-secondary">{t("canvasComputers.connectBoatHint")}</p>
-          <button className={`${control} mt-2 border border-hairline/50`} onClick={settings}>{t("canvasComputers.connectBoat")}</button>
-        </div>}
         {creating ? <form className="space-y-3 rounded-xl border border-hairline/60 bg-card p-3" onSubmit={(event) => {
           event.preventDefault();
           const value = submittedName.current ?? name.trim();
@@ -240,7 +236,7 @@ export function CanvasComputers({ open, createRequest, drop, sections, onClose, 
             onLostPointerCapture={() => { if (pointer.current) clearDrag(); }}
             className="flex touch-none select-none cursor-grab items-center gap-2.5 rounded-lg py-1 outline-none active:cursor-grabbing">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-control text-ink-secondary"><Box size={18} /></span>
-            <span className="min-w-0"><span className="block truncate text-[13px] font-medium">{computer.name}</span><span className="block text-[11px] text-ink-secondary">{t("canvasComputers.cloudComputer")} · {computerStateLabel(computer.state, busy === computer.id)}</span></span>
+            <span className="min-w-0"><span className="block truncate text-[13px] font-medium">{computer.name}</span><span className="block text-[11px] text-ink-secondary">{t("canvasComputers.remoteComputer")} · {computerStateLabel(computer.state, busy === computer.id)}</span></span>
           </div>
           {computer.problem && <p className="mt-2 text-[11px] text-danger">{computer.problem}</p>}
           <label className="sr-only" htmlFor={`computer-team-${computer.id}`}>{t("canvasComputers.teamFor", { name: computer.name })}</label>

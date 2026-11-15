@@ -19,7 +19,7 @@ export function recoveryCapabilityError(from: Engine, to: Engine): string | unde
   if (supportsWorkspaceFiles(from.driverKind) !== supportsWorkspaceFiles(to.driverKind)) {
     return "The backup cannot use the same workspace.";
   }
-  const tools = ["agentsMcp", "computerMcp", "composioMcp", "dataMcp", "emailMcp", "deviceMcp",
+  const tools = ["agentsMcp", "computerMcp", "dataMcp", "emailMcp", "deviceMcp",
     "browserMcp", "localComputerMcp", "customMcp", "images"] as const;
   if (tools.some(key => from.capabilities[key] === true && to.capabilities[key] !== true)) {
     return "The backup does not support all of this AI's tools and attachments.";

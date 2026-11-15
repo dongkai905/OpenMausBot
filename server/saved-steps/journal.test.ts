@@ -182,7 +182,7 @@ describe("computer journal", () => {
 
   it("journals only this computer's turns", () => {
     expect(hostScope({ ...scope, kind: "computer" })).toEqual(scope);
-    expect(hostScope({ ...scope, kind: "computer", boxId: null })).toBeNull();
+    expect(hostScope({ ...scope, kind: "computer", teamComputerId: "tc_1" })).toBeNull();
     expect(hostScope({ ...scope, kind: "computer", localVmTarget: {} })).toBeNull();
     expect(hostScope({ ...scope, kind: "computer", teamComputerId: "tc" })).toBeNull();
     expect(hostScope({ ...scope, kind: "browser" })).toBeNull();
@@ -192,7 +192,7 @@ describe("computer journal", () => {
     const saved = createSavedSteps({ enabled: () => true, bot: () => ({}), publish: () => {}, engines: { get: () => undefined, set: () => {} }, stopped: () => false, generation: () => "g1", patchMessage: () => {}, withholdHandoff: () => () => {}, contextChanged: () => {} });
     saved.gateChecked({ ...scope, kind: "browser" });
     expect(saved.journal.take("t1", new Set(["g1"]))).toBeNull();
-    saved.gateChecked({ ...scope, kind: "computer", boxId: null });
+    saved.gateChecked({ ...scope, kind: "computer", teamComputerId: "tc_1" });
     expect(saved.journal.take("t1", new Set(["g1"]))).toEqual({ calls: [], complete: true, tainted: true });
     saved.gateChecked({ ...scope, kind: "computer" });
     saved.journal.record(scope, CLICK);

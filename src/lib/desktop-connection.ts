@@ -1,3 +1,4 @@
+/// <reference path="../novnc.d.ts" />
 import RFB from "@novnc/novnc";
 import { DESKTOP_VIEWER_TARGET } from "../../shared/desktop-viewer";
 

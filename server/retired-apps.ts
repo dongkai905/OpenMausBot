@@ -1,5 +1,5 @@
 // Retired connected apps. A bot saved by an older version may name one in connectorScopes.apps or connectorTools, where
-// it would read as a Composio app the bot is limited to or must be told to connect, and the data folder may hold its
+// it would read as an app the bot is limited to or must be told to connect, and the data folder may hold its
 // sealed tokens: both go when the server starts.
 import { readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";

@@ -7,10 +7,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppState, ConfigStatus, InstanceInfo } from "@/state/store";
 
-const fixture = vi.hoisted(() => ({ owner: true as boolean | null, track: vi.fn(), api: vi.fn(), connectedApps: vi.fn() }));
+const fixture = vi.hoisted(() => ({ owner: true as boolean | null, track: vi.fn(), api: vi.fn() }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.owner }));
 vi.mock("@/lib/analytics", () => ({ track: fixture.track, analyticsEnabled: () => true }));
-vi.mock("@/lib/connected-apps", () => ({ preloadConnectedApps: fixture.connectedApps }));
 vi.mock("@/state/store", async (original) => ({ ...await original<typeof import("@/state/store")>(), api: fixture.api }));
 
 const LATE_EVENING = Date.parse("2026-10-15T22:30:00.000Z");
@@ -26,7 +25,7 @@ function ready(patch: Partial<AppState> = {}): AppState {
     ...store.initialState,
     connected: true,
     hydrated: true,
-    config: { box: { configured: false }, composio: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 } } as ConfigStatus,
+    config: { box: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 } } as ConfigStatus,
     instances: [{ instanceId: "claude", driverKind: "customAcp", displayName: "Claude", snapshot: { state: "available", authenticated: true }, models: { default: "", options: [] } } as InstanceInfo],
     ...patch,
   };
@@ -57,7 +56,6 @@ beforeEach(async () => {
   fixture.owner = true;
   fixture.track.mockReset();
   fixture.api.mockReset().mockResolvedValue({ sessions: [], current: null });
-  fixture.connectedApps.mockReset().mockResolvedValue({ services: {}, authoritative: true });
   vi.resetModules();
   store = await import("@/state/store");
   hook = await import("./use-usage-snapshot");
@@ -77,7 +75,6 @@ describe("useUsageSnapshot", () => {
     // Its reads are background reads: nobody is using a Cloud home when the day's snapshot goes (src/state/api.ts).
     expect(fixture.api.mock.calls.length).toBeGreaterThan(0);
     expect(fixture.api.mock.calls.every(([, init]) => (init as { background?: boolean } | undefined)?.background === true)).toBe(true);
-    expect(fixture.connectedApps).toHaveBeenCalledWith(false, true);
   });
 
   it("still sends one through re-renders and readiness that comes and goes", async () => {
@@ -113,7 +110,6 @@ describe("useUsageSnapshot", () => {
     await wait(26 * HOUR);
     expect(fixture.track).not.toHaveBeenCalled();
     expect(fixture.api).not.toHaveBeenCalled();
-    expect(fixture.connectedApps).not.toHaveBeenCalled();
   });
 
   it("waits for the config and the engine list", async () => {

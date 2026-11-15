@@ -45,7 +45,7 @@ describe("which MCP servers need this computer", () => {
 
 describe("what GET /api/cloud-connections names", () => {
   const sources = (config: AppConfig, extra: Partial<Parameters<typeof listConnections>[0]> = {}) => ({
-    config, mcpAuth: () => "none" as const, composio: null, ...extra,
+    config, mcpAuth: () => "none" as const, ...extra,
   });
 
   it("each connection by name, with what moves it, and never a secret", () => {
@@ -59,14 +59,12 @@ describe("what GET /api/cloud-connections names", () => {
       openrouter: { key: "sk-or-fake" }, elevenlabs: { key: "voice-fake" },
     } as unknown as AppConfig;
     const listed = listConnections(sources(config, { mcpAuth: (name) => (name === "linear" ? "signed-in" : "none"),
-      composio: { mode: "managed", account: "managed:abc", installationId: "11111111-2222-4333-8444-555555555555", shared: false },
       email: () => [{ address: "ana@example.test" }] }));
     expect(listed).toEqual([
       { id: "mcp:dodo", kind: "mcp", label: "dodo", detail: "npx dodopayments-mcp", launcher: "npx" },
       { id: "mcp:linear", kind: "mcp", label: "linear", detail: "mcp.linear.app", signIn: true },
       { id: "mcp:notes", kind: "mcp", label: "notes", detail: "127.0.0.1:9", runsHere: true },
       { id: "key:openrouter", kind: "key", label: "OpenRouter", for: ["openrouter"] },
-      { id: "composio", kind: "composio", label: "Connected apps", mode: "managed", account: "managed:abc", installationId: "11111111-2222-4333-8444-555555555555" },
       { id: "email", kind: "email", label: "Email" },
     ]);
     const text = JSON.stringify(listed);
@@ -82,7 +80,7 @@ describe("what the private port hands over, and lets go of", () => {
   const config = { mcpServers: {
     linear: { type: "http", url: "https://mcp.linear.app/sse", headers: { Authorization: "Bearer h" }, oauth: { clientId: "client", clientSecret: "app-secret" } },
     notes: { type: "http", url: "http://localhost:9/mcp" },
-  }, openrouter: { key: "sk-or-fake" }, composio: { apiKey: "ck_fake", userId: "u_1" } } as unknown as AppConfig;
+  }, openrouter: { key: "sk-or-fake" } } as unknown as AppConfig;
   const tokens = { access: "access-1", refresh: "refresh-1", expiresAt: 10 };
 
   it("a server with its secrets and its sign-in, and the digest of that sign-in", () => {
@@ -97,11 +95,10 @@ describe("what the private port hands over, and lets go of", () => {
     expect(JSON.stringify(here)).not.toContain("refresh-1");
   });
 
-  it("a key and the person's own Composio project, each as My Cloud's routes take them", () => {
+  it("a key, as My Cloud's routes take it", () => {
     const sources = { config, mcpSignIn: () => undefined };
     expect(answerConnection("key:openrouter", sources)).toEqual({ ok: true, connection: { config: { openrouter: { key: "sk-or-fake" } } } });
     expect(answerConnection("key:openai", sources)).toEqual({ ok: false, error: "This key is no longer saved on this computer." });
-    expect(answerConnection("composio", sources)).toEqual({ ok: true, connection: { composio: { apiKey: "ck_fake", userId: "u_1" } } });
     expect(answerConnection("mcp:gone", sources)).toEqual({ ok: false, error: "This MCP server is no longer on this computer." });
   });
 

@@ -533,12 +533,12 @@ describe("ApprovalCard outbound holds", () => {
     expect(html).toContain("Create linear comment ×2");
   });
 
-  it("phrases a Composio slug on a plain permission card as words", () => {
+  it("phrases an MCP tool's upper-snake name as words", () => {
     const message = outboundMessage();
     message.card!.outboundRequest = undefined;
-    message.card!.tool = "mcp__composio__LINEAR_CREATE_LINEAR_COMMENT";
+    message.card!.tool = "mcp__linear__LINEAR_CREATE_LINEAR_COMMENT";
     const html = renderToStaticMarkup(createElement(ApprovalCard, { bot, message }));
-    expect(html).toContain("Kiwi wants to create linear comment");
+    expect(html).toContain("Kiwi wants to linear · create linear comment");
   });
 });
 
@@ -631,20 +631,20 @@ describe("one approval, one card", () => {
       ...(answered ? { answered } : {}),
     },
   });
-  const proxy = (answered?: string): Message => ({
-    id: "proxy-card",
+  const send = (answered?: string): Message => ({
+    id: "send-card",
     role: "bot",
     kind: "options",
     at: 1,
     card: {
       title: "Send on your behalf?",
-      subtitle: 'Composio · Proxy execute\n{"code_to_execute":"res, err = run_composio_tool(\\"GITHUB_GET_A_COMMIT\\", {})"}',
+      subtitle: 'Slack · Send message\n{"text":"hi"}',
       options: ["Allow", "Deny"],
-      requestId: "r-proxy",
-      tool: "COMPOSIO_PROXY_EXECUTE",
+      requestId: "r-send",
+      tool: "SLACK_SEND_MESSAGE",
       heldCode: "approval.held.outbound",
       held: "This sends something on your behalf, so it always asks first.",
-      outboundRequest: { tool: "COMPOSIO_PROXY_EXECUTE", app: "Composio", calls: [{ app: "Composio", label: "Proxy execute" }] },
+      outboundRequest: { tool: "SLACK_SEND_MESSAGE", app: "Slack", calls: [{ app: "Slack", label: "Send message" }] },
       ...(answered ? { answered } : {}),
     },
   });
@@ -684,30 +684,8 @@ describe("one approval, one card", () => {
     expect(line).toContain("· Denied");
   });
 
-  it("names code run on Composio plainly and keeps the code behind Details", () => {
-    const line = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Ursa" }, message: proxy("allow") }));
-    expect(line).toContain("Run code on Composio</span>");
-    expect(line).toContain("· Allowed");
-    expect(line).not.toContain("Proxy execute");
-    expect(line).not.toContain("code_to_execute");
-    expect(line).not.toContain("always asks first");
-
-    const [pending] = pendingApprovals([proxy()]);
-    const panel = renderToStaticMarkup(createElement(PendingApprovalPanel, { pending: pending!, count: 1, index: 0, botName: "Ursa" }));
-    const row = visibleRow(panel);
-    expect(row).toContain("Run code on Composio?");
-    expect(row).not.toContain("code_to_execute");
-    expect(row).toContain('aria-label="Details"');
-    expect(row).toMatch(/>May send<\/span>/);
-    expect(row).toContain('title="This runs code that could send or change things in your apps, so it always asks first."');
-    expect(panel).not.toContain("This sends something");
-    expect(panel.slice(panel.indexOf('id="approval-details-'))).toContain("code_to_execute");
-  });
-
   it("keeps a real send's arguments under the composer details", () => {
-    const send: Message = { ...proxy(), card: { ...proxy().card!, subtitle: 'Slack · Send message\n{"text":"hi"}', tool: "SLACK_SEND_MESSAGE",
-      outboundRequest: { tool: "SLACK_SEND_MESSAGE", app: "Slack", calls: [{ app: "Slack", label: "Send message" }] } } };
-    const [pending] = pendingApprovals([send]);
+    const [pending] = pendingApprovals([send()]);
     const panel = renderToStaticMarkup(createElement(PendingApprovalPanel, { pending: pending!, count: 1, index: 0 }));
     expect(panel).toContain("Send to Slack?");
     expect(panel).toContain("{&quot;text&quot;:&quot;hi&quot;}");

@@ -15,7 +15,6 @@ import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBo
 import type { SetupCardFields } from "./setup-card.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
-import type { AppEventAttempt, AppTrigger, AppTriggerRequestCardData, AppTriggerService } from "./app-triggers.ts";
 import type { ProfileRequestCardData } from "./profile-request.ts";
 import type { ServerTextLine, ServerTextParams } from "./server-text.ts";
 import type { WireTool } from "./wire-tool.ts";
@@ -55,8 +54,8 @@ export interface ModelSelection {
   variant?: string;
 }
 
-/** Which cloud computer backs computer: "cloud"; absent means Boat. */
-export type CloudBackend = "box" | "vps";
+/** Which remote computer backs computer: "cloud"; absent means this computer. */
+export type CloudBackend = "vps";
 
 /** A place a bot can act. `cloud` covers both cloud backends. */
 export type Surface = "cloud" | "vm" | "local" | "browser";
@@ -265,9 +264,9 @@ export interface ConnectorToolGrant {
   tools: "*" | string[];
 }
 
-/** Lowercased Composio service slug, e.g. `gmail`. */
+/** Lowercased app slug, e.g. `email`. */
 export const CONNECTOR_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,80}$/;
-/** Composio tool names are upper-snake, e.g. `GMAIL_SEND_EMAIL`. */
+/** App tool names are upper-snake, e.g. `EMAIL_SEND_MESSAGE`. */
 export const CONNECTOR_TOOL_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/;
 
 /** Fails closed: only an absent switch or a strict true allows the helper model; a hand-edited "false" or 0 reads as never. */
@@ -319,7 +318,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   modelSelection: ModelSelection;
   /** where the bot works ("Works on"). Unset = auto. */
   computer?: Surface | "off";
-  /** Which cloud computer backs computer: "cloud"; absent means Boat. */
+  /** Which remote computer backs computer: "cloud"; absent means this computer. */
   cloudBackend?: CloudBackend;
   /** Auto mode may prepare/start this bot's managed VPS container. */
   autoStartVps?: boolean;
@@ -371,10 +370,10 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   /** Team Cloud only: the lowercased email of the member the bot reports to, whose inbox its questions and approvals
    * reach. Absent: it reports to `createdBy`. */
   reportsTo?: string;
-  /** Whether this bot may use the workspace's connected apps. */
-  composio?: boolean;
-  /** Which connected-app tools this bot may call, by service slug. Absent
-   * defers to `composio` (unset/true = every tool, false = none); `{}` grants
+  /** Whether this bot may use the workspace's apps. */
+  apps?: boolean;
+  /** Which app tools this bot may call, by service slug. Absent
+   * defers to `apps` (unset/true = every tool, false = none); `{}` grants
    * none. Grants never travel in shareable exports. */
   connectorTools?: Record<string, ConnectorToolGrant>;
   connectorScopes?: { apps: Record<string, "read" | "write"> };
@@ -679,8 +678,6 @@ export interface OptionCardData extends WaitCardField, ComputerAskField, AccessR
   autoApplied?: boolean;
   /** A person undid that change. */
   undone?: boolean;
-  /** An app-event automation a bot made or changed from chat. */
-  appTriggerRequest?: AppTriggerRequestCardData;
   /** A durable profile-change proposal (propose_profile). */
   profileRequest?: ProfileRequestCardData;
   /** A durable default-model proposal (propose_model). */
@@ -951,10 +948,6 @@ export type ServerFrame =
   | { kind: "notify"; notification: NotificationLogEntry }
   | { kind: "notifications.read"; threadId: string; ids: string[] }
   | { kind: "group.deleted"; groupId: string }
-  | { kind: "app-trigger"; botId: string; trigger: AppTrigger }
-  | { kind: "app-trigger.attempt"; botId: string; attempt: AppEventAttempt }
-  | { kind: "app-trigger.deleted"; triggerId: string }
-  | { kind: "app-trigger.service"; service: AppTriggerService }
   | { kind: "runtime"; event: RuntimeEvent }
   /** An MCP server was added, changed or removed: a list of them is stale. */
   | { kind: "mcp.changed" }

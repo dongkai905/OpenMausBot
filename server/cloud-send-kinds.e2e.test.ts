@@ -1,7 +1,7 @@
 // Everything else the one-time move carries, end to end: this computer's server and a Cloud home
-// (scripts/testing/cloud-send-fixture.ts) with main's own wiring between them and the connected-apps service with a fake
-// Composio behind it. Automations, bot files, memory, the bot and conversation fields, a row over 1 MB, skill extras and
-// a model on the home network; then the check, and a move run again. Disposable homes; no network.
+// (scripts/testing/cloud-send-fixture.ts) with main's own wiring between them. Automations, bot files, memory, the bot and
+// conversation fields, a row over 1 MB, skill extras and a model on the home network; then the check, and a move run again.
+// Disposable homes; no network.
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,23 +9,19 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { itemKey } from "../electron/cloud-send-parts.mjs";
 import type { CloudSendOutcome } from "../electron/cloud-send.mjs";
 import { launchCloudSendFixture, type CloudSendFixture } from "../scripts/testing/cloud-send-fixture.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const TOKEN = `ops_fake-kinds-${randomBytes(8).toString("hex")}`;
 const HOME_MODEL_KEY = `sk-fake-home-${randomBytes(8).toString("hex")}`;
-let broker: BrokerFake;
 let fx: CloudSendFixture;
 let replyFile = "";
 
 beforeAll(async () => {
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, broker, desktopEngine: `process.env.FAKE_CLAUDE_REPLY_FILE = process.env.HOME + "/long-reply.txt";` });
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, desktopEngine: `process.env.FAKE_CLAUDE_REPLY_FILE = process.env.HOME + "/long-reply.txt";` });
   replyFile = join(fx.root, "desktop", "long-reply.txt");
 }, hostTimeout(90_000));
 afterAll(async () => {
   await fx?.close();
-  await broker?.close();
 });
 
 type Side = CloudSendFixture["local"];
@@ -56,7 +52,7 @@ let old: { id: string; threadId: string };
 let plan: { threadId: string };
 let room: { id: string; threadId: string };
 let project = "";
-let routineId = "", callId = "", webhookId = "", appEventId = "";
+let routineId = "", callId = "", webhookId = "";
 let webhookHere: { endpointId: string; secret: string };
 let finishedRun = "";
 let longRow = "";
@@ -151,18 +147,12 @@ it("a move carries the automations, files, memory, fields and skills, and its ch
   const webhook = (await local("POST", "/api/webhooks", { name: "Orders", prompt: "File the order.", botId: nova.id })).body;
   webhookId = webhook.webhook.id;
   webhookHere = { endpointId: webhook.webhook.endpointId, secret: webhook.credential.secret };
-  broker.account(fx.desktopInstallation!.userId, "gmail");
-  const trigger = await local("POST", "/api/app-triggers", { botId: nova.id, name: "Invoices", prompt: "File the invoice.", app: "gmail", event: "GMAIL_NEW_GMAIL_MESSAGE" });
-  expect(trigger.status, JSON.stringify(trigger.body)).toBeLessThan(300);
-  appEventId = trigger.body.trigger.id;
 
   // A model on the home network, which stays here.
   expect((await local("PATCH", "/api/config", { openaiCompat: { key: HOME_MODEL_KEY, url: "http://192.168.1.20:11434/v1", model: "llama" } })).status).toBe(200);
 
   first = await fx.move();
   expect(first.result.failed, JSON.stringify(first.result.failed)).toEqual([]);
-  const triggersThere = async () => (await onCloud("GET", "/api/app-triggers")).body.triggers as Array<{ id: string; enabled: boolean }>;
-  expect(await triggersThere(), "an app event goes only when this computer lets go of it").toEqual([]);
   const final = await fx.move({ final: true });
   expect(final.result.failed, JSON.stringify(final.result.failed)).toEqual([]);
 
@@ -188,8 +178,6 @@ it("a move carries the automations, files, memory, fields and skills, and its ch
   expect(hookThere.endpointId).not.toBe(webhookHere.endpointId);
   expect(address.secret).not.toBe(webhookHere.secret);
   expect(address.endpointUrl.endsWith(`/hooks/${hookThere.endpointId}`)).toBe(true);
-  expect((await triggersThere()).find((entry) => entry.id === appEventId)).toMatchObject({ enabled: false });
-  expect(((await local("GET", "/api/app-triggers")).body.triggers as Array<{ id: string }>).map((entry) => entry.id), "this computer no longer collects it").not.toContain(appEventId);
 
   // Memory merged: every fact once.
   const merged = entries(await memoryText(onCloud, nova.id, "MEMORY.md"));

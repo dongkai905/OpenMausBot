@@ -116,13 +116,13 @@ describe("managed companion credentials", () => {
   });
 
   it("copies a valid provision response into and out of the encrypted credential shape", () => {
-    const credentials = { composioApiKey: "keep-me" };
+    const credentials = { openaiApiKey: "keep-me" };
     const provisioned = withManagedCompanionTunnelAccess(credentials, {
       endpoint: { url: `${ENDPOINT}/` },
       connectorToken: TOKEN,
     });
     expect(provisioned).toEqual({
-      composioApiKey: "keep-me",
+      openaiApiKey: "keep-me",
       managedCompanionEndpointUrl: ENDPOINT,
       managedCompanionConnectorToken: TOKEN,
       [MANAGED_COMPANION_ORIGIN_VERSION_FIELD]: MANAGED_COMPANION_ORIGIN_VERSION,
@@ -137,14 +137,14 @@ describe("managed companion credentials", () => {
   });
 
   it("drops a planned release with the address it belonged to", () => {
-    const credentials = { composioApiKey: "keep-me", [MANAGED_COMPANION_RELEASE_AT_FIELD]: 1_700_000_000_000 };
+    const credentials = { openaiApiKey: "keep-me", [MANAGED_COMPANION_RELEASE_AT_FIELD]: 1_700_000_000_000 };
     const provisioned = withManagedCompanionTunnelAccess(credentials, {
       endpoint: { url: ENDPOINT },
       connectorToken: TOKEN,
     });
     expect(provisioned).not.toHaveProperty(MANAGED_COMPANION_RELEASE_AT_FIELD);
     expect(withoutManagedCompanionTunnelAccess({ ...provisioned, [MANAGED_COMPANION_RELEASE_AT_FIELD]: 1 }))
-      .toEqual({ composioApiKey: "keep-me" });
+      .toEqual({ openaiApiKey: "keep-me" });
   });
 });
 

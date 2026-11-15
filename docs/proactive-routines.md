@@ -65,9 +65,9 @@ there is no brief at all. Its row says
 
 1. **Checks before the model.** A routine can name `checks`: `calendar` (the
    next 36 hours), `mail` (new inbox mail since the cursor) and `runs` (other
-   routines' finished runs). They are plain code over one connected-apps
-   session per tick, as the default account of each app, and only for apps the
-   bot's own app switches let it read. Nothing new starts no turn and leaves no
+   routines' finished runs). They are plain code over one session per tick, as
+   the default account of each app, and only for apps the bot's own app switches
+   let it read. Nothing new starts no turn and leaves no
    run, only "checked at". Reminders, clashes and Your day need no AI. Email
    triage and meeting prep go to **one** batched run, each item in a records
    block. The cursor moves only once that run's answer is kept, and items are
@@ -83,7 +83,7 @@ there is no brief at all. Its row says
    - the run runs at Ask, and the server refuses every request in it outright,
      never as a card;
    - its OpenMausBot routes are conversation reads, its own results, the
-     engine's hooks and the connected-apps relay;
+     engine's hooks;
    - through the relay it reads Gmail and Google Calendar, and may write one
      draft per thread, replying to that thread's sender, in a thread its checks
      handed it;
@@ -154,8 +154,7 @@ there is no brief at all. Its row says
   for it (`nextWakeAt`). The very first morning push says it is the first brief.
 - An install that can't reach connected apps gets no watch, and so no brief,
   until it can. It checks once a minute, since a Cloud's access arrives after
-  start. A scripted test install without the fake connected-apps service
-  behaves as before.
+  start.
 - Routines carry `checks`, `access` and `deliver` through Cloud moves and team
   backups. The watch moves to My Cloud with MausBot. A move carries MausBot
   when it has a routine the person set up, paused or changed, even if nobody
@@ -169,5 +168,4 @@ there is no brief at all. Its row says
 - Phone push when the app is closed (there is no caller of the push relay yet).
 - Quiet hours.
 - A sweep of old run conversations.
-- A run against a real Google account: the Composio slugs and answer shapes
-  follow its documentation and the fixtures in `server/testing/fixtures/`.
+- A run against a real Google account.

@@ -1,7 +1,6 @@
-import { AppWindow, FolderOpen, Globe, Puzzle, Rocket, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, Globe, Puzzle, Rocket, UsersRound } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useAppTriggers } from "@/lib/app-triggers";
 import { cn } from "@/lib/cn";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { t } from "@/lib/i18n";
@@ -19,7 +18,6 @@ function NavRow({
   label,
   icon,
   active = false,
-  attention = false,
   iconsOnly,
   rail = false,
   tourId,
@@ -29,7 +27,6 @@ function NavRow({
   label: string;
   icon: (active: boolean) => ReactNode;
   active?: boolean;
-  attention?: boolean;
   iconsOnly: boolean;
   rail?: boolean;
   tourId?: string;
@@ -52,12 +49,6 @@ function NavRow({
     >
       {icon(active)}
       {!iconsOnly && <span className="flex-1 truncate text-[14px] font-medium leading-5">{label}</span>}
-      {attention && (
-        <span
-          data-testid="automations-attention"
-          className={cn("size-2 shrink-0 rounded-full bg-danger", iconsOnly && (rail ? "absolute right-1 top-1" : "absolute right-2 top-2"))}
-        />
-      )}
     </button>
   );
 }
@@ -82,12 +73,6 @@ export function SidebarAppsButton() {
       <Puzzle size={18} />
     </button>
   );
-}
-
-/** An app trigger in trouble: the app must be fixed before it can run again. */
-export function useAutomationsNeedYou(): boolean {
-  const appTriggers = useAppTriggers();
-  return appTriggers.triggers.some((trigger) => trigger.enabled && trigger.problem);
 }
 
 export function SidebarBottomButtons() {
@@ -118,17 +103,6 @@ export function SidebarFooterNav({
   const toolbar = advanced && !iconsOnly && toolsLayout === "toolbar";
   const iconSize = iconsOnly && !rail ? 20 : 18;
   const tone = (active: boolean) => (active ? "text-accent" : "text-ink-secondary");
-  const automationsNeedYou = useAutomationsNeedYou();
-  const automationsRow = <NavRow
-    id="automations"
-    label={t("sidebar.nav.automations")}
-    tourId="nav-automations"
-    iconsOnly={iconsOnly || toolbar}
-    active={state.activeView === "automations"}
-    attention={automationsNeedYou}
-    icon={(active) => <Zap size={iconSize} className={tone(active)} />}
-    onClick={() => dispatch({ type: "showAutomations" })}
-  />;
   const filesRow = useCloudFilesReady() && <NavRow
     id="files"
     label={t("sidebar.nav.files")}
@@ -153,7 +127,6 @@ export function SidebarFooterNav({
 
   const rows = (
     <>
-      {automationsRow}
       {appsRow}
       {(advanced || iconsOnly) && (
         <NavRow
@@ -197,7 +170,6 @@ export function SidebarFooterNav({
       <SidebarSectionHeader
         name={t("sidebar.tools")}
         collapsed={collapsed}
-        alert={collapsed && automationsNeedYou}
         onToggle={onToggleCollapsed}
         reorderable={false}
         dragging={false}

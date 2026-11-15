@@ -94,7 +94,7 @@ describe("liveStepLabel", () => {
   it("prefers the tool's spoken label, then its name, and never its arguments", () => {
     expect(liveStepLabel({ name: "mcp__agents__list_bots", spoken: "Checking the team" })).toBe("Checking the team");
     expect(liveStepLabel({ name: "mcp__team-notes__query_database" })).toBe("team notes: query database");
-    expect(liveStepLabel({ name: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL" })).toBe("composio: COMPOSIO MULTI EXECUTE TOOL");
+    expect(liveStepLabel({ name: "mcp__gmail__GMAIL_FETCH_EMAILS" })).toBe("gmail: GMAIL FETCH EMAILS");
     expect(liveStepLabel({ name: "Bash" })).toBe("run a command");
     expect(liveStepLabel({ name: `mcp__x__${"y".repeat(200)}` }).length).toBeLessThanOrEqual(81);
   });

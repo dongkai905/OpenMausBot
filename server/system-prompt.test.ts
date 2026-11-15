@@ -13,8 +13,6 @@ import {
   computerPrompt,
   resolveComputerPromptKind,
   mentionPrompt,
-  COMPOSIO_PROMPT,
-  composioSystemPrompt,
   customMcpPrompt,
   CREDENTIAL_PROMPT,
   LEARN_PROMPT,
@@ -51,7 +49,6 @@ describe("resolveComputerPromptKind", () => {
   it.each([
     [{ kind: "vm", vmPrivate: false }, "vm-shared"],
     [{ kind: "vm", vmPrivate: true }, "vm-private"],
-    [{ kind: "box", vmPrivate: false }, "box"],
     [{ kind: "vps", vmPrivate: false }, "vps"],
     [{ kind: "local", vmPrivate: false }, "local"],
     [{ kind: null, vmPrivate: true }, null],
@@ -66,7 +63,6 @@ describe("computerPrompt", () => {
     const paragraphs: Record<string, string> = {
       "vm-private": "your own isolated Cua sandbox",
       "vm-shared": "shared, isolated Cua sandbox",
-      box: "You control the assigned cloud computer",
       vps: "This is the user's own VPS",
       local: "act on the user's computer",
     };
@@ -210,7 +206,6 @@ describe("computerPrompt", () => {
     }
     expect(SANDBOX_DESKTOP_INPUT).toContain('delivery_mode "foreground" for keys, typing, scrolling and pixel clicks');
     expect(computerPrompt("local")).not.toContain(SANDBOX_DESKTOP_INPUT);
-    expect(computerPrompt("box")).not.toContain(SANDBOX_DESKTOP_INPUT);
   });
   it("is empty with no computer", () => {
     expect(computerPrompt(null)).toBe("");
@@ -219,10 +214,9 @@ describe("computerPrompt", () => {
   it("shares the authorized sign-in policy across every computer and browser surface", () => {
     expect(computerPrompt("vm-private")).toContain("your own isolated Cua sandbox");
     expect(computerPrompt("vm-shared")).toContain("a shared, isolated Cua sandbox");
-    expect(computerPrompt("box")).toContain("You control the assigned cloud computer");
     expect(computerPrompt("vps")).toContain("self-hosted remote Linux computer");
     expect(computerPrompt("local")).toContain("act on the user's computer");
-    for (const kind of ["vm-private", "vm-shared", "box", "vps", "local"] as const) {
+    for (const kind of ["vm-private", "vm-shared", "vps", "local"] as const) {
       expect(computerPrompt(kind).endsWith(SIGN_IN_PROMPT)).toBe(true);
       expect(computerPrompt(kind).startsWith(" ")).toBe(true);
     }
@@ -257,14 +251,13 @@ describe("computerPrompt", () => {
     // An inbox code no longer sends the person in; only a code the bot cannot read does.
     expect(SIGN_IN_PROMPT).not.toMatch(/\bMFA\b/u);
     expect(SIGN_IN_PROMPT.indexOf("type the code into that site yourself")).toBeLessThan(SIGN_IN_PROMPT.indexOf("call request_sign_in"));
-    for (const prompt of [computerPrompt("local"), computerPrompt("box"), BUILT_IN_BROWSER_SYSTEM_PROMPT]) expect(prompt).toContain("type the code into that site yourself");
+    for (const prompt of [computerPrompt("local"), BUILT_IN_BROWSER_SYSTEM_PROMPT]) expect(prompt).toContain("type the code into that site yourself");
   });
 
-  it("prefers connected apps for Google and Microsoft data without refusing an asked-for Google or Microsoft sign-in", () => {
+  it("does not refuse an asked-for Google or Microsoft sign-in", () => {
     // A company SSO into a work app needs a Microsoft or Google browser sign-in; the bot must not refuse it.
     expect(SIGN_IN_PROMPT).not.toContain("use connected apps, not a browser sign-in");
-    expect(SIGN_IN_PROMPT).toContain("For Gmail, Calendar, Drive, Outlook or OneDrive data, use connected apps rather than a browser sign-in");
-    expect(SIGN_IN_PROMPT).toContain("when the person asks you to sign in to a site that uses a Google or Microsoft account (such as a company single sign-on), sign in as for any other site, through that provider's own sign-in button and login page rather than a saved login for the site's own form");
+    expect(SIGN_IN_PROMPT).toContain("When the person asks you to sign in to a site that uses a Google or Microsoft account (such as a company single sign-on), sign in as for any other site, through that provider's own sign-in button and login page rather than a saved login for the site's own form");
   });
 
   it("prefers a saved login through fill_login, which submits the form, before asking the person", () => {
@@ -295,7 +288,7 @@ describe("computerPrompt", () => {
 
 describe("shared sentences", () => {
   it("each begins with one space so they concatenate onto the persona line", () => {
-    for (const sentence of [COMPOSIO_PROMPT, CREDENTIAL_PROMPT, TRIGGER_PROMPT, ROUTINE_EXECUTION_PROMPT, AUTOMATION_REPLY_PROMPT, LEARN_PROMPT, WEBHOOK_PROMPT, PROFILE_PROMPT, SIGN_IN_PROMPT]) {
+    for (const sentence of [CREDENTIAL_PROMPT, TRIGGER_PROMPT, ROUTINE_EXECUTION_PROMPT, AUTOMATION_REPLY_PROMPT, LEARN_PROMPT, WEBHOOK_PROMPT, PROFILE_PROMPT, SIGN_IN_PROMPT]) {
       expect(sentence.startsWith(" ")).toBe(true);
       expect(sentence.startsWith("  ")).toBe(false);
     }
@@ -341,45 +334,6 @@ describe("shared sentences", () => {
     expect(TRIGGER_PROMPT).not.toMatch(/pending|explicitly asks/);
     expect(CREDENTIAL_PROMPT).toContain("secure credential request");
     expect(CREDENTIAL_PROMPT).not.toContain("applied immediately");
-  });
-});
-
-describe("composioSystemPrompt", () => {
-  it("keeps the generic all-tools sentence for legacy bots, with the app tools every engine offers by name", () => {
-    expect(composioSystemPrompt(undefined)).toBe(`${COMPOSIO_PROMPT} Gmail and Google Calendar, when connected, have tools of their own: call gmail.search_emails, gmail.read_email, gmail.read_email_thread, gmail.create_draft, gmail.list_drafts, gmail.read_draft and gmail.update_draft, and googlecalendar.list_events and googlecalendar.list_calendars directly (your engine may show them behind its own prefix, with _ for the dot), and use the composio tools for everything else. Draft requests never authorize sending. Revisions update the existing draft ID; creation always makes another draft. If an action fails or accidentally sends, report that fact accurately; a later draft does not undo a send`);
-  });
-
-  it("names the app tools of only the apps a bot was granted", () => {
-    expect(composioSystemPrompt({ gmail: { tools: "*" } })).toContain("Gmail, when connected, has tools of its own: call gmail.search_emails, gmail.read_email, gmail.read_email_thread, gmail.create_draft");
-    expect(composioSystemPrompt({ github: { tools: "*" } })).not.toContain("gmail.");
-    expect(composioSystemPrompt({})).not.toContain("gmail.");
-  });
-
-  it("offers only a connection card when no tools are granted", () => {
-    const prompt = composioSystemPrompt({});
-    expect(prompt).toContain("No connected apps are assigned to this bot");
-    expect(prompt).toContain("COMPOSIO_MANAGE_CONNECTIONS");
-    expect(prompt).not.toContain("COMPOSIO_MULTI_EXECUTE_TOOL");
-    expect(prompt.startsWith(" ")).toBe(true);
-  });
-
-  it("names exactly the granted services for a partial grant", () => {
-    const prompt = composioSystemPrompt({
-      gmail: { tools: ["GMAIL_SEND_EMAIL"] },
-      google_calendar: { tools: "*" },
-    });
-    expect(prompt).toContain("(Gmail, Google Calendar)");
-    expect(prompt).toContain("COMPOSIO_SEARCH_TOOLS");
-    expect(prompt).toContain("COMPOSIO_MULTI_EXECUTE_TOOL");
-    expect(prompt).toContain("Only the tools this bot was granted will run");
-    expect(prompt).not.toContain("Slack");
-    expect(prompt).not.toContain("Notion");
-  });
-
-  it("starts with exactly one space like every shared sentence", () => {
-    const prompt = composioSystemPrompt({ gmail: { tools: "*" } });
-    expect(prompt.startsWith(" ")).toBe(true);
-    expect(prompt.startsWith("  ")).toBe(false);
   });
 });
 
@@ -460,7 +414,7 @@ it("tells Cloud bots that their AIs run on the Cloud and are signed in from the 
 
 describe("longCommandsPrompt", () => {
   it("names Bash's limit everywhere and vm_exec's own limit only with a Local VM", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("`timeout` in milliseconds, up to 600000");
       expect(text).toContain("Never wait inside a command for CI, a deploy or any other job to finish (no sleep loops or repeated polls): check it once");
@@ -474,7 +428,7 @@ describe("longCommandsPrompt", () => {
   });
 
   it("keeps a long command in the foreground, and trusts only its own fresh exit code", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("keep the command in the foreground until it exits");
       expect(text).toContain("split work that cannot finish within that into shorter pieces");

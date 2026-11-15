@@ -36,7 +36,6 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
   const bots: Bot[] = [];
   const kept = new Set<string>();
   const warnings: string[] = [];
-  const forgotten: string[] = [];
   let listener: (change: { type: string; threadId?: string; botId?: string }) => void = () => {};
   const store: DeleteLeftoversDeps["store"] = { get bots() { return bots; }, messagesFor: (threadId) => messages.get(threadId) ?? [], onChange: (added) => { listener = added; }, threadsGoing: () => {} };
   const leftovers = createDeleteLeftovers({
@@ -46,7 +45,6 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
     keptAttachments: () => kept,
     deleteAttachment: (name) => rmSync(join(dataDir, "attachments", name)),
     engineFolders: () => engineSessionFolders([{ HOME: home }]),
-    layers: { journalFile: (layer) => join(dataDir, "memory-journal", `${layer}.ndjson`), forget: (layer) => { forgotten.push(layer); } },
     defer: () => {},
     warn: (line) => { warnings.push(line); },
     ...over,
@@ -80,7 +78,7 @@ function fixture(over: Partial<DeleteLeftoversDeps> = {}) {
   const stored = (name: string) => existsSync(join(dataDir, "attachments", name));
   const logSession = (threadId: string, sessionId: string) =>
     put(join(dataDir, "events", `${threadId}.ndjson`), `${JSON.stringify({ type: "session.started", threadId, sessionId })}\n`);
-  return { sandbox, dataDir, home, outside, messages, bots, kept, warnings, forgotten, say, deleteThreads, deleteBot, stored, logSession, store, leftovers };
+  return { sandbox, dataDir, home, outside, messages, bots, kept, warnings, say, deleteThreads, deleteBot, stored, logSession, store, leftovers };
 }
 
 describe("a deleted conversation's uploads", () => {
@@ -236,13 +234,13 @@ describe("a deleted conversation's engine sessions", () => {
 
 describe("a deleted bot", () => {
   it("takes its checkpoints, its box uploads and the memory layers kept beside its own folder, and keeps the files its conversations made", () => {
-    const { dataDir, bots, deleteBot, forgotten } = fixture();
+    const { dataDir, bots, deleteBot } = fixture();
     bots.push({ id: "scout", tasks: [{ threadId: "t1" }] }, { id: "scout-two", tasks: [{ threadId: "t9" }] });
     const layers = [`scout--member-${MEMBER}`, "scout--room-r1"];
     const mine = [
       put(join(dataDir, "checkpoints", "scout", "0123456789abcdef", ".git", "HEAD")),
       put(join(dataDir, "box-uploads", "scout", "t1", upload(1))),
-      ...layers.flatMap((layer) => [put(join(dataDir, "workspaces", layer, "memory", "notes.md")), put(join(dataDir, "memory-journal", `${layer}.ndjson`))]),
+      ...layers.map((layer) => put(join(dataDir, "workspaces", layer, "memory", "notes.md"))),
     ];
     const others = [
       put(join(dataDir, "checkpoints", "scout-two", "0123456789abcdef", ".git", "HEAD")),
@@ -254,7 +252,6 @@ describe("a deleted bot", () => {
     deleteBot("scout");
     expect(mine.filter(existsSync)).toEqual([]);
     expect(others.filter((path) => !existsSync(path))).toEqual([]);
-    expect(forgotten.sort()).toEqual([...layers].sort());
   });
 
   it("never follows a link out of the data folder", () => {
@@ -311,11 +308,10 @@ describe("the helpers", () => {
 
   it("removes a memory layer and nothing that is not one", () => {
     const { dataDir } = fixture();
-    const records = { journalFile: (layer: string) => join(dataDir, "memory-journal", `${layer}.ndjson`), forget: () => {} };
     const own = put(join(dataDir, "workspaces", "scout", "memory", "notes.md"));
     const layer = put(join(dataDir, "workspaces", "scout--room-r1", "memory", "notes.md"));
-    removeMemoryLayer(dataDir, "scout", records);
-    removeMemoryLayer(dataDir, "scout--room-r1", records);
+    removeMemoryLayer(dataDir, "scout");
+    removeMemoryLayer(dataDir, "scout--room-r1");
     expect([existsSync(own), existsSync(layer)]).toEqual([true, false]);
   });
 

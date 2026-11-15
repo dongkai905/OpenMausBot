@@ -6,7 +6,7 @@ import { inboxWhy } from "./inbox-words.ts";
 // them only as cleaned data. One failed decision fails the batch, which then waits for the next check: no email is
 // dropped half-sorted.
 import type { AppConfig } from "../config.ts";
-import type { EmailHeader } from "../connected-reads.ts";
+import type { EmailHeader } from "../mail-facts.ts";
 import { deciderReady, type Decider } from "../decider/index.ts";
 import { inboxTriageRequest, INBOX_TRIAGE_TIMEOUT_MS, type InboxDetails } from "../decider/inbox-triage.ts";
 import { INBOX_FIELDS, INBOX_TEXT_MAX } from "../extractor/contract.ts";

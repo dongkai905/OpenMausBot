@@ -2,7 +2,7 @@
 // clash, and which new emails go to the AI to sort. Pure, so every rule is tested without a clock or a connected app.
 import { createHash } from "node:crypto";
 
-import type { CalendarEvent, EmailHeader, ThreadMessage } from "../connected-reads.ts";
+import type { CalendarEvent, EmailHeader, ThreadMessage } from "../mail-facts.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

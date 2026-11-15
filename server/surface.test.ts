@@ -8,7 +8,6 @@ import {
   computerToolsRefusal,
   handoffUsesOwnCloud,
   isHandedWork,
-  ownCloudStateWithin,
   parseSurface,
   pinSource,
   placeUnavailable,
@@ -34,17 +33,6 @@ describe("isHandedWork", () => {
     expect(isHandedWork({ mode: "work" })).toBe(false);
     expect(isHandedWork({ parentId: "root-1", mode: "consult" })).toBe(false);
     expect(isHandedWork(undefined)).toBe(false);
-  });
-});
-
-describe("ownCloudStateWithin", () => {
-  it("answers with the cloud computer's state, and marks a failed or slow lookup as unavailable", async () => {
-    await expect(ownCloudStateWithin(Promise.resolve({ box: { state: "stopped" } }))).resolves.toEqual({ state: "stopped", unavailable: false });
-    await expect(ownCloudStateWithin(Promise.resolve({ box: null }))).resolves.toEqual({ state: undefined, unavailable: false });
-    await expect(ownCloudStateWithin(Promise.reject(new Error("Boat is down")))).resolves.toEqual({ state: undefined, unavailable: true });
-    const started = Date.now();
-    await expect(ownCloudStateWithin(new Promise(() => {}), 20)).resolves.toEqual({ state: undefined, unavailable: true });
-    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
 
@@ -376,8 +364,7 @@ describe("surface parsing", () => {
     expect(parseSurface(undefined)).toBeUndefined();
   });
 
-  it("folds both cloud backends into one surface", () => {
-    expect(surfaceOfComputerKind("box")).toBe("cloud");
+  it("folds the cloud backend into one surface", () => {
     expect(surfaceOfComputerKind("vps")).toBe("cloud");
     expect(surfaceOfComputerKind("vm")).toBe("vm");
     expect(surfaceOfComputerKind("local")).toBe("local");
@@ -400,8 +387,8 @@ describe("cloudPlaceRefusal", () => {
 
   it("refuses an engine without computer tools as one state, its fix the same whatever the source", () => {
     const refused = cloudPlaceRefusal(engine({ computerMcp: false }), "works-on", "Scout")!;
-    expect(refused).toMatchObject({ name: "PlaceUnavailableError", place: "cloud", row: { state: "cc-cannot", params: { bot: "Scout", model: "Llama" }, source: "works-on" } });
-    expect(refused.message).toBe("Llama can't use a desktop. Choose a model that can, such as Claude or ChatGPT. Choose another model in Scout's settings.");
+    expect(refused).toMatchObject({ name: "PlaceUnavailableError", place: "cloud", row: { state: "vm-cannot", params: { bot: "Scout", model: "Llama" }, source: "works-on" } });
+    expect(refused.message).toBe("Llama can't use a private desktop. Choose a model that can, such as Claude or ChatGPT. Choose another model in Scout's settings.");
     for (const source of ["pin", "routine", "room"] as const) {
       expect(cloudPlaceRefusal(engine({}), source, "Scout")?.message).toBe(refused.message);
     }
@@ -411,14 +398,14 @@ describe("cloudPlaceRefusal", () => {
 describe("computerToolsRefusal", () => {
   it("refuses a Tool selection without the computer with one action: the setting that changes it", () => {
     const refused = computerToolsRefusal({ deny: ["mcp:computer:*"] }, "works-on", "Scout")!;
-    expect(refused).toMatchObject({ name: "PlaceUnavailableError", place: "cloud", row: { state: "cc-tools-off", params: { bot: "Scout" }, source: "works-on" } });
+    expect(refused).toMatchObject({ name: "PlaceUnavailableError", place: "cloud", row: { state: "local-unavailable", params: { bot: "Scout" }, source: "works-on" } });
     const line = "What Scout can use doesn't include a desktop. Change what Scout can use in its settings.";
     expect(refused.message).toBe(line);
     for (const source of ["pin", "routine", "room"] as const) {
       expect(computerToolsRefusal({ allow: ["native:*"] }, source, "Scout")?.message).toBe(line);
     }
     expect(computerToolsRefusal({ allow: ["native:*"] }, "auto-pin", "Scout")?.message)
-      .toBe("What Scout can use doesn't include a desktop. This conversation is back on Auto. Change what Scout can use in its settings.");
+      .toBe("What Scout can use doesn't include a desktop. Change what Scout can use in its settings. This conversation is back on Auto.");
   });
 
   it("lets every selection that keeps a computer tool through", () => {
@@ -431,8 +418,8 @@ describe("computerToolsRefusal", () => {
 describe("placeUnavailable", () => {
   it("words a passing cause's way on by where the place came from, and never says Set Works on to Auto", () => {
     const cause = (source: "works-on" | "pin" | "auto-pin" | "routine" | "room") =>
-      placeUnavailable("cloud", { state: "cc-no-start", params: { bot: "Scout" }, source }).message;
-    expect(cause("works-on")).toBe("Scout's cloud desktop didn't start. Try again.");
+      placeUnavailable("cloud", { state: "place-failed", params: { bot: "Scout", cause: "Scout's cloud desktop didn't start." }, source }).message;
+    expect(cause("works-on")).toBe("Scout's cloud desktop didn't start. Check it in the Screen panel.");
     expect(cause("pin")).toBe("Scout's cloud desktop didn't start. Clear this conversation's place in the composer to continue.");
     expect(cause("auto-pin")).toBe("Scout's cloud desktop didn't start. This conversation is back on Auto. Send your message again.");
     expect(cause("routine")).toBe("Scout's cloud desktop didn't start. Change where this routine runs.");

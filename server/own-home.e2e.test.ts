@@ -10,7 +10,6 @@ import { createLendingTarget } from "../electron/lending-target.mjs";
 import { launchOwnHomeFixture, type OwnHomeFixture, type OwnServer } from "../scripts/testing/own-home-fixture.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { movedRefusal } from "./move-freeze.ts";
-import { webhookMovedLine } from "./cloud-send-arrived.ts";
 
 let fx: OwnHomeFixture;
 let garage: OwnServer, family: OwnServer;
@@ -108,8 +107,6 @@ it("Make Garage server my home: bots, chats, memory and routines arrive, this co
   expect(chat.some((row) => row.role === "user" && row.text === "Plan the week.")).toBe(true);
   const memory = (await garage.as("GET", `/api/bots/${ember.id}/memory/file?path=MEMORY.md`)).body;
   expect(memory?.text).toContain("The person likes short answers.");
-  const told = (await rows(garage.as, scout.threadId)).filter((row) => row.role === "bot" && row.text === webhookMovedLine("Orders", "Garage server"));
-  expect(told, "the webhook's bot says once where it lives now").toHaveLength(1);
 
   // What was on here is on there, and only that; this computer is stopped for good and says where its bots live.
   const after = await routines(garage.as);

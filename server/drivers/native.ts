@@ -67,7 +67,7 @@ export function appendNative(threadId: string, entry: { dir: "in" | "out"; sourc
   if (streamedFragment(entry.source, entry.msg)) return;
   let line: string;
   try {
-    // Session setup carries agent credentials (boat/comms tokens, MCP headers) and
+    // Session setup carries agent credentials (relay and comms tokens, MCP headers) and
     // people paste these logs into bug reports, so values are masked.
     line = JSON.stringify({ at: new Date().toISOString(), ...entry, msg: redactSecrets(withoutInlineData(entry.msg)) }) + "\n";
   } catch {

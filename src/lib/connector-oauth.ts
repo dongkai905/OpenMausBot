@@ -5,7 +5,7 @@ export interface PendingAuthorization {
   createdAt: number;
 }
 
-/** Composio authorization links expire after ten minutes; reopening the page must not renew the clock. */
+/** Authorization links expire after ten minutes; reopening the page must not renew the clock. */
 export const AUTHORIZATION_LINK_MS = 10 * 60 * 1_000;
 
 export function reusableConnectionUrl(page: PendingAuthorization | null | undefined, now = Date.now()): string | null {

@@ -34,7 +34,7 @@ ipcRenderer.on("desktop-notifications:open", (_event, target) => {
 });
 
 // Only fixed actions are retained, never a destination supplied by a renderer.
-const FIXED_SETTINGS_ACTIONS = new Set(["organization", "cloud", "cloud-settings", "cloud-add", "cloud-add-howto"]);
+const FIXED_SETTINGS_ACTIONS = new Set(["cloud", "cloud-settings", "cloud-add", "cloud-add-howto"]);
 let pendingSettingsAction = null;
 const appSettingsListeners = new Set();
 ipcRenderer.on("app:open-settings", (_event, section) => {
@@ -102,33 +102,6 @@ ipcRenderer.on("desktop-language:changed", (_event, language) => {
 });
 const onHomePage = !isLocalPage && homePage();
 const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(updaterOffered() ? ["updater"] : []), ...(onHomePage ? HOME_PAGE : [])]);
-
-// Keep in parity with shared/workspace-backup-client.ts (a sandboxed preload cannot import it).
-const COMPANY_BACKUP_CLIENT_KEYS = [
-  "omb-drafts", "omb-draft-attachments", "omb-draft-send-ids", "omb-draft-channel-modes",
-  "omb-skin", "omb-show-threads", "omb-show-run-card", "omb-send-key", "omb-color-user-bubbles", "omb-chat-width", "openmausbot.sidebarDensity",
-  "openmausbot.sidebarToolsLayout",
-  "openmausbot.sidebarCollapsedSections.v1", "openmausbot.sidebarSectionOrder.v1",
-  "omb-analytics-opt-out", "openmausbot.remote-voice.v1",
-];
-if (isLocalPage && !desktopRemoteClient && process.argv.includes("--omb-company-desktop=1")) {
-  ipcRenderer.on("company-backups:collect-client-state", (_event, request) => {
-    if (!request || typeof request.requestId !== "string" || !/^[a-f0-9-]{36}$/.test(request.requestId)) return;
-    try {
-      // Check the origin again; a later navigation must not export remote data.
-      if (!localOrigin || location.origin !== localOrigin) throw new Error("Not the local workspace");
-      const clientState = {};
-      for (const key of COMPANY_BACKUP_CLIENT_KEYS) {
-        const value = localStorage.getItem(key);
-        if (value !== null) clientState[key] = value;
-      }
-      if (new TextEncoder().encode(JSON.stringify(clientState)).byteLength > 2 * 1024 ** 2) throw new Error("Browser state too large");
-      ipcRenderer.send("company-backups:client-state", { requestId: request.requestId, clientState });
-    } catch {
-      ipcRenderer.send("company-backups:client-state", { requestId: request.requestId, unavailable: true });
-    }
-  });
-}
 
 // main passes app.getVersion(): a server's page carries that server's version, so About asks this for the app's own.
 const appVersion = (process.argv.find((arg) => arg.startsWith("--omb-app-version="))?.slice("--omb-app-version=".length) ?? "").slice(0, 64);
@@ -624,35 +597,6 @@ const bridge = {
       ? ipcRenderer.invoke("cloud-plan:room-not-now", String(id)) : Promise.reject(new Error("Choose Not now.")),
     restartNow: () => navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("cloud-plan:restart-now") : Promise.reject(new Error("Choose Restart now to restart the Cloud.")),
-  } : undefined,
-  organization: process.argv.includes("--omb-company-desktop=1") ? {
-    settingsOpened: () => ipcRenderer.invoke("organization:settings-opened"),
-    state: () => ipcRenderer.invoke("organization:state"),
-    begin: input => ipcRenderer.invoke("organization:begin", input),
-    reopen: () => ipcRenderer.invoke("organization:reopen"),
-    cancelEnrollment: () => ipcRenderer.invoke("organization:cancel"),
-    refresh: () => ipcRenderer.invoke("organization:refresh"),
-    disconnect: () => ipcRenderer.invoke("organization:disconnect"),
-    onState: cb => {
-      const handler = (_event, state) => cb(state);
-      ipcRenderer.on("organization:state-changed", handler);
-      return () => ipcRenderer.removeListener("organization:state-changed", handler);
-    },
-  } : undefined,
-  companyBackups: process.argv.includes("--omb-company-desktop=1") ? {
-    state: () => ipcRenderer.invoke("company-backups:state"),
-    list: () => ipcRenderer.invoke("company-backups:list"),
-    create: input => ipcRenderer.invoke("company-backups:create", input),
-    configureSchedule: input => ipcRenderer.invoke("company-backups:configure-schedule", input),
-    prepareRestore: input => ipcRenderer.invoke("company-backups:preview", input),
-    restore: input => ipcRenderer.invoke("company-backups:restore", input),
-    delete: input => ipcRenderer.invoke("company-backups:delete", input),
-    cancel: () => ipcRenderer.invoke("company-backups:cancel"),
-    onState: cb => {
-      const handler = (_event, state) => cb(state);
-      ipcRenderer.on("company-backups:state-changed", handler);
-      return () => ipcRenderer.removeListener("company-backups:state-changed", handler);
-    },
   } : undefined,
   computerSharing: {
     state: id => ipcRenderer.invoke("sharing:state", id),

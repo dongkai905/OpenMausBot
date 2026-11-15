@@ -22,7 +22,7 @@ export type TeamComputerRecord = z.infer<typeof entrySchema>;
 export const teamComputerOwner = (id: string): string => `computer_${id}`;
 const failure = (message: string, status = 409) => Object.assign(new Error(message), { status });
 
-/** Persist identity before any provider call, so a retried create keeps its Boat journal key; invalid restored state is never reset. */
+/** Persist identity before any provider call, so a retried create keeps its journal key; invalid restored state is never reset. */
 export class TeamComputers {
   private entries: TeamComputerRecord[] = [];
   private problem?: string;

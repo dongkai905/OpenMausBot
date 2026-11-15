@@ -8,7 +8,7 @@ import type { TeamConnectionsHost } from "../host/team-connections-host.ts";
 import { personKey } from "../person-key.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PeopleConnections } from "../team-connections.ts";
-import { createTeamConnectionRoutes, type TeamConnectionRouteDeps } from "./team-connections.ts";
+import { createTeamConnectionRoutes } from "./team-connections.ts";
 
 const URL_A = "https://mail.example.com/mcp";
 const URL_B = "https://other.example.com/mcp";
@@ -18,11 +18,11 @@ const KEY = "Bearer personal-key-12345";
 
 function setup() {
   const cfg = { mcpServers: { mail: { type: "http", url: URL_A, headers: { Authorization: "" } } } } as unknown as AppConfig;
-  const people = new PeopleConnections({ dataDir: join(DATA_DIR, randomUUID()), brokerUrl: () => null, clients: () => undefined, isOwnerLive: () => true });
+  const people = new PeopleConnections({ dataDir: join(DATA_DIR, randomUUID()), clients: () => undefined, isOwnerLive: () => true });
   const route = createTeamConnectionRoutes({
     cfg: () => cfg,
     host: { team: { id: "team-acme-1", name: "Acme" }, people, personMcp: () => ["mail"] } as TeamConnectionsHost,
-    composio: {} as TeamConnectionRouteDeps["composio"], publicOrigin: null,
+    publicOrigin: null,
   });
   const auth: RequestAuth = { kind: "session", via: "bearer", scopes: ["client"], session: {
     id: "s-ada", tokenHash: "0".repeat(64), label: "Desktop", scopes: ["client"], createdAt: 1, lastSeenAt: 1, expiresAt: 9_000,

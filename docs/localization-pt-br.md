@@ -152,7 +152,6 @@ English avoids an internal word, the Portuguese avoids it too:
 | engine | `motor`, `mecanismo`, `engine` | `IA` |
 | instance | `instância` | `conta de IA` |
 | server (on everyday screens) | `servidor` | `o app`, or `o Cloud` when it is hosted. `servidor MCP` and Discord or Slack servers keep the word. |
-| Composio | `Composio` | `apps conectados` |
 | cloud computer | `computador na nuvem` | `desktop na nuvem` |
 | VPS | `VPS` | `sua própria máquina` |
 | Local VM (on everyday screens) | `VM local` | `desktop privado` |

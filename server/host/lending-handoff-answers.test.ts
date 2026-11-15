@@ -32,8 +32,8 @@ function world({ parked = true, opener = "a", card = true } = {}) {
   const gate = createCloudLendingTurns({
     store: store as never, cloudHome: true,
     directRequest: () => ({ generations: new Set(["g1"]), origin: { kind: "user", request: "Tidy", person: OWNER, lends: true } }) as never,
-    threadStarter: () => undefined, ownerPerson: (person) => person === OWNER, cardAnswerer: () => undefined, activeRoutineRun: () => null, ownerStartedRun: () => false,
-    routineRunIsOwners: () => false, memoryChangedBySomeoneElse: () => false, routines: () => null, routineAuthors: null, lentPlatform: () => "darwin",
+    threadStarter: () => undefined, ownerPerson: (person) => person === OWNER, cardAnswerer: () => undefined,
+    memoryChangedBySomeoneElse: () => false, lentPlatform: () => "darwin",
   });
   const routing = createQuestionRouting({
     store: store as never, active: () => [requester, node], node: (id: string) => [requester, node].find((one) => one.id === id), parkedFor: (botId: string) => parked && botId === "b" ? [node] : [],

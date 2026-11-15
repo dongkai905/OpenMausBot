@@ -10,11 +10,10 @@ import type { NewBotDefaults } from "../../shared/new-bot-defaults";
 const defaults = (): NewBotDefaults => ({
   profile: {
     name: "Suggested", modelSelection: { instanceId: "claude", model: "opus" }, approvalMode: "ask",
-    computer: "local", cwd: "/work/site", composio: true, color: "green",
+    computer: "local", cwd: "/work/site", apps: true, color: "green",
   },
   memory: { "MEMORY.md": "- The person's own default note" },
   skills: [],
-  routines: [{ name: "Mine", prompt: "Mine", schedule: { type: "daily", time: "07:00", weekdays: [1] }, enabled: true }],
 });
 
 describe("ready-made bots", () => {
@@ -40,13 +39,6 @@ describe("ready-made bots", () => {
       expect(bot.soul.length).toBeGreaterThan(200);
     }
   });
-
-  it("only ever bring paused routines and notes under the memory folder", () => {
-    for (const bot of READY_BOTS) {
-      for (const routine of bot.routines ?? []) expect(routine.enabled).toBe(false);
-      for (const path of Object.keys(bot.notes ?? {})) expect(path).toMatch(/^(MEMORY\.md|memory\/[a-z0-9-]+\.md)$/);
-    }
-  });
 });
 
 describe("readyBotTemplate", () => {
@@ -60,16 +52,14 @@ describe("readyBotTemplate", () => {
   it("never changes the person's model, approval level, computer, folder or apps", () => {
     const { profile } = readyBotTemplate(defaults(), plant);
     expect(profile).toMatchObject({
-      modelSelection: { instanceId: "claude", model: "opus" }, approvalMode: "ask", computer: "local", cwd: "/work/site", composio: true,
+      modelSelection: { instanceId: "claude", model: "opus" }, approvalMode: "ask", computer: "local", cwd: "/work/site", apps: true,
     });
   });
 
-  it("adds notes beside the person's own and appends its routines paused", () => {
+  it("leaves the person's own notes as they are", () => {
     const template = readyBotTemplate(defaults(), plant);
     expect(template.memory["MEMORY.md"]).toContain("The person's own default note");
-    expect(template.memory["MEMORY.md"]).toContain("memory/plants.md");
-    expect(template.memory["memory/plants.md"]).toContain("title: My plants");
-    expect(template.routines.map((routine) => [routine.name, routine.enabled])).toEqual([["Mine", true], ["Weekly plant check", false]]);
+    expect(template.memory["memory/plants.md"]).toBeUndefined();
   });
 
   it("leaves the defaults it was given untouched", () => {
@@ -109,14 +99,11 @@ describe("the social media manager", () => {
     expect(social.soul).toContain("Add every post to Postiz as a draft, unless the user gave it a time to go out: then schedule it for that time.");
     expect(social.soul).toContain("Never publish a post straight away (type now) unless the user asks for that post to go out now.");
     expect(social.soul).toContain("show a preview of it with show_html, then add it to Postiz without waiting for a reply.");
-    expect(social.routines).toEqual([expect.objectContaining({ name: "Weekly post plan", enabled: false })]);
-    expect(social.routines![0]!.prompt).toContain("as drafts");
   });
 
-  it("brings its notes and leaves the person's approval level, so publishing asks as their other bots do", () => {
+  it("leaves the person's approval level, so publishing asks as their other bots do", () => {
     const template = readyBotTemplate(defaults(), social);
     expect(template.profile.approvalMode).toBe("ask");
-    expect(template.memory["memory/social.md"]).toContain("title: Social media");
-    expect(template.memory["MEMORY.md"]).toContain("memory/social.md");
+    expect(template.memory["MEMORY.md"]).toContain("The person's own default note");
   });
 });

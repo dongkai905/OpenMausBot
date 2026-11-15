@@ -464,14 +464,13 @@ it("on a Team Cloud, sends people to the Plan page for its people and plan, neve
 const ENDS = new Date(2026, 9, 15, 12).getTime(), DAY = 86_400_000;
 const onTrial = (state: "active" | "ending" | "processing" | "late" | "ended", extra: object = {}) =>
   ({ state, tier: "pro", endsAt: ENDS, amount: 4900, chargeAt: null, holdUntil: null, deleteAt: null, keep: "none", ...extra }) as NonNullable<CloudAccountState["trial"]>;
-const credit = { grantedUsd: 5, remainingUsd: 3.2, state: "active" } as const;
 it("a free trial says what happens and when, in the notice's words, with its next step on the browser button", async () => {
   const machine = { status: "ready" as const, origin };
   await ready({ ...pro, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: ENDS + 3 * DAY, version: 3 }, machine,
-    trial: onTrial("ending", { deleteAt: ENDS + 3 * DAY, keep: "portal" }), credit });
+    trial: onTrial("ending", { deleteAt: ENDS + 3 * DAY, keep: "portal" }) });
   const html = render().html;
   all(html, [">Pro free trial<", "Your free trial ends on Oct 15", "Renewal is off, so the Cloud stops then and its files are deleted on Oct 18.",
-    "Trial Claude credit: $3.20 of $5 left.", 'data-cloud-trial="ending"', 'data-cloud-credit="active"']);
+    'data-cloud-trial="ending"']);
   none(html, ["Pro active", "Manage subscription", ...BUY]);
   click("Subscribe to keep it"); await flush(); expect(bridge.openDashboard).toHaveBeenCalledExactlyOnceWith();
   push({ ...pro, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: ENDS + 3 * DAY, version: 4 }, machine, trial: onTrial("active", { chargeAt: ENDS }) });
@@ -481,16 +480,15 @@ it("a free trial says what happens and when, in the notice's words, with its nex
 });
 it("an ended trial is one message: what happens to the files, and Subscribe to keep it; the stopped Cloud only says it is stopped", async () => {
   await ready({ ...free, entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 6 }, machine: { status: "stopped", origin },
-    trial: onTrial("ended", { deleteAt: ENDS + 3 * DAY, keep: "checkout" }), credit: { grantedUsd: 5, remainingUsd: 0, state: "used_up" } });
+    trial: onTrial("ended", { deleteAt: ENDS + 3 * DAY, keep: "checkout" }) });
   const html = render().html;
-  all(html, ["Your free trial has ended", "The Cloud is stopped. Its files are kept until Oct 18, then deleted.", 'data-cloud-home="stopped"', ">The Cloud is stopped.</p>",
-    "Your $5 trial Claude credit is used up. To keep your bots working, sign in with your own Claude or ChatGPT account in the Cloud, or add an API key there."]);
+  all(html, ["Your free trial has ended", "The Cloud is stopped. Its files are kept until Oct 18, then deleted.", 'data-cloud-home="stopped"', ">The Cloud is stopped.</p>"]);
   none(html, ["Subscribe again on your Plan page", "Your plan is not active right now", ...BUY]);
   expect(button("Subscribe to keep it")).toBeTruthy();
 });
 it("signed out or with no plan, the Add a Cloud button names the trial only when the Admin offers one, with its money-back", async () => {
   const onAddCloud = vi.fn();
-  const offer = vi.fn().mockResolvedValue({ plans: [{ tier: "pro", amount: 4900, trialDays: 7 }], recommended: "pro", creditUsd: 5, refundDays: 14 });
+  const offer = vi.fn().mockResolvedValue({ plans: [{ tier: "pro", amount: 4900, trialDays: 7 }], recommended: "pro", refundDays: 14 });
   (bridge as CloudAccountBridge).offer = offer;
   await ready({ status: "signed-out" });
   render({ onAddCloud }); f.effects.at(-1)!(); await flush();
@@ -507,17 +505,17 @@ it("signed out or with no plan, the Add a Cloud button names the trial only when
   offer.mockClear(); push(pro); render({ onAddCloud }); f.effects.at(-1)!(); await flush();
   expect(offer).not.toHaveBeenCalled(); none(render({ onAddCloud }).html, BUY);
 });
-it("on My Cloud, Settings shows the trial and its credit, and its button names the trial's next step", async () => {
-  const plan = { state: vi.fn().mockResolvedValue({ status: "paid", tier: "pro", trial: onTrial("active", { chargeAt: ENDS }), credit }),
+it("on My Cloud, Settings shows the trial, and its button names the trial's next step", async () => {
+  const plan = { state: vi.fn().mockResolvedValue({ status: "paid", tier: "pro", trial: onTrial("active", { chargeAt: ENDS }) }),
     manage: vi.fn().mockResolvedValue(undefined) };
   const view = () => { f.index = 0; f.effects = []; let tree: ReactNode; function Capture() { tree = CloudPlanOnCloud({ bridge: plan }); return tree; }
     return { html: renderToStaticMarkup(createElement(Capture)), nodes: nodes(tree) }; };
   view(); f.effects[0](); await flush();
-  all(view().html, [">Pro free trial<", "Your free trial ends on Oct 15", "Then Pro is $49/month plus tax, charged on Oct 15.", "Trial Claude credit: $3.20 of $5 left."]);
+  all(view().html, [">Pro free trial<", "Your free trial ends on Oct 15", "Then Pro is $49/month plus tax, charged on Oct 15."]);
   view().nodes.find(node => node.type === "button" && node.props.children === "Manage subscription")!.props.onClick!();
   await flush(); expect(plan.manage).toHaveBeenCalledExactlyOnceWith();
   plan.state.mockResolvedValueOnce({ status: "paid", tier: "pro" }); f.values = []; view(); f.effects[0](); await flush();
-  all(view().html, [">Pro<", "Manage subscription"]); none(view().html, ["free trial", "Claude credit"]);
+  all(view().html, [">Pro<", "Manage subscription"]); none(view().html, ["free trial"]);
 });
 it("Sign in is the sheet's email code when Settings hands it over; the staging Admin is marked plainly", async () => {
   const onSignIn = vi.fn();

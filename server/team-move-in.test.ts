@@ -23,10 +23,6 @@ function setup(over: Partial<TeamMoveInDeps> = {}) {
   const issued: Array<{ bot: string; email: string }> = [];
   const revoked: string[] = [];
   const starters = new Map<string, string>();
-  const routines = [
-    { id: "r-scout", botId: SCOUT, enabled: false, target: "bot" },
-    { id: "r-other", botId: OTHER, enabled: false, target: "bot" },
-  ];
   const bots: Array<{ id: string; name: string; threadId: string }> = [{ id: OTHER, name: "Scout", threadId: "other-main" }];
   const deps: TeamMoveInDeps = {
     team: ACME, dataDir: dir,
@@ -37,12 +33,11 @@ function setup(over: Partial<TeamMoveInDeps> = {}) {
       botByThread: (threadId) => bots.find((bot) => bot.threadId === threadId) ?? (threadId.startsWith(`${SCOUT}-`) ? { id: SCOUT } : threadId.startsWith("other-") ? { id: OTHER } : null),
       groupByThread: (threadId) => (threadId === "room-1" ? { id: "room" } : null),
     },
-    routines: () => ({ listRoutines: () => routines as never, update: (id: string, patch: { enabled?: boolean }) => { const found = routines.find((routine) => routine.id === id)!; Object.assign(found, patch); return found as never; } }),
     library: () => ({ "team-writing": {} }),
     starters: { get: (threadId) => starters.get(threadId), set: (threadId, person) => { if (person && !starters.has(threadId)) starters.set(threadId, person); } },
     ...over,
   };
-  return { moveIn: createTeamMoveIn(deps), issued, revoked, starters, routines, bots };
+  return { moveIn: createTeamMoveIn(deps), issued, revoked, starters, bots };
 }
 
 const session = (extra: Partial<SessionRecord> = {}): RequestAuth => ({ kind: "session", via: "bearer", scopes: ["client"], session: { ...ada, tokenHash: "", label: "", scopes: ["client"], createdAt: 0, lastSeenAt: 0, expiresAt: 0, ...extra } as SessionRecord });
@@ -156,18 +151,9 @@ describe("what a move-in may write", () => {
     expect(own.body).toEqual({ id: SCOUT, name: "Scout (Ada)", useDefaults: false, reportsTo: "Ada@acme.test" });
   });
 
-  it("takes its own routines only, reporting into the mover's conversation, and a library skill only when the team lacks it", async () => {
-    const { moveIn, starters } = await moving();
+  it("takes a library skill only when the team lacks it", async () => {
+    const { moveIn } = await moving();
     const put = (key: string, record: Record<string, unknown>) => call(moveIn.guard, "PUT", "/api/cloud-send/kind", moveInSession(), { v: 1, key, dataDir: "/d", record });
-    expect((await put("routine:r-new", { id: "r-new", botId: SCOUT, target: "bot" })).body).toMatchObject({ record: { resultsThreadId: "my-main" } });
-    starters.set(`${SCOUT}-results`, adaKey);
-    expect((await put("routine:r-new", { id: "r-new", botId: SCOUT, target: "bot", resultsThreadId: `${SCOUT}-results` })).body).toMatchObject({ record: { resultsThreadId: `${SCOUT}-results` } });
-    expect((await put("routine:r-new", { id: "r-new", botId: SCOUT, target: "bot", resultsThreadId: "other-main" })).body, "never another bot's conversation").toMatchObject({ record: { resultsThreadId: "my-main" } });
-    expect((await put("routine:r-other", { id: "r-other", botId: SCOUT, target: "bot" })).answer?.status, "another bot's routine id").toBe(403);
-    expect((await put("routine:r-new", { id: "r-new", botId: OTHER, target: "bot" })).answer?.status).toBe(403);
-    expect((await put("routine:r-new", { id: "r-new", botId: SCOUT, target: "room-goal" })).answer?.status).toBe(403);
-    expect((await put("call:c1", { id: "c1", botIds: [SCOUT] })).answer?.status).toBe(403);
-    expect((await put("webhook:w1", { id: "w1", botId: SCOUT })).answer?.status).toBe(403);
     expect((await put("library-skill:trip-plan", { text: "x" })).out).toBe(PASS);
     expect((await put("library-skill:team-writing", { text: "x" })).answer?.status, "never over the team's own").toBe(403);
     expect((await put("imported-skill:mine", {})).answer?.status).toBe(403);
@@ -196,12 +182,10 @@ describe("what a move-in may write", () => {
     expect(verify.answer?.status).toBe(403);
   });
 
-  it("switches on its own routines at the end, ends every sign-in that moved it, and takes nothing after", async () => {
-    const { moveIn, routines, revoked } = await moving();
-    routines.push({ id: "r-new", botId: SCOUT, enabled: false, target: "bot" });
-    const done = await call(moveIn.routes, "POST", `/api/team-move-in/${SCOUT}/done`, moveInSession(), { v: 1, on: ["routine:r-new", "routine:r-other", "webhook:w1"] });
-    expect(done.answer).toEqual({ status: 200, body: { v: 1, switched: 1 } });
-    expect(routines.map((routine) => [routine.id, routine.enabled])).toEqual([["r-scout", false], ["r-other", false], ["r-new", true]]);
+  it("ends every sign-in that moved it, and takes nothing after", async () => {
+    const { moveIn, revoked } = await moving();
+    const done = await call(moveIn.routes, "POST", `/api/team-move-in/${SCOUT}/done`, moveInSession(), { v: 1, on: [] });
+    expect(done.answer).toEqual({ status: 200, body: { v: 1, switched: 0 } });
     expect(revoked).toEqual([SCOUT]);
     expect(moveIn.list()[SCOUT]?.state).toBe("done");
     expect((await call(moveIn.guard, "PATCH", `/api/bots/${SCOUT}`, moveInSession(), { soul: "late" })).answer?.status).toBe(403);
@@ -210,7 +194,7 @@ describe("what a move-in may write", () => {
     expect((await call(moveIn.routes, "POST", `/api/team-move-in/${OTHER}/done`, moveInSession(), { v: 1, on: [] })).answer?.status).toBe(403);
   });
 
-  it("names the mover as the lines and routines that arrive name them, and keeps reads to its bot", async () => {
+  it("names the mover as the lines that arrive name them, and keeps reads to its bot", async () => {
     const { moveIn } = await moving();
     expect(moveIn.owner(moveInSession())).toEqual({ person: adaKey, name: "Ada" });
     expect(moveIn.scope(moveInSession())).toBe(SCOUT);

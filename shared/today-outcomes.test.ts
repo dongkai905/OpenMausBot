@@ -3,7 +3,7 @@ import { classifyToolCall, isReportRoutine, minutesSaved, toolApps, type Outcome
 
 const CASES: ReadonlyArray<[string, OutcomeCategory | null]> = [
   ["GMAIL_FETCH_EMAILS", "emailRead"],
-  ["mcp__composio__GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", "emailRead"],
+  ["mcp__gmail__GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", "emailRead"],
   ["GMAIL_LIST_THREADS", "emailRead"],
   ["GMAIL_ADD_LABEL_TO_EMAIL", "emailRead"],
   ["GMAIL_MOVE_TO_TRASH", "emailRead"],
@@ -46,10 +46,7 @@ const CASES: ReadonlyArray<[string, OutcomeCategory | null]> = [
   ["STRIPE_CREATE_REFUND", "other"],
   ["GOOGLECALENDAR_CREATE_EVENT", "other"],
   ["GITHUB_CREATE_AN_ISSUE", "other"],
-  ["COMPOSIO_REMOTE_WORKBENCH", "other"],
   ["GOOGLECALENDAR_FIND_EVENT", null],
-  ["COMPOSIO_SEARCH_TOOLS", null],
-  ["mcp__composio__COMPOSIO_MANAGE_CONNECTIONS", null],
   ["Bash", null],
   ["Read", null],
   ["WebSearch", null],
@@ -67,29 +64,10 @@ describe("the outcome a finished tool call counts as", () => {
     expect(classifyToolCall(name)).toEqual(expected ? [expected] : []);
   });
 
-  it("reads every app tool a multi-execute call ran from its recorded input", () => {
-    const input = JSON.stringify({ tools: [
-      { tool_slug: "GMAIL_FETCH_EMAILS", arguments: { query: "is:unread" } },
-      { tool_slug: "GMAIL_SEND_EMAIL", arguments: { to: "ada@example.test" } },
-      { tool_slug: "GOOGLECALENDAR_FIND_EVENT", arguments: {} },
-    ] }, null, 2);
-    expect(classifyToolCall("mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", input)).toEqual(["emailRead", "emailSent"]);
-    expect(classifyToolCall("COMPOSIO_MULTI_EXECUTE_TOOL", input)).toEqual(["emailRead", "emailSent"]);
-    expect(toolApps("COMPOSIO_MULTI_EXECUTE_TOOL", input)).toEqual(["GMAIL", "GOOGLECALENDAR"]);
-  });
-
-  it("reads the slugs of a preview cut short, and counts a call it cannot read once", () => {
-    const cut = `{\n  "tools": [\n    {\n      "tool_slug": "SLACK_SEND_MESSAGE",\n      "arguments": {}\n    },\n    {\n      "tool_slug": "NOTION_CREATE_PAGE",\n      "arguments": {\n        "title": "Week${"x".repeat(40)}\n[… preview shortened]`;
-    expect(classifyToolCall("COMPOSIO_MULTI_EXECUTE_TOOL", cut)).toEqual(["message", "doc"]);
-    expect(classifyToolCall("COMPOSIO_MULTI_EXECUTE_TOOL")).toEqual(["other"]);
-    expect(classifyToolCall("COMPOSIO_MULTI_EXECUTE_TOOL", "{\"thought\": \"look things up\"}")).toEqual(["other"]);
-  });
-
   it("names the app a tool belongs to", () => {
-    expect(toolApps("mcp__composio__GMAIL_SEND_EMAIL")).toEqual(["GMAIL"]);
+    expect(toolApps("mcp__gmail__GMAIL_SEND_EMAIL")).toEqual(["GMAIL"]);
     expect(toolApps("mcp__claude_ai_Google_Drive__search_files")).toEqual(["GOOGLEDRIVE"]);
     expect(toolApps("Bash")).toEqual([]);
-    expect(toolApps("COMPOSIO_SEARCH_TOOLS")).toEqual([]);
   });
 });
 

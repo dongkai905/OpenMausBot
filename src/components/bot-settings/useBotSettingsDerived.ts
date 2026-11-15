@@ -3,7 +3,7 @@ import { browserAvailable, builtInBrowserEnabled } from "@/lib/feature-flags";
 import { stateForBot } from "@/lib/mascot";
 import { useStore, type Bot } from "@/state/store";
 import { approvalModeFor } from "../../../shared/approval-mode";
-import { connectorGrantsState, type ConnectorGrantsState } from "@/lib/connector-grants";
+import { connectorGrantsState, type ConnectorGrantsState } from "@/lib/bot-apps";
 
 export type BotPatch = Partial<
   Pick<
@@ -37,7 +37,7 @@ export type BotPatch = Partial<
     | "voice"
     | "chiefOfStaff"
     | "managedSections"
-    | "composio"
+    | "apps"
     | "browser"
     | "recordBrowserSteps"
     | "mcpServers"
@@ -62,10 +62,9 @@ export function useBotSettingsDerived(bot: Bot) {
   const approvalMode = approvalModeFor(bot);
   const trustedModesAvailable = Boolean(window.ogb?.approvals && capabilities.host.packaged);
   const canCoordinate = engine?.capabilities?.agentsMcp === true;
-  // Connected apps reach a bot through Composio's MCP or the native Email one; either lets the switch work.
-  const canUseConnectedApps = engine?.capabilities?.composioMcp === true || engine?.capabilities?.emailMcp === true;
-  const connectedAppsConfigured = state.config?.composio?.configured === true;
-  const connectedAppsEnabled = bot.composio !== false;
+  // The native app tools reach a bot through the engine's own app mount; without it the switch cannot be turned on.
+  const canUseConnectedApps = engine?.capabilities?.emailMcp === true;
+  const connectedAppsEnabled = bot.apps !== false;
   const connectorGrantState: ConnectorGrantsState = connectorGrantsState(bot);
   const canUseBrowser = engine?.capabilities?.browserMcp === true;
   const desktopBrowser = browserAvailable(state.config);
@@ -86,7 +85,6 @@ export function useBotSettingsDerived(bot: Bot) {
     trustedModesAvailable,
     canCoordinate,
     canUseConnectedApps,
-    connectedAppsConfigured,
     connectedAppsEnabled,
     connectorGrantState,
     canUseBrowser,

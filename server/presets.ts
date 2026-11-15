@@ -18,10 +18,6 @@ import {
   PACKAGE_FORMAT,
   PACKAGE_VERSION,
   parsePackageDocument,
-  SEED_FILE_MAX_BYTES,
-  SEED_MAX_BYTES,
-  SEED_MAX_FILES,
-  utf8Bytes,
   type PackageDocument,
   type PackagePlaybook,
   type PackagePreset,
@@ -322,6 +318,8 @@ export function listBotPresets(store: Pick<PresetStore, "list" | "resolve">, sta
       skills: resolved.skills.map((skill) => ({ name: skill.name, description: skill.description })),
       skillsEnabled: row.source === "org",
       playbooks: resolved.playbooks.map((playbook) => playbook.name),
+      // The preset carries no notes of its own any more, so the list says so rather than leaving the field out.
+      notes: [],
       addedAt: row.addedAt,
     });
   }

@@ -1,5 +1,5 @@
 // This computer's connections, moved once with the rest of the person's things to their own Cloud: MCP servers with
-// their secrets and sign-ins, the AI keys bots run on, connected apps and mailboxes. Secrets reach main only over the
+// their secrets and sign-ins, the AI keys bots run on, and mailboxes. Secrets reach main only over the
 // server's private port (cloud-logins.mjs) and go only to the move's owner session on My Cloud. A sign-in that
 // refreshes itself moves: once My Cloud has it, this computer forgets its own copy, so only My Cloud uses it.
 //
@@ -14,16 +14,14 @@ import nativeText from "./native-text.cjs";
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const sentence = (value) => (typeof value === "string" && value.trim() ? value.trim().slice(0, 300) : null);
 const pick = (source, names) => Object.fromEntries(names.filter((name) => source[name] !== undefined && source[name] !== null).map((name) => [name, source[name]]));
-const ID = /^(?:mcp:[a-z][a-z0-9_-]{0,31}|key:\w{1,40}|composio|email)$/u;
-const INSTALLATION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const ID = /^(?:mcp:[a-z][a-z0-9_-]{0,31}|key:\w{1,40}|email)$/u;
 const ENVIRONMENT = /^[\w-]{1,128}$/u;
-const SLUG = /^[a-z0-9_][a-z0-9_-]{0,80}$/u;
 const ENGINE = /^[\w.:-]{1,128}$/u;
 const LAUNCHER = /^[a-z0-9._+-]{1,40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
-const KINDS = new Set(["mcp", "key", "composio", "email"]);
-/** Keys first, so the engines they run are ready before anything that follows them; connected apps last. */
-const ORDER = { key: 0, mcp: 1, email: 2, composio: 3 };
+const KINDS = new Set(["mcp", "key", "email"]);
+/** Keys first, so the engines they run are ready before anything that follows them. */
+const ORDER = { key: 0, mcp: 1, email: 2 };
 const MCP_FIELDS = ["command", "args", "env", "type", "url", "headers", "oauth", "resultBudget", "enabled", "runsOn"];
 /** How long a move waits for My Cloud to run the engines whose keys just went. */
 const ENGINE_WAIT_MS = 10_000;
@@ -52,12 +50,9 @@ export function parseConnections(value) {
       ...(typeof item.launcher === "string" && LAUNCHER.test(item.launcher) ? { launcher: item.launcher } : {}),
       ...(Array.isArray(item.for) ? { for: strings(item.for, ENGINE, 20) } : {}),
       ...(item.signIn === true ? { signIn: true } : {}),
-      ...(item.mode === "managed" || item.mode === "own" ? { mode: item.mode } : {}),
-      ...(typeof item.account === "string" && item.account.length <= 120 ? { account: item.account } : {}),
-      ...(typeof item.installationId === "string" && INSTALLATION.test(item.installationId) ? { installationId: item.installationId } : {}),
     }));
   return { computer: { environmentId, label: label.trim().slice(0, 120) }, connections, engines: strings(value.engines, ENGINE, 200), commands: strings(value.commands, LAUNCHER, 40),
-    ...(value.managedApps === false ? { managedApps: false } : {}), ...(value.vaultKeys === true ? { vaultKeys: true } : {}) };
+    ...(value.vaultKeys === true ? { vaultKeys: true } : {}) };
 }
 
 /** This computer's connections, by name only, and the computer they are on. */
@@ -115,37 +110,6 @@ async function letGo(local, target, item, digest) {
 }
 
 /**
- * Makes My Cloud act as this computer's connected-apps account: with OpenMausBot's service, a one-time code minted for
- * My Cloud's own installation; with the person's own Composio project, the same key and user. A Cloud whose own apps
- * are connected keeps them, and says which apps connected here it lacks (`missing`).
- * `here` and `there`: the "composio" connection of this computer and of My Cloud (null when My Cloud has none yet).
- */
-export async function adoptComposioId(target, { local, here, there, managedApps = true, t = nativeText.englishText.t }) {
-  if (here.account && there?.account === here.account) return { shared: true };
-  if (here.mode === "managed" && !managedApps) {
-    throw new ConnectionMoveError("no_service", t("native.cloud.connectedAppsStay"), true);
-  }
-  const listed = await local.json("/api/connectors/connected").catch(() => null);
-  const apps = Object.entries(record(listed?.services) ? listed.services : {}).filter(([slug, state]) => SLUG.test(slug) && record(state) && state.connected === true)
-    .map(([slug]) => slug).slice(0, 200);
-  let body;
-  if (here.mode === "managed") {
-    if (!there?.installationId) throw new ConnectionMoveError("not_ready", "My Cloud's connected apps are not ready yet. Try again in a moment.");
-    const code = (await local.handoff({ kind: "composio-share", for: there.installationId }).catch(() => null))?.share?.code;
-    if (typeof code !== "string") throw new ConnectionMoveError("local", "This computer's connected apps could not be shared.");
-    body = { share: code, apps };
-  } else {
-    const own = (await secrets(local, here)).connection.composio;
-    if (!record(own) || typeof own.apiKey !== "string" || typeof own.userId !== "string") throw new ConnectionMoveError("local", "This computer's connected apps could not be read.");
-    body = { apiKey: own.apiKey, userId: own.userId, apps };
-  }
-  const answer = await target.call("POST", "/api/cloud-connections/connected-apps", body);
-  if (!answer.ok) throw refused(answer, "My Cloud did not take this computer's connected apps.");
-  if (answer.body?.shared === true) return { shared: true };
-  return { kept: true, missing: Array.isArray(answer.body?.missing) ? answer.body.missing.filter((slug) => typeof slug === "string" && SLUG.test(slug)) : [] };
-}
-
-/**
  * Moves each of this computer's connections to My Cloud, keys first: each over My Cloud's own routes, with its secrets.
  * An MCP server that needs this computer (its program, files or address are here, or My Cloud lacks its program) goes
  * marked as running on this computer, which My Cloud never starts. A sign-in that refreshes itself goes too, and this
@@ -154,18 +118,17 @@ export async function adoptComposioId(target, { local, here, there, managedApps 
  *
  * With `signIns: false`, a sign-in that refreshes itself stays here for a later pass (`later`), and the rest goes.
  *
- * Returns { moved, runsHere, kept, missing, failed, release, later, held }: what My Cloud has now; what went marked as
- * running here (`needs`: a program My Cloud lacks; `off`: it was switched off here too); what My Cloud kept of its own (its own sign-in, its own connected
- * apps); the connected apps of this computer's that My Cloud then lacks; what failed (`final`: trying again can't fix
- * it); the sign-ins My Cloud took that this computer still holds; the sign-ins left for a later pass; and the keys a
- * trial's Cloud keeps unused while its Claude credit lasts.
+ * Returns { moved, runsHere, kept, failed, release, later }: what My Cloud has now; what went marked as
+ * running here (`needs`: a program My Cloud lacks; `off`: it was switched off here too); what My Cloud kept of its own
+ * (its own sign-in); what failed (`final`: trying again can't fix it); the sign-ins My Cloud took that this computer
+ * still holds; and the sign-ins left for a later pass.
  */
 export async function sendConnections(collected, target, { local, release = true, signIns = true, waitMs = ENGINE_WAIT_MS, onProgress = () => {}, t = nativeText.englishText.t } = {}) {
   const answer = await target.call("GET", "/api/cloud-connections").catch(() => null);
   if (answer?.status === 404) throw new ConnectionMoveError("outdated", "My Cloud needs an update before it can take this computer's apps and keys. It updates by itself.");
   let cloud = answer?.ok ? parseConnections(answer.body) : null;
   if (!cloud) throw new ConnectionMoveError("unreachable", "My Cloud did not answer. Try again in a moment.");
-  const result = { moved: [], runsHere: [], kept: [], missing: [], failed: [], release: [], later: [], held: [] };
+  const result = { moved: [], runsHere: [], kept: [], failed: [], release: [], later: [] };
   const done = (item) => result.moved.push({ id: item.id, label: item.label });
 
   /** A sign-in to My Cloud; one that refreshes itself (`digest`) is then let go of here. My Cloud keeps one of its own. */
@@ -182,12 +145,12 @@ export async function sendConnections(collected, target, { local, release = true
     async key(item) {
       const { connection } = await secrets(local, item);
       if (!record(connection.config)) throw new ConnectionMoveError("local", `${item.label} could not be read on this computer.`);
-      const holding = await target.call("PUT", "/api/cloud-connections/held-keys", { for: item.for ?? [] }).catch(() => null);
       const saved = await target.call("PATCH", "/api/config", connection.config);
       if (!saved.ok) throw refused(saved, `My Cloud did not take the ${item.label} key.`);
-      if (holding?.ok && holding.body?.held === true) result.held.push({ id: item.id, label: item.label });
       done(item);
-      return holding?.ok && holding.body?.held === true;
+      // Nothing holds a key back any more, so the engines this key runs are
+      // collected and waited for before whatever follows the move.
+      return false;
     },
     async mcp(item) {
       const { connection, digest } = await secrets(local, item);
@@ -222,13 +185,6 @@ export async function sendConnections(collected, target, { local, release = true
       if (answer.status === 404) throw new ConnectionMoveError("outdated", t("native.cloud.mailOutdated"), true);
       if (!answer.ok) throw refused(answer, t("native.cloud.mailRefused"));
       done(item);
-    },
-    async composio(item) {
-      const outcome = await adoptComposioId(target, { local, here: item, there: cloud.connections.find((theirs) => theirs.id === "composio") ?? null, managedApps: cloud.managedApps !== false, t });
-      if (outcome.kept) {
-        result.kept.push({ id: item.id, label: item.label });
-        result.missing.push(...outcome.missing.map((slug) => ({ slug })));
-      } else done(item);
     },
   };
 

@@ -1,10 +1,9 @@
-export type ComputerInventoryRequest = "status" | "local-vms" | "cloud" | "vps";
+export type ComputerInventoryRequest = "status" | "local-vms" | "vps";
 export type ComputerApiRequest = [url: string, init: RequestInit];
 
 const computerInventoryPaths: Record<ComputerInventoryRequest, string> = {
   status: "/api/local-computer",
   "local-vms": "/api/local-computer/instances",
-  cloud: "/api/computers/boxes",
   vps: "/api/computers/vps",
 };
 

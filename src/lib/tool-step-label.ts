@@ -1,8 +1,17 @@
-import { composioActionPhrase } from "@/lib/approval-summary";
 import { activityText, isNoticeCode } from "@/lib/activity-text";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import type { Message } from "@/state/store";
+
+/** An upper-snake tool name, as an app's MCP servers name their tools: LINEAR_CREATE_LINEAR_COMMENT. */
+const UPPER_SNAKE_TOOL = /^[A-Z][A-Z0-9]+_([A-Z0-9_]+)$/;
+
+/** What an upper-snake tool name says it does, as words: "create linear comment". */
+export function toolActionPhrase(tool: string): string | undefined {
+  const match = UPPER_SNAKE_TOOL.exec(tool);
+  if (!match) return undefined;
+  return match[1]!.replace(/_+/g, " ").trim().toLowerCase() || undefined;
+}
 
 type StepTool = Pick<NonNullable<Message["tool"]>, "name" | "summary" | "nameCode" | "nameParams" | "whose" | "label">;
 
@@ -80,8 +89,8 @@ function stepWords(tool: StepTool): string {
   if (/(?:^|_)browser_/i.test(bare)) return t("toolStep.useBrowser");
   const key = STEP_KEYS[bare.toLowerCase()];
   if (key) return t(key);
-  const composio = composioActionPhrase(bare);
-  if (composio) return sentence(composio);
+  const phrase = toolActionPhrase(bare);
+  if (phrase) return sentence(phrase);
   const words = bare
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_\-.:]+/g, " ")

@@ -1,5 +1,5 @@
 import type { Surface } from "../shared/wire.ts";
-import { canWorkOnCloud, type CloudEngine } from "../shared/cloud-computer.ts";
+import { canWorkOnRemote, type CloudEngine } from "../shared/remote-computer.ts";
 import { canUseMcpServer } from "../shared/tool-scope.ts";
 import { placeRowText, type PlaceRow, type PlaceSource } from "../shared/place-view.ts";
 import { PLAIN_WORDS } from "./local-computer-guidance.ts";
@@ -32,8 +32,8 @@ export function parseSurface(value: unknown): Surface | undefined {
   return typeof value === "string" && SURFACES.has(value) ? (value as Surface) : undefined;
 }
 
-export function surfaceOfComputerKind(kind: "box" | "vps" | "vm" | "local" | null): Surface | null {
-  if (kind === "box" || kind === "vps") return "cloud";
+export function surfaceOfComputerKind(kind: "vps" | "vm" | "local" | null): Surface | null {
+  if (kind === "vps") return "cloud";
   return kind;
 }
 
@@ -94,17 +94,6 @@ export function handoffUsesOwnCloud(input: { plan: Pick<SurfacePlan, "computer">
   return input.handoffWork && input.plan.computer === undefined && Boolean(input.ownCloudState);
 }
 
-/** Best effort: an unreachable Boat service counts as no cloud computer after `ms`, so a handoff still starts promptly.
- * `unavailable` marks a failed or slow lookup, which is not a confirmed "no cloud computer". */
-export function ownCloudStateWithin(status: Promise<{ box?: { state?: string | null } | null }>, ms = 3_000): Promise<{ state: string | null | undefined; unavailable: boolean }> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const unavailable = { state: undefined, unavailable: true };
-  return Promise.race([
-    status.then((result) => ({ state: result.box?.state, unavailable: false }), () => unavailable),
-    new Promise<typeof unavailable>((resolve) => { timer = setTimeout(() => resolve(unavailable), ms); }),
-  ]).finally(() => clearTimeout(timer));
-}
-
 export function browserIsThePlace(plan: SurfacePlan): boolean {
   return plan.computer === "off" && plan.browser;
 }
@@ -122,13 +111,16 @@ export function pinSource(pinned: Surface, task: { surfaceSource?: "user" | "aut
 }
 
 export function cloudPlaceRefusal(engine: CloudEngine & { name: string }, source: PlaceSource, bot: string): PlaceUnavailableError | null {
-  if (canWorkOnCloud(engine)) return null;
-  return placeUnavailable("cloud", { state: "cc-cannot", params: { bot, model: engine.name }, source });
+  if (canWorkOnRemote(engine)) return null;
+  // A model that cannot drive a desktop cannot drive the cloud desktop either, so it says the same thing the private
+  // desktop says: no other desktop wording is left (shared/place-view.ts, placeState).
+  return placeUnavailable("cloud", { state: "vm-cannot", params: { bot, model: engine.name }, source });
 }
 
 export function computerToolsRefusal(toolScope: unknown, source: PlaceSource, bot: string): PlaceUnavailableError | null {
   if (canUseMcpServer(toolScope, "computer")) return null;
-  return placeUnavailable("cloud", { state: "cc-tools-off", params: { bot }, source });
+  // What the bot may use leaves the desktop out: the place cannot be used, and the line says what changes it.
+  return placeUnavailable("cloud", { state: "local-unavailable", params: { bot, reason: `What ${bot} can use doesn't include a desktop. Change what ${bot} can use in its settings.` }, source });
 }
 
 export class PlaceUnavailableError extends Error {

@@ -10,10 +10,10 @@ import {
 } from "./connector-scopes.ts";
 
 describe("toolkitOf", () => {
-  it("takes the toolkit from a Composio slug, lower-cased", () => {
+  it("takes the toolkit from an app slug, lower-cased", () => {
     expect(toolkitOf("GMAIL_SEND_EMAIL")).toBe("gmail");
     expect(toolkitOf("GOOGLESHEETS_BATCH_UPDATE")).toBe("googlesheets");
-    expect(toolkitOf("COMPOSIO_PROXY_EXECUTE")).toBe("composio");
+    expect(toolkitOf("PROXY_EXECUTE")).toBe("proxy");
   });
 });
 
@@ -25,7 +25,7 @@ describe("isReadOnlyAction", () => {
     expect(isReadOnlyAction("GMAIL_SEND_EMAIL")).toBe(false);
     expect(isReadOnlyAction("GOOGLESHEETS_BATCH_UPDATE")).toBe(false);
     expect(isReadOnlyAction("GMAIL_CREATE_EMAIL_DRAFT")).toBe(false);
-    expect(isReadOnlyAction("COMPOSIO_PROXY_EXECUTE")).toBe(false);
+    expect(isReadOnlyAction("PROXY_EXECUTE")).toBe(false);
   });
 });
 
@@ -83,7 +83,7 @@ describe("connectorAccessDecision", () => {
   });
 
   it("never lets a raw API proxy through a scoped bot", () => {
-    expect(connectorAccessDecision({ apps: { gmail: "write" } }, calls("COMPOSIO_PROXY_EXECUTE"))).toMatchObject({ ok: false, reason: "app" });
+    expect(connectorAccessDecision({ apps: { gmail: "write" } }, calls("PROXY_EXECUTE"))).toMatchObject({ ok: false, reason: "app" });
   });
 });
 

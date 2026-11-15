@@ -58,10 +58,6 @@ export function callWords(call: Pick<BotApiCall, "outcome" | "statusCode" | "rep
 
 const onlyThisComputer = (url: string) => /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])[:/]/.test(url);
 
-export function webhooksLine(count: number): string {
-  return count === 0 ? t("botApi.webhooksNone") : count === 1 ? t("botApi.webhooksOne") : t("botApi.webhooks", { count });
-}
-
 /** Starter: one line and the usual Upgrade (its preview, then the person's confirmation). Where this page has no way to change the
  * plan, a browser tab on the Cloud's own address, the line stands alone. */
 function BotApiStarter({ className }: { className?: string }) {
@@ -80,14 +76,14 @@ function BotApiStarter({ className }: { className?: string }) {
   );
 }
 
-/** The Bot API, the same in the bot panel and in Bot settings: a switch, the key once, the command to paste. */
+/** The Bot API, the same in the bot panel and in Bot settings: a switch, the key once, the command to paste.
+ * `webhooksLink` is left over from the page that listed a bot's webhooks; that page is gone, so the link has nothing to open. */
 export function BotApiCard(props: { bot: Bot; webhooksLink?: boolean; className?: string }) {
   const { state } = useStore();
   return state.config?.cloudStarter === true ? <BotApiStarter className={props.className} /> : <BotApiSection {...props} />;
 }
 
-function BotApiSection({ bot, webhooksLink = false, className }: { bot: Bot; webhooksLink?: boolean; className?: string }) {
-  const { state, dispatch } = useStore();
+function BotApiSection({ bot, className }: { bot: Bot; webhooksLink?: boolean; className?: string }) {
   const [view, setView] = useState<BotApiView | null>(null);
   const [freshKey, setFreshKey] = useState<string | null>(null);
   const [confirmingNewKey, setConfirmingNewKey] = useState(false);
@@ -127,7 +123,6 @@ function BotApiSection({ bot, webhooksLink = false, className }: { bot: Bot; web
     window.setTimeout(() => setCopied(null), 1500);
   };
   const refreshCalls = () => { api<BotApiView>(path).then(setView).catch(() => undefined); };
-  const webhookCount = state.webhooks.filter((webhook) => webhook.botId === bot.id).length;
   const canManage = view?.canManage ?? false;
 
   return (
@@ -187,16 +182,6 @@ function BotApiSection({ bot, webhooksLink = false, className }: { bot: Bot; web
         </div>
       )}
       {error && <div className="mt-2 text-[12px] text-danger">{error}</div>}
-      {webhooksLink && (
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "showAutomations" })}
-          className="mt-3 text-[13px] text-ink-secondary hover:text-ink"
-          data-testid="bot-api-webhooks"
-        >
-          {webhooksLine(webhookCount)}
-        </button>
-      )}
     </div>
   );
 }

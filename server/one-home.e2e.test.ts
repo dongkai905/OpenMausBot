@@ -10,7 +10,6 @@ import type { OneHomeView } from "../electron/one-home.mjs";
 import { launchCloudSendFixture, type CloudSendFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { MOVED_REFUSAL } from "./move-freeze.ts";
-import { webhookMovedLine } from "./cloud-send-arrived.ts";
 
 const TOKEN = `ops_fake-one-home-${randomBytes(8).toString("hex")}`;
 const COMPUTER = "MacBook Air";
@@ -134,9 +133,6 @@ it("a new buyer: every phase, the app killed at each one, ends with home on My C
   expect(((await onCloud("GET", "/api/calendar-calls")).body.calls as Array<{ id: string; nextRunAt: number | null }>).find((call) => call.id === callId)?.nextRunAt).not.toBeNull();
   const hooksThere = (await onCloud("GET", "/api/webhooks")).body.webhooks as Array<{ id: string; enabled: boolean }>;
   expect(hooksThere.find((entry) => entry.id === webhookId)?.enabled).toBe(true);
-  // Scout says once, in its own chat, that its webhook has a new address; the address itself stays on its card.
-  const told = (await rows(onCloud, scout.threadId)).filter((row) => row.role === "bot" && row.text === webhookMovedLine("Orders"));
-  expect(told).toHaveLength(1);
   expect(JSON.parse(readFileSync(join(dataDir("cloud"), "moved-from.json"), "utf8"))).toMatchObject({ computer: COMPUTER });
 
   // §2.2: one Ember, updated where only this computer changed it and My Cloud's title kept; both Scouts, the arriving

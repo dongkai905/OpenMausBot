@@ -1,7 +1,7 @@
 // Screen 1: MausBot Cloud in a line, then the plans the Admin sells now as cards that show only what sets each apart,
 // each with its own button; what every plan includes and the money are said once, under them.
 import { useState } from "react";
-import { AudioLines, ChevronDown, CloudUpload, HardDrive, Lock, Monitor, Moon, Power, Smartphone, Timer, type LucideIcon } from "lucide-react";
+import { AudioLines, ChevronDown, CloudUpload, HardDrive, Lock, Monitor, Moon, Power, Smartphone, type LucideIcon } from "lucide-react";
 import type { CloudOffer, CloudOfferPlan } from "../../../electron/cloud-home.mjs";
 import { cn } from "@/lib/cn";
 import { cardRows, moneyBackShort, planCards, sharedTrialDays, trialTimeline, type CloudPlanCard, type CloudPlanCardRow } from "@/lib/cloud-plan";
@@ -17,7 +17,7 @@ const FEATURES: ReadonlyArray<readonly [LucideIcon, LocaleKey, LocaleKey]> = [
   [Monitor, "cloudBuy.benefit.browserTitle", "cloudBuy.benefit.browser"],
   [CloudUpload, "cloudBuy.benefit.moveTitle", "cloudBuy.benefit.move"],
 ];
-const ROW_ICON: Partial<Record<CloudPlanCardRow["key"], LucideIcon>> = { power: Power, hours: Timer, storage: HardDrive, voice: AudioLines };
+const ROW_ICON: Partial<Record<CloudPlanCardRow["key"], LucideIcon>> = { power: Power, storage: HardDrive, voice: AudioLines };
 
 /** Cards side by side on a wide sheet, written out for Tailwind to find. */
 const COLUMNS: Record<number, string> = { 1: "md:grid-cols-1", 2: "md:grid-cols-2", 3: "md:grid-cols-3", 4: "md:grid-cols-2 lg:grid-cols-4" };

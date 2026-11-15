@@ -1,4 +1,9 @@
 node_modules
+# Python bytecode caches: scripts/gitdata_push.test.py imports the module under
+# test, and a stray __pycache__ would be an untracked file that the push gate
+# (and any later reader) has to reason about.
+__pycache__/
+*.pyc
 .worktrees/
 dist
 dist-electron
@@ -20,7 +25,6 @@ release
 .dev.vars
 .dev.vars.*
 !cloudflare/control-plane/.dev.vars.example
-cloudflare/composio-broker/worker-configuration.d.ts
 cloudflare/control-plane/worker-configuration.d.ts
 .claude/worktrees/
 .vercel/

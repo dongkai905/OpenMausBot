@@ -4,7 +4,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, rmSync } from "node:f
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { dirname } from "node:path";
 import { defaultFleetDeps, executePlan, loadRegistry, markProvisioningFailed, planFleetAction, type FleetDeps, type FleetInput } from "./fleet-cli.ts";
-import { assertSlug, fleetLayout, fleetUser, openRouterModelIds, workspaceDataDir, type FleetLayout, type FleetWorkspace } from "./fleet.ts";
+import { assertSlug, fleetLayout, fleetUser, workspaceDataDir, type FleetLayout, type FleetWorkspace } from "./fleet.ts";
 
 export interface FleetAgentOptions {
   socketPath: string;
@@ -61,11 +61,6 @@ export function readBody(req: IncomingMessage): Promise<Record<string, unknown>>
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : []);
 const text = (value: unknown): string | undefined => (typeof value === "string" && value.trim() ? value.trim() : undefined);
 const number = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
-const models = (value: unknown): string[] => {
-  try { return openRouterModelIds(value); }
-  catch (error) { throw Object.assign(error as Error, { status: 400 }); }
-};
-
 /** Only bounded, unprivileged aggregates cross back into the root process. */
 export function workspaceUsage(layout: FleetLayout, slug: string, now: Date, deps: FleetDeps): FleetWorkspaceView["usage"] {
   const month = now.toISOString().slice(0, 7);
@@ -153,9 +148,7 @@ export function createFleetAgent(options: FleetAgentOptions): Server {
         const result = await act({
           ...base(), action: "create", slug: text(body.slug), admins: strings(body.admins), members: strings(body.members),
           cap: number(body.cap), memory: text(body.memory), brandJson: text(body.brandJson), anthropicKey: text(body.anthropicKey),
-          portalUrl: text(body.portalUrl), anthropicUrl: text(body.anthropicUrl),
-          openrouterKey: text(body.openrouterKey), openrouterUrl: text(body.openrouterUrl),
-          openrouterModels: body.openrouterModels === undefined ? undefined : models(body.openrouterModels), openrouterDefault: body.openrouterDefault === true,
+          portalUrl: text(body.portalUrl),
         });
         return send(result.status, result.body);
       }
@@ -163,16 +156,11 @@ export function createFleetAgent(options: FleetAgentOptions): Server {
         const result = await act({ ...base(), action: "upgrade" });
         return send(result.status, result.body);
       }
-      const match = /^\/workspaces\/([a-z0-9-]+)(?:\/(users|providers|suspend|resume))?$/.exec(url.pathname);
+      const match = /^\/workspaces\/([a-z0-9-]+)(?:\/(users|suspend|resume))?$/.exec(url.pathname);
       if (match) {
         const slug = match[1]!;
         assertSlug(slug);
         const sub = match[2];
-        if (method === "POST" && sub === "providers") {
-          const body = await readBody(req);
-          const result = await act({ ...base(), action: "providers", slug, openrouterModels: models(body.models) });
-          return send(result.status, result.body);
-        }
         if (method === "POST" && sub === "users") {
           const body = await readBody(req);
           const action = body.action === "remove" ? "remove" : body.action === "add" ? "add" : undefined;

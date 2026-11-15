@@ -89,7 +89,7 @@ describe("the Room panel's open state", () => {
 
     render(inRoom);
     open();
-    render({ ...inRoom, activeView: "automations" });
+    render({ ...inRoom, activeView: "published-apps" });
     expect(seen.open).toBeNull();
 
     render(inRoom);

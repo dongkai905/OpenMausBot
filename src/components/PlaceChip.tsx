@@ -6,7 +6,7 @@ import { MENU_HEADING, MENU_SHEET } from "./menu-recipe";
 import { t } from "@/lib/i18n";
 import { instanceSupportsLocalComputer, localComputerDisabledReason, localComputerSelectable, pageOnRemoteServer } from "@/lib/local-computer";
 import { effectivePlace, personPin, PLACES, placeLabelKey, placeOffered, type Place } from "@/lib/place";
-import { placeBlocked, placeFacts, placeHasIssue, placeViewFor, usePlaceSeat } from "@/lib/place-view";
+import { placeBlocked, placeFacts, placeViewFor, usePlaceSeat } from "@/lib/place-view";
 import { useStore, type Bot, type Task } from "@/state/store";
 import type { PlaceView } from "../../shared/place-view";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -19,8 +19,7 @@ export function usePlaceViews(bot: Bot): Record<Place, { view: PlaceView; reacha
   const { state } = useStore();
   const { capabilities } = useDesktopCapabilities();
   const seat = usePlaceSeat(state.config, capabilities);
-  const backend = bot.cloudBackend === "vps" ? "vps" : "box";
-  const allowed = state.config?.managedPolicy?.computers ?? { thisComputer: true, localVm: true, box: true, vps: true };
+  const allowed = state.config?.managedPolicy?.computers ?? { thisComputer: true, localVm: true, vps: true };
   const providerSupportsLocal = instanceSupportsLocalComputer(state.instances, bot);
   const local = {
     ready: localComputerSelectable({ capabilities, providerSupportsLocal }),
@@ -28,7 +27,7 @@ export function usePlaceViews(bot: Bot): Record<Place, { view: PlaceView; reacha
   };
   const entry = (place: Place) => {
     const view = placeViewFor(placeFacts({ bot, place, seat, config: state.config, instances: state.instances, local }));
-    const policy = (place === "cloud" ? allowed[backend] : place === "vm" ? allowed.localVm : place === "local" ? allowed.thisComputer : true)
+    const policy = (place === "cloud" ? allowed.vps : place === "vm" ? allowed.localVm : place === "local" ? allowed.thisComputer : true)
       && placeOffered(place, state.config);
     const listed = placeOffered(place, state.config) && !(place === "local" && pageOnRemoteServer(capabilities));
     return { view, policy, listed, reachable: policy && !placeBlocked(view) };
@@ -79,7 +78,7 @@ export function usePlaceMenuItem({ bot, task, disabled = false, onPin }: {
         return {
           key: `place:${place}`,
           label: t(placeLabelKey(place)),
-          note: !policy ? t("place.unavailable") : placeHasIssue(view) ? view.short : t(DESCRIPTION[place]),
+          note: !policy ? t("place.unavailable") : placeBlocked(view) ? view.short : t(DESCRIPTION[place]),
           icon: <PlaceIcon place={place} size={16} aria-hidden="true" />,
           active: pin === place,
           trailing: pin === place ? check : undefined,
@@ -170,7 +169,7 @@ export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
             {PLACES.filter((place) => places[place].listed).map((place) => {
               const selected = pin === place;
               const { view, reachable, policy } = places[place];
-              const detail = !policy ? t("place.unavailable") : placeHasIssue(view) ? view.short : t(DESCRIPTION[place]);
+              const detail = !policy ? t("place.unavailable") : placeBlocked(view) ? view.short : t(DESCRIPTION[place]);
               return (
                 <button
                   key={place}
@@ -178,7 +177,7 @@ export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
                   role="menuitemradio"
                   aria-checked={selected}
                   disabled={!reachable}
-                  title={!policy ? t("place.unavailable") : placeHasIssue(view) ? view.line : undefined}
+                  title={!policy ? t("place.unavailable") : placeBlocked(view) ? view.line : undefined}
                   onClick={() => choose(place)}
                   className={cn("flex items-start gap-2 rounded-md px-2 py-1.5 text-left", selected ? "bg-menu-active" : reachable ? "hover:bg-menu-hover" : "cursor-not-allowed opacity-45")}
                 >

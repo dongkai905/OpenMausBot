@@ -32,7 +32,6 @@ export function useSettingsContext(): SettingsContext {
     admin,
     places: known > 1 || (!ogb?.environments && railShown(places)),
     plan: desktop ? Boolean(ogb?.cloudAccount || (ogb?.cloudPlan && cloud)) : cloud && !team && admin,
-    organization: Boolean(ogb?.organization) && !client,
     environments: Boolean(ogb?.environments),
     installations: workspacesAvailable(state.config),
     skills: skillsLibraryEnabled(state.config),

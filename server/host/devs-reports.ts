@@ -317,7 +317,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
     const { instanceId, model, effort, variant } = effective.modelSelection;
     const engine = deps.engine(instanceId);
     const grants = effective.connectorTools ? Object.keys(effective.connectorTools) : null;
-    const apps = !deps.appsReady() ? "not set up" : effective.composio === false ? "off for this bot"
+    const apps = !deps.appsReady() ? "not set up" : effective.apps === false ? "off for this bot"
       : grants === null ? "on, every connected app" : grants.length ? `on: ${grants.slice(0, 12).join(", ")}` : "on, no app granted";
     return { id: bot.id, name: bot.name, engine: engine?.name ?? "unknown engine", instanceId, model, ...(effort ? { effort } : {}),
       ...(variant ? { variant } : {}), health: engine ? health(engine.snapshot) : "not installed", apps };

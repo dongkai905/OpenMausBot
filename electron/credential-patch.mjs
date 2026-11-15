@@ -2,8 +2,6 @@ import nativeText from "./native-text.cjs";
 export const CREDENTIAL_PATCH = {
   openaiApiKey: (value) => ({ openai: { key: value } }),
   openrouterApiKey: (value) => ({ openrouter: { key: value } }),
-  composioApiKey: (value) => ({ composio: { apiKey: value } }),
-  boxToken: (value) => ({ box: { token: value } }),
   ttsKey: (value) => ({ tts: { key: value } }),
   fishAudioKey: (value) => ({ tts: { fishKey: value } }),
   geminiTtsKey: (value) => ({ tts: { geminiKey: value } }),

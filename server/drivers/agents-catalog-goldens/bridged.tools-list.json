@@ -250,13 +250,11 @@
           "credential_id": {
             "type": "string",
             "enum": [
-              "boxToken",
               "ttsKey",
               "geminiTtsKey",
               "fishAudioKey",
               "openaiImageApiKey",
               "onePasswordToken",
-              "composioApiKey",
               "openaiApiKey",
               "openrouterApiKey",
               "email"

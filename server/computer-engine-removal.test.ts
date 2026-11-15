@@ -10,14 +10,13 @@ import { Store, type BotRecord } from "./store.ts";
 describe("the Computer engine is not offered", () => {
   it("is in no built-in driver list and no default fleet", () => {
     expect(BUILT_IN_DRIVERS.map(driver => driver.driverKind)).not.toContain("boxAgent");
-    const fleet = instanceConfigs({ box: { token: "box_fixture" } });
+    const fleet = instanceConfigs({});
     expect(fleet).not.toHaveProperty("computer");
     expect(Object.values(fleet).map(entry => entry.driver)).not.toContain("boxAgent");
   });
 
   it("drops a saved fleet's entries for it, so the next save leaves them off disk", () => {
     const cfg: AppConfig = {
-      box: { token: "box_fixture" },
       instances: {
         claude: { driver: "claudeAgent" },
         computer: { driver: "boxAgent", environment: { BOX_TOKEN: "box_instance" } },
@@ -48,11 +47,11 @@ describe("moving saved bots off the engine", () => {
   /** This server has a Boat account, the bot's cloud backend is Boat, and no
    * team computer serves its section: on Auto, the removed engine ran on the
    * bot's own cloud computer. */
-  const boat = { driverKind: "claudeAgent", canWorkOnCloud: true, keepCloud: (bot: BotRecord) => bot.cloudBackend !== "vps" };
-  const noBoat = { driverKind: "claudeAgent", canWorkOnCloud: true, keepCloud: () => false };
+  const boat = { driverKind: "claudeAgent", canWorkOnRemote: true, keepCloud: (bot: BotRecord) => bot.cloudBackend !== "vps" };
+  const noBoat = { driverKind: "claudeAgent", canWorkOnRemote: true, keepCloud: () => false };
   /** The same server, but the engine a new bot gets has no computer tools:
    * an OpenAI-compatible endpoint without computer use, like Mistral. */
-  const chatOnly = { driverKind: "mistral", canWorkOnCloud: false, keepCloud: (bot: BotRecord) => bot.cloudBackend !== "vps" };
+  const chatOnly = { driverKind: "mistral", canWorkOnRemote: false, keepCloud: (bot: BotRecord) => bot.cloudBackend !== "vps" };
 
   it("moves the bot's model, each conversation's model and its backups once, and keeps Works on", () => {
     const store = new Store(newBotDefault);

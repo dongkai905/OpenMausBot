@@ -25,7 +25,6 @@ import { listsComputerTool } from "../computer-tool-list.ts";
 import { capToolList, learnToolCountLimit, shareToolBudget, toolCountLimitFromError } from "../tool-count-limit.ts";
 import type { ToolSchemaProfile } from "../tool-schema-profile.ts";
 import { allowsTool, canUseMcpServer, parseToolScope, type ToolScope } from "../../shared/tool-scope.ts";
-import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { CHAT_TOOL_LIMIT, type ToolBudget } from "../../shared/tool-budget.ts";
 
 export interface ChatToolDefinition {
@@ -73,7 +72,7 @@ const REQUEST_TIMED_OUT = "MCP request timed out; execution outcome may be uncer
 const STDERR_TAIL_CHARS = 4_000, STDERR_LINE_CHARS = 300;
 /** Built-ins a turn can go on without, saying so. A turn can't run without the agents server, nor without a Local VM it
  * was given (mountChatTools `mustHave`). */
-const OPTIONAL_BUILT_INS: ReadonlySet<string> = new Set(["computer", "browser", "composio", OWN_APPS_SERVER, "data", "email", "device"]);
+const OPTIONAL_BUILT_INS: ReadonlySet<string> = new Set(["computer", "browser", "data", "email", "device"]);
 
 /** How long a server that runs a command gets to start here. */
 export function mcpStartupMs(env: Record<string, string | undefined> = process.env): number {
@@ -487,8 +486,6 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
   // Security: a selection matches the name in the call, so with one the agents server is never bridged.
   const agentsServer = integrations?.agents && scope !== undefined ? unbridgedServer(integrations.agents) : integrations?.agents;
   if (agentsServer && eligible("agents")) servers.push(["agents", agentsServer]);
-  if (integrations?.composio && eligible("composio")) servers.push(["composio", integrations.composio]);
-  if (integrations?.composioOwn && eligible(OWN_APPS_SERVER)) servers.push([OWN_APPS_SERVER, integrations.composioOwn]);
   if (integrations?.data && eligible("data")) servers.push(["data", integrations.data]);
   if (integrations?.email && eligible("email")) servers.push(["email", integrations.email]);
   if (integrations?.device && eligible("device")) servers.push(["device", integrations.device]);

@@ -23,7 +23,6 @@ import {
   Smartphone,
   UserRound,
   UsersRound,
-  Zap,
 } from "lucide-react";
 
 import { accountMenuItems, AccountsSheet, useAccounts } from "./AccountMenu";
@@ -40,7 +39,6 @@ import { useCloudPlanSnapshot } from "./CloudTrialNotice";
 import type { WorkspacePlace } from "./DesktopWorkspaceSwitcher";
 import { railShown, usePlaces } from "@/lib/places";
 import { useAdvancedMode } from "@/lib/interface-mode";
-import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { api, useStore, type Action, type AppSettingsSection } from "@/state/store";
@@ -307,10 +305,8 @@ export function phoneDevicesItem(state: PhonePlaceState, place: string, onSelect
   };
 }
 
-export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onTeamMap, onFiles, onPublishedApps, archived }: {
+export function toolMenuItems({ activeView, onTeamMap, onFiles, onPublishedApps, archived }: {
   activeView: string;
-  automationsNeedYou: boolean;
-  onAutomations: () => void;
   onTeamMap: () => void;
   /** set once My Cloud's files are ready to open */
   onFiles?: () => void;
@@ -318,7 +314,6 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   archived?: ArchivedBots;
 }): SidebarMenuItem[] {
   return [
-    { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "automations", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
     ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
     ...(onPublishedApps ? [{ key: "published-apps", label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
@@ -327,21 +322,19 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
 }
 
 /** The account button's name: the person, then whatever its dot is raised for, then the move to My Cloud while it goes.
- * A failing move and automations that need the person share one segment. */
-export function accountLabel(name: string, { automationsNeedYou, update, move = null }: { automationsNeedYou: boolean; update: string | null; move?: AccountMoveKind | null }): string {
-  const needsYou = move === "failed"
-    ? t(automationsNeedYou ? "sidebar.account.moveAndAutomationsNeedYou" : "sidebar.account.moveNeedsYou")
-    : automationsNeedYou ? t("sidebar.account.automationsNeedYou") : "";
+ * A failing move raises the button on its own. */
+export function accountLabel(name: string, { update, move = null }: { update: string | null; move?: AccountMoveKind | null }): string {
+  const needsYou = move === "failed" ? t("sidebar.account.moveNeedsYou") : "";
   return [name, needsYou, move === "sending" ? t("sidebar.account.moving") : "", update ?? ""].filter(Boolean).join(" · ");
 }
 
 export type AccountDot = "danger" | "accent";
 const DOT_COLOR: Record<AccountDot, string> = { danger: "bg-danger", accent: "bg-accent" };
 
-/** The avatar's dot: red while automations, a failed update or the failing move to My Cloud need the person, the accent
+/** The avatar's dot: red while a failed update or the failing move to My Cloud needs the person, the accent
  * for an update; none for the move on its way or done (what it brought waits in the menu). */
-export function accountDot({ automationsNeedYou, update, move }: { automationsNeedYou: boolean; update: "failed" | "news" | null; move: AccountMoveKind | null }): AccountDot | null {
-  if (automationsNeedYou || update === "failed" || move === "failed") return "danger";
+export function accountDot({ update, move }: { update: "failed" | "news" | null; move: AccountMoveKind | null }): AccountDot | null {
+  if (update === "failed" || move === "failed") return "danger";
   return update ? "accent" : null;
 }
 
@@ -508,12 +501,11 @@ export interface ArchivedBots {
 export interface SimpleAccount {
   place: WorkspacePlace;
   owner: string | null;
-  automationsNeedYou: boolean;
   archived?: ArchivedBots;
 }
 
 export function useSimpleAccount(place: WorkspacePlace, owner: string | null, archived?: ArchivedBots): SimpleAccount {
-  return { place, owner, automationsNeedYou: useAutomationsNeedYou(), archived };
+  return { place, owner, archived };
 }
 
 /** `circle` is the phone's round avatar button at the top of the bot list. */
@@ -524,7 +516,6 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   const simple = account !== undefined;
   const [menuOpen, setMenuOpen] = useState(false);
   const advancedMode = useAdvancedMode();
-  const automationsNeedYou = useAutomationsNeedYou();
   const planSnapshot = useCloudPlanSnapshot(usageBridge(state.config?.cloudHome === true) ?? (window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudPlan));
   const cloudUsage = cloudUsageSummary(planSnapshot);
   const phoneState = usePhonePlaceState(menuOpen);
@@ -587,8 +578,6 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     ...(account || (circle && !advancedMode) ? { simple: {
       tools: toolMenuItems({
         activeView: state.activeView,
-        automationsNeedYou: account?.automationsNeedYou ?? automationsNeedYou,
-        onAutomations: () => dispatch({ type: "showAutomations" }),
         onTeamMap: () => dispatch({ type: "showTeamMap" }),
         onFiles: filesReady ? () => dispatch({ type: "showFiles" }) : undefined,
         onPublishedApps: () => dispatch({ type: "showPublishedApps" }),
@@ -613,13 +602,12 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
       ? { place: t("rail.thisComputer"), open: () => void openComputer("account").catch(() => {}) } : null,
   });
   const noteworthy = update && updateNoteworthy(update.phase, update.pending) && !updateHasButton(update.phase);
-  const needsYou = account?.automationsNeedYou === true;
   const initials = profileInitials(profile);
   const nameless = simple && initials === "?" ? <UserRound size={18} strokeWidth={1.75} aria-hidden /> : undefined;
-  const label = accountLabel(name, { automationsNeedYou: needsYou, update: simple && noteworthy && update ? update.label : null, move: move.kind });
-  const dot = accountDot({ automationsNeedYou: needsYou, update: noteworthy ? (update.phase === "error" ? "failed" : "news") : null, move: move.kind });
+  const label = accountLabel(name, { update: simple && noteworthy && update ? update.label : null, move: move.kind });
+  const dot = accountDot({ update: noteworthy ? (update.phase === "error" ? "failed" : "news") : null, move: move.kind });
   // Advanced's full row has its own update badge: its avatar's dot is the move's alone.
-  const moveDot = accountDot({ automationsNeedYou: false, update: null, move: move.kind });
+  const moveDot = accountDot({ update: null, move: move.kind });
 
   return (
     <>

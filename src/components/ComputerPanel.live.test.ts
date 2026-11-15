@@ -35,7 +35,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
       return { png: "POLLED", format: "png" };
     }
     if (path.startsWith("/api/bots/bot/computer/control")) return { held: false, helpReason: null };
-    if (path.startsWith("/api/bots/bot/computer?")) return { configured: true, box: { state: "ready" } };
+    if (path.startsWith("/api/bots/bot/computer?")) return { configured: true, ready: true, container: "running", managed: true, imageMatches: true, problem: null };
     return {};
   },
 }));
@@ -81,7 +81,7 @@ beforeAll(async () => {
     bots: [bot],
     selectedId: bot.id,
     instances: [engine],
-    config: { box: { configured: true } } as AppState["config"],
+    config: { vps: { configured: true, sshAlias: "" }, rooms: { turnTimeoutMinutes: 0 } } as AppState["config"],
   };
   value = { state, dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {} };
   const container = document.createElement("div");

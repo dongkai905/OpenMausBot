@@ -1,7 +1,6 @@
 // A Team Cloud's shared connections and AI, as its team's admins see them on the Admin's Team admin pages.
 // Security invariant: names, states and the identities the providers report only; never a key, token, header or
 // environment value, nor any part of an MCP URL but its host.
-import type { ConnectorServiceState } from "./composio.ts";
 import type { ProviderSnapshot } from "./contracts.ts";
 
 export const CLOUD_TEAM_ADMIN_PATH = "/api/cloud/team/admin";
@@ -33,9 +32,6 @@ export type PersonConnectionState = "connected" | "needs-sign-in" | "not-connect
 /** The wire shape of `GET /api/cloud/team/admin` (signed by the Admin). */
 export interface TeamAdminSummary {
   v: 1;
-  /** Connected apps (Composio). `available: false`: connected apps are off or unreadable here; `services` is then empty.
-   * An account's `health` is its status word as one of the four (none for a word not known). */
-  apps: { available: boolean; services: ({ slug: string; status: string; accounts: { id: string; alias: string | null; status: string; health?: ConnectionHealthWord }[] } & ConnectionStatus)[] };
   /** `expiresAt`: when the server's sign-in ends for good, for a sign-in that expires and that nothing can refresh. */
   mcp: ({ name: string; transport: "http" | "sse" | "stdio"; host: string | null; enabled: boolean; signedIn: boolean | null; secrets: string[]; expiresAt?: string } & ConnectionStatus)[];
   /** The team's own service keys, set or not: treg (X research) and voice (ElevenLabs). `included`: the Cloud's own voice
@@ -58,7 +54,6 @@ export interface TeamAdminSummary {
 type ListedMcp = { name: string; enabled?: boolean; url?: string; type?: string; command?: string; headerKeys?: string[]; envKeys?: string[]; auth?: string };
 
 export function teamAdminSummary(input: {
-  apps: Record<string, ConnectorServiceState> | null;
   mcp: readonly ListedMcp[];
   status: Record<string, unknown>;
   voice: { key: boolean; included: boolean };
@@ -70,12 +65,6 @@ export function teamAdminSummary(input: {
   };
   return {
     v: 1,
-    apps: {
-      available: input.apps !== null,
-      services: Object.entries(input.apps ?? {}).filter(([, state]) => state.connected || state.pending || state.accounts.length > 0).map(([slug, state]) => ({
-        slug, status: state.status, accounts: state.accounts.map((account) => ({ id: account.id, alias: account.alias?.trim() || null, status: account.status })),
-      })),
-    },
     mcp: input.mcp.map((server) => ({
       name: server.name,
       transport: server.url ? (server.type === "sse" ? "sse" : "http") : "stdio",

@@ -7,12 +7,11 @@ import type { SessionRecord } from "../sessions.ts";
 import { createConversationSharing, type ConversationShareDeps } from "./conversation-share.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
-const share = vi.fn(), add = vi.fn();
+const share = vi.fn();
 const deps = (team: boolean): ConversationShareDeps => ({
   team: team ? { id: "acme", name: "Acme" } : null,
   store: () => ({ bot: () => ({ id: "scout", name: "Scout" }), taskByThread: () => ({ threadId: "t1", title: "Plan" }), messagesFor: () => [{ id: "m1" }], onChange: () => () => {} }) as never,
   shares: { get: () => undefined, share, readers: () => null, personLeft: () => [] } as never,
-  saves: { add, list: () => [], remove: () => "gone", personLeft: () => {} } as never,
   starter: () => undefined, audienceOf: () => "team", sees: () => true, levelOf: () => "edit", levelFor: () => "edit",
   people: () => [], nameOf: (email) => email, language: () => undefined, busy: () => false, routinesIn: () => 0, outside: () => false,
   audienceChanged: vi.fn(), changed: vi.fn(), inbox: () => ({ keepOne: () => null }), looking: () => false, notify: vi.fn(),
@@ -35,14 +34,11 @@ describe("who reaches sharing and team memory", () => {
   const routes: Array<[string, string, unknown]> = [
     ["POST", "/api/bots/scout/tasks/t1/share", { with: "team" }],
     ["GET", "/api/bots/scout/tasks/t1/share", undefined],
-    ["POST", "/api/bots/scout/memory/team", { threadId: "t1", messageId: "m1", text: "x" }],
-    ["DELETE", "/api/bots/scout/memory/team/e1", undefined],
   ];
 
   it("refuses the server itself, as a bot's own call would come, with every scope", async () => {
     for (const [method, path, body] of routes) expect(await call(true, { kind: "loopback", scopes: ["admin", "client"] }, method, path, body), `${method} ${path}`).toBe(404);
     expect(share).not.toHaveBeenCalled();
-    expect(add).not.toHaveBeenCalled();
   });
 
   it("refuses a session no team membership vouches for, and everything off a team", async () => {
@@ -51,7 +47,6 @@ describe("who reaches sharing and team memory", () => {
       expect(await call(false, member(), method, path, body)).toBe(404);
     }
     expect(share).not.toHaveBeenCalled();
-    expect(add).not.toHaveBeenCalled();
   });
 
   it("leaves every other path to the routes after it", async () => {

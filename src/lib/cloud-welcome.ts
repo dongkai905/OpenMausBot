@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import type { CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { CLOUD_SETUP_HIDDEN, CLOUD_WELCOME_DONE, cloudWelcomeStage } from "@/lib/cloud-setup";
 import type { OnboardingStatus, WelcomeViewer } from "@/lib/onboarding";
 import { api, type Action, type ConfigStatus } from "@/state/store";
@@ -123,20 +122,4 @@ export function cloudFirstRun(shown: { welcome: boolean; intent: boolean; signIn
   if (shown.welcome) return "welcome";
   if (shown.intent) return "intent";
   return shown.signIn ? "sign-in" : null;
-}
-
-export type WelcomeCredit = { state: "active"; left: number | null } | { state: "used_up" | "ended" };
-
-/** The trial's Claude credit as the Cloud's engines report it; the amount only where the desktop app's plan says it. */
-export function welcomeCredit(
-  instances: ReadonlyArray<{ trialCredit?: "active" | "used_up" | "ended" }>,
-  plan: CloudPlanSnapshot | null,
-): WelcomeCredit | null {
-  const reported = instances.find((instance) => instance.trialCredit)?.trialCredit;
-  const credit = plan?.credit;
-  if (reported === "active" || (!reported && credit?.state === "active")) {
-    return { state: "active", left: credit?.state === "active" ? credit.remainingUsd : null };
-  }
-  if (reported) return { state: reported };
-  return credit?.state === "used_up" ? { state: "used_up" } : null;
 }

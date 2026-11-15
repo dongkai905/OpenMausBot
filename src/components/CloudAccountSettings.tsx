@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CloudAccountState, CloudPlanBridge, CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
-import type { CloudCredit, CloudMachine, CloudTrial } from "../../electron/cloud-home.mjs";
+import type { CloudMachine, CloudTrial } from "../../electron/cloud-home.mjs";
 import { planTeam, teamPlan } from "../../electron/cloud-team-plan.mjs";
 import { cloudFilesBridge } from "@/lib/cloud-files";
 import { moveLine } from "@/lib/cloud-send";
 import { activeLocale, t } from "@/lib/i18n";
-import { buyOfferAllowed, cloudCreditLine, cloudPlanLabel, cloudPlanLine, cloudPlanView, cloudTrialView, moneyBackLine, offerTrialDays, trialRunning, type CloudPlanView } from "@/lib/cloud-plan";
+import { buyOfferAllowed, cloudPlanLabel, cloudPlanLine, cloudPlanView, cloudTrialView, moneyBackLine, offerTrialDays, trialRunning, type CloudPlanView } from "@/lib/cloud-plan";
 import { useCloudOffer } from "@/lib/use-cloud-offer";
 import type { LocaleKey } from "@/locales";
 import { AccountsSheet } from "./AccountMenu";
@@ -35,13 +35,12 @@ const MACHINE_TEXT = {
 const time = (value: number) => new Intl.DateTimeFormat(activeLocale(), { timeStyle: "short" }).format(new Date(value));
 const day = (value: number) => new Intl.DateTimeFormat(activeLocale(), { dateStyle: "medium" }).format(new Date(value));
 
-function trialLines(trial: CloudTrial | undefined, credit: CloudCredit | undefined) {
-  if (!trial && !credit) return null;
-  const view = trial ? cloudTrialView(trial) : null;
-  return <div data-cloud-trial={trial?.state ?? "none"} className="flex flex-col gap-1">
-    {view && <p className="text-[13px] font-medium text-ink">{view.title}</p>}
-    {view && <p className="text-[13px] leading-relaxed text-ink-secondary">{view.body}</p>}
-    {credit && <p data-cloud-credit={credit.state} className="text-[13px] leading-relaxed text-ink-secondary">{cloudCreditLine(credit)}</p>}
+function trialLines(trial: CloudTrial | undefined) {
+  if (!trial) return null;
+  const view = cloudTrialView(trial);
+  return <div data-cloud-trial={trial.state} className="flex flex-col gap-1">
+    <p className="text-[13px] font-medium text-ink">{view.title}</p>
+    <p className="text-[13px] leading-relaxed text-ink-secondary">{view.body}</p>
   </div>;
 }
 
@@ -149,7 +148,7 @@ export function CloudPlanOnCloud({ bridge, usage = null, upgrade, extra }: { bri
   return <div data-cloud-plan={plan?.status ?? "loading"} className="contents">
     {planLayout({ title, primary, usage, upgrade, extra,
       subtitle: plan?.status === "signin" ? t("cloudAccount.onCloudSignIn") : cancelled && plan?.renewal ? endedLine(plan.renewal) : renewalLine(plan?.renewal),
-      message: trialLines(plan?.trial, plan?.credit) || failed ? <>{trialLines(plan?.trial, plan?.credit)}{failed && <p role="alert" className="text-danger">{t("cloudAccount.actionFailed")}</p>}</> : undefined,
+      message: trialLines(plan?.trial) || failed ? <>{trialLines(plan?.trial)}{failed && <p role="alert" className="text-danger">{t("cloudAccount.actionFailed")}</p>}</> : undefined,
       cancel: plan?.renewal && renewal ? <CancelPlanRow renewal={plan.renewal} actions={renewal} onChanged={() => setReads((count) => count + 1)} /> : undefined })}
   </div>;
 }
@@ -309,8 +308,8 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
       subtitle: view.kind === "signed-out" ? t("settings.plan.offer") : cancelled && account?.status === "connected" && account.renewal ? endedLine(account.renewal)
         : view.kind === "paid" && view.checking ? t("cloudAccount.checking") : message ?? (account?.status === "connected" ? renewalLine(account.renewal) : undefined),
       // Only a trial or a staging account has a line here; an empty node would add height to the row.
-      message: signed && (account.staging || (account.status === "connected" && trialLines(account.trial, account.credit)))
-        ? <>{account.staging && <StagingMark className="mb-1" />}{account.status === "connected" ? trialLines(account.trial, account.credit) : null}</> : undefined,
+      message: signed && (account.staging || (account.status === "connected" && trialLines(account.trial)))
+        ? <>{account.staging && <StagingMark className="mb-1" />}{account.status === "connected" ? trialLines(account.trial) : null}</> : undefined,
       links: <>
         {signedOut && <SettingsLinkRow title={t("settings.plan.haveOne")} onClick={() => onSignIn ? onSignIn() : void perform(() => bridge.begin())} />}
         {machine && (onTeamPlan

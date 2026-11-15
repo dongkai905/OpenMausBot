@@ -25,7 +25,7 @@ function fixture(response = 0) {
     mainWindow, rendererOrigin: () => ORIGIN, environmentsState: { activeId: "local", environments: [] },
     dialog: { showMessageBox: async (...args) => { calls.push(args); return { response }; } }, nativeT: nativeText.englishText.t,
   });
-  vm.runInContext(section("const workspaceOnly =", 'ipcMain.handle("organization:settings-opened"')
+  vm.runInContext(section("const workspaceOnly =", 'function myCloud()')
     + section('ipcMain.handle("dialog:confirm"', 'ipcMain.handle("environments:state"'), context);
   return { confirm: handlers.get("dialog:confirm"), calls, mainWindow, context, event: { sender: contents, senderFrame: frame } };
 }

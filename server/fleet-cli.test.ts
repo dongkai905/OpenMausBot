@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { markProvisioningFailed, runFleetCommand, type FleetDeps, type FleetInput } from "./fleet-cli.ts";
-import { emptyRegistry, fenceRules, MANAGED_OPENROUTER, type FleetWorkspace } from "./fleet.ts";
+import { emptyRegistry, fenceRules, type FleetWorkspace } from "./fleet.ts";
 
 // A machine that records what the CLI would do to it. Nothing here touches
 // the real filesystem, systemd, nftables or Caddy.
@@ -41,35 +41,6 @@ const registryFile = "/etc/openmausbot/fleet.json";
 const withRegistry = (workspaces = {}) => ({ [registryFile]: JSON.stringify({ ...emptyRegistry("agentada.cc"), workspaces }) });
 
 describe("openmausbot fleet", () => {
-  it("updates only managed OpenRouter models and rejects missing, malformed or redirected config", async () => {
-    const workspace: FleetWorkspace = { slug: "acme", host: "acme.agentada.cc", port: 8810, webhookPort: 8811, status: "running", createdAt: "" };
-    const path = "/var/lib/openmausbot/acme/.config/opencode/opencode.json";
-    const cfgPath = "/var/lib/openmausbot/acme/.openmausbot/config.json";
-    const config = { model: "my-own-default", provider: { unrelated: { models: { keep: {} } }, [MANAGED_OPENROUTER]: {
-      npm: "@ai-sdk/openai-compatible", name: "Keep this name", options: { baseURL: "https://admin.example.test/api/gateway/acme/openrouter/v1", apiKey: "scoped-secret" }, models: { "old/model": { name: "Old" } },
-    } } };
-    const initialFiles = { ...withRegistry({ acme: workspace }), [path]: JSON.stringify(config), [cfgPath]: '{"defaultModelSelection":{"instanceId":"claude","model":"keep"}}', "/etc/openmausbot/instances/acme.env": "OMB_ADMIN_URL=https://admin.example.test\nOMB_ADMIN_WORKSPACE=acme\n" };
-    const m = machine({ root: true, files: initialFiles });
-    const output = io();
-    const input: FleetInput = { ...base, action: "providers", slug: "acme", openrouterModels: ["next/model", "next/model"] };
-    expect(await runFleetCommand(input, output.io, m.deps)).toBe(0);
-    expect(JSON.parse(m.files.get(path)!)).toEqual({ ...config, provider: { ...config.provider, [MANAGED_OPENROUTER]: { ...config.provider[MANAGED_OPENROUTER], models: { "next/model": { name: "next/model" } } } } });
-    expect(m.files.get(cfgPath)).toBe(initialFiles[cfgPath]);
-    expect(m.calls).toEqual([`read ${path} as omb-acme`, `write ${path} 600 as omb-acme`]);
-    expect(output.out.join("\n") + output.err.join("\n")).not.toContain("scoped-secret");
-    expect(await runFleetCommand({ ...input, openrouterModels: [] }, output.io, m.deps)).toBe(0);
-    expect(JSON.parse(m.files.get(path)!).provider[MANAGED_OPENROUTER].models).toEqual({});
-    for (const raw of [undefined, '{"secret":"scoped-secret",', '[]', '{}', JSON.stringify({ ...config, provider: { [MANAGED_OPENROUTER]: { ...config.provider[MANAGED_OPENROUTER], options: { apiKey: "scoped-secret", baseURL: "https://other.example.test" } } } })]) {
-      const bad = machine({ root: true, files: initialFiles });
-      if (raw === undefined) bad.files.delete(path); else bad.files.set(path, raw);
-      const log = io();
-      expect(await runFleetCommand(input, log.io, bad.deps)).toBe(2);
-      expect(bad.files.get(path)).toBe(raw);
-      expect(bad.calls.every((call) => call.startsWith("read "))).toBe(true);
-      expect(log.err.join("\n")).not.toContain("scoped-secret");
-    }
-  });
-
   it("prints the plan instead of acting when not root, and on --dry-run even as root", async () => {
     const { deps, calls } = machine();
     const { io: log, out } = io();

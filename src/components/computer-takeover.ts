@@ -9,7 +9,7 @@ export interface TakeoverSnapshot {
 
 /** Another device's hand-back and this view's next take can arrive out of order; only a release that lasts ends a session. */
 const RELEASE_SETTLE_MS = 1_500;
-/** Past a sleeping Boat's wake (90 s) and its desktop link (bounded per request on the server). */
+/** Past a sleeping VPS computer's wake (90 s) and its desktop link (bounded per request on the server). */
 const JOIN_TIMEOUT_MS = 200_000;
 
 /** `crypto.randomUUID` exists only in secure contexts, and a phone may reach the app over plain LAN http. */
@@ -25,8 +25,8 @@ function releaseWhenClosed(tab: Window, release: () => void): void {
   }, 1_000);
 }
 
-/** A provider-hosted desktop (a Boat) ships its own viewer, so it opens in the app's viewer window or its own tab. A
- * stuck join gives the computer back instead of leaving the bot waiting. */
+/** A provider-hosted desktop (a computer on the person's own VPS) ships its own viewer, so it opens in the app's viewer
+ * window or its own tab. A stuck join gives the computer back instead of leaving the bot waiting. */
 export async function openProviderDesktop({ botId, title, held, request, join, current }: {
   botId: string;
   title: string;

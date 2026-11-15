@@ -20,15 +20,13 @@ const BY_PHASE: Array<[readonly string[], LocaleKey[]]> = [
 /** Servers of the app's own tools: their work reads as what it does, never as "Working in …". */
 const OWN_SERVERS = new Set(["ogb", "agents", "omb", "openmausbot", "computer", "browser", "harness"]);
 
-/** The outside service a tool call works in, by its MCP server or a connected-app tool's name, as a person names it. */
+/** The outside service a tool call works in, by its MCP server, as a person names it. */
 export function toolService(name: string | undefined): string | null {
   const server = /^mcp__([^_]+(?:-[^_]+)*)__(.+)$/.exec(name ?? "");
   if (!server) return null;
-  const [, id, tool] = server;
-  if (OWN_SERVERS.has(id!.toLowerCase())) return null;
-  const raw = id!.toLowerCase() === "composio" ? /^([A-Za-z]+)_/.exec(tool!)?.[1] : id;
-  if (!raw) return null;
-  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  const [, id] = server;
+  if (OWN_SERVERS.has(id.toLowerCase())) return null;
+  return id.charAt(0).toUpperCase() + id.slice(1).toLowerCase();
 }
 
 function phrases(phase: string, keys: LocaleKey[]): LiveActivityPhrases {

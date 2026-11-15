@@ -964,7 +964,6 @@ describe("Instance CLI override", () => {
 
   it("never persists the credential env instanceConfigs injects", () => {
     const cfg: AppConfig = {
-      box: { token: "SECRET-BOAT" },
       instances: {
         claude: { driver: "claudeAgent" },
         grokApi: { driver: "grok" },
@@ -1001,8 +1000,8 @@ describe("Instance CLI override", () => {
 });
 
 describe("credential env narrowing", () => {
-it("hands no credential to any default-fleet CLI engine, and the Boat key to none at all", () => {
-    const cfg: AppConfig = { box: { token: "SECRET-BOAT" } };
+it("hands no credential to any default-fleet CLI engine", () => {
+    const cfg: AppConfig = {};
     const instances = instanceConfigs(cfg);
     for (const entry of Object.values(instances)) {
       expect(entry.environment).toEqual({});
@@ -1093,12 +1092,10 @@ describe("credential env preference", () => {
     "OPENAI_COMPAT_URL",
     "OPENAI_COMPAT_MODEL",
     "OPENAI_COMPAT_PROVIDER",
-    "BOX_TOKEN",
     "OPENCODE_API_KEY",
     "OMB_TTS_KEY",
     "OMB_FISH_AUDIO_API_KEY",
     "OMB_OPENAI_IMAGE_KEY",
-    "COMPOSIO_API_KEY",
   ] as const;
   let saved: Record<string, string | undefined>;
 
@@ -1129,8 +1126,6 @@ it("uses a preset voice only when the person has not chosen one or another provi
 
   it("never takes Cloud Pro's included tokens for the person's own keys, in config or an engine's environment", () => {
     const included = {
-      OMB_CLOUD_BOAT_URL: "https://cloud.example.test/api/cloud/services/boat/api/box/v1",
-      OMB_CLOUD_BOAT_TOKEN: "box_omb_included-relay-token",
       OMB_CLOUD_VOICE_URL: "https://cloud.example.test/api/cloud/services/voice/v1",
       OMB_CLOUD_VOICE_TOKEN: "omb_voice_included-relay-token",
       OMB_CLOUD_DECIDER_URL: "https://cloud.example.test/api/cloud/services/decider",
@@ -1139,23 +1134,21 @@ it("uses a preset voice only when the person has not chosen one or another provi
     for (const [name, value] of Object.entries(included)) vi.stubEnv(name, value);
     try {
       const cfg = loadConfig();
-      expect(cfg.box?.token).toBeUndefined();
       expect(cfg.tts?.key).toBeUndefined();
       expect(cfg.decider?.key).toBeUndefined();
       for (const entry of Object.values(instanceConfigs(cfg))) {
         for (const value of Object.values(entry.environment ?? {})) expect(Object.values(included)).not.toContain(value);
       }
-      saveConfig({ tts: { voice: "chosen" }, box: { token: "" }, decider: { enabled: true, jobs: { roomRouting: true } } });
+      saveConfig({ tts: { voice: "chosen" }, decider: { enabled: true, jobs: { roomRouting: true } } });
       const disk = readFileSync(join(DATA_DIR, "config.json"), "utf8");
       const runtime = JSON.stringify([loadConfig(), instanceConfigs(loadConfig()), persistableInstanceConfigs(loadConfig())]);
-      for (const token of [included.OMB_CLOUD_BOAT_TOKEN, included.OMB_CLOUD_VOICE_TOKEN, included.OMB_CLOUD_DECIDER_TOKEN]) {
+      for (const token of [included.OMB_CLOUD_VOICE_TOKEN, included.OMB_CLOUD_DECIDER_TOKEN]) {
         expect(disk).not.toContain(token);
         expect(runtime).not.toContain(token);
       }
-      process.env.BOX_TOKEN = "box_own";
       process.env.OMB_TTS_KEY = "sk-own";
-      expect(loadConfig()).toMatchObject({ box: { token: "box_own" }, tts: { key: "sk-own" } });
-      expect(JSON.stringify(instanceConfigs(loadConfig()))).not.toContain("box_own");
+      expect(loadConfig()).toMatchObject({ tts: { key: "sk-own" } });
+      expect(JSON.stringify(instanceConfigs(loadConfig()))).not.toContain("sk-own");
     } finally {
       vi.unstubAllEnvs();
     }
@@ -1361,22 +1354,19 @@ it("uses a preset voice only when the person has not chosen one or another provi
 
   it("treats a blanked file field as absent when env supplies the secret", () => {
     // The desktop shell may leave "" behind (a key cleared mid-session); the env-injected value must still win.
-    writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ composio: { apiKey: "" } }));
-    process.env.COMPOSIO_API_KEY = "env-composio";
-    expect(loadConfig().composio?.apiKey).toBe("env-composio");
+    writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ tts: { key: "" } }));
+    process.env.OMB_TTS_KEY = "env-tts";
+    expect(loadConfig().tts?.key).toBe("env-tts");
   });
 
   it("syncCredentialEnv keeps process.env in step with a credential save", () => {
-    process.env.BOX_TOKEN = "boot-injected";
-    process.env.COMPOSIO_API_KEY = "boot-injected";
+    process.env.OMB_TTS_KEY = "boot-injected";
+    process.env.OMB_FISH_AUDIO_API_KEY = "boot-injected";
     syncCredentialEnv({
-      composio: { apiKey: "ak_just_saved" },
-      box: { token: "" },
+      tts: { key: "sk_just_saved", fishKey: "" },
       profile: { name: "Ada" },
     });
-    expect(process.env.COMPOSIO_API_KEY).toBe("ak_just_saved");
-    expect(process.env.BOX_TOKEN).toBeUndefined();
-    expect(process.env.OMB_TTS_KEY).toBeUndefined();
+    expect(process.env.OMB_TTS_KEY).toBe("sk_just_saved");
     expect(process.env.OMB_FISH_AUDIO_API_KEY).toBeUndefined();
   });
 
@@ -1423,12 +1413,9 @@ describe("workspace credential env strip", () => {
   });
 
   it("covers in-process secrets and private app-state paths", () => {
-    expect(WORKSPACE_CREDENTIAL_ENV).toContain("BOX_TOKEN");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_TTS_KEY");
-    expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_CLOUD_BOAT_TOKEN");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_CLOUD_VOICE_TOKEN");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_CLOUD_DECIDER_TOKEN");
-    expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_CLOUD_AI_TOKEN");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_FISH_AUDIO_API_KEY");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_OPENAI_IMAGE_KEY");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_BROWSER_CONNECTION");
@@ -1519,7 +1506,7 @@ describe("changedInstanceIds", () => {
   it("replaces nothing for sections no driver reads", () => {
     expect(reloaded({ onboarding: { hintsSeen: ["tour.composer"] } })).toEqual([]);
     expect(reloaded({ profile: {}, language: "de", tts: {}, features: {} })).toEqual([]);
-    expect(reloaded({ box: { token: "boat" }, composio: { apiKey: "c" }, budgets: { monthlyUsd: 5 } })).toEqual([]);
+    expect(reloaded({ budgets: { monthlyUsd: 5 } })).toEqual([]);
   });
 it("names an engine that was added or removed", () => {
     expect(changedInstanceIds({ a: { driver: "fake" } }, { b: { driver: "fake" } })).toEqual(["a", "b"]);

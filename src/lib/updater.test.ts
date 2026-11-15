@@ -1,7 +1,6 @@
 import { afterEach, expect, it } from "vitest";
 import { setLocale } from "@/lib/i18n";
 import { updaterMessage } from "@/lib/updater";
-import { connectionMessage } from "@/components/OrganizationSettings";
 
 afterEach(() => setLocale("en"));
 
@@ -35,12 +34,4 @@ it("says the updater's own words in the app's language, and keeps a message main
   setLocale("en");
   expect(updaterMessage({ status: "installing", message: "Restart is taking longer than expected. Quit and reopen OpenMausBot to finish the update.", messageCode: "slowRestart" }))
     .toBe("Restart is taking longer than expected. Quit and reopen OpenMausBot to finish the update.");
-});
-
-it("says the company connection's lines in the app's language, in order, and keeps a line that comes with no codes", () => {
-  setLocale("pt-br");
-  expect(connectionMessage({ message: "Disconnected on this computer. The portal was unreachable; …", messageCodes: ["disconnected", "portalUnreachable"] }))
-    .toBe("Desconectado neste computador. Não foi possível acessar o portal. Peça ao administrador para revogar o acesso deste dispositivo lá também.");
-  expect(connectionMessage({ message: "An older desktop's words." })).toBe("An older desktop's words.");
-  expect(connectionMessage({ message: "Unknown.", messageCodes: ["somethingNew" as never] })).toBe("Unknown.");
 });

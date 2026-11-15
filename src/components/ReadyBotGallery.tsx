@@ -65,9 +65,8 @@ export function ReadyBotGallery({ search, onDialog, onAdded }: {
         </div>
         <p className="mt-3 text-[13px] leading-[1.45] text-ink-secondary">{copy.description}</p>
         <p className="mt-2 text-[12px] italic text-ink-tertiary">{t("readyBots.try", { prompt: copy.tryAsking })}</p>
-        {(bot.apps.length > 0 || bot.routines?.length) && <p className="mt-auto pt-2 text-[12px] text-ink-tertiary">
-          {[bot.apps.length > 0 && t("readyBots.worksWith", { apps: bot.apps.map((app) => APP_LABELS[app] ?? app).join(", ") }),
-            bot.routines?.length && t("readyBots.pausedRoutine")].filter(Boolean).join(" · ")}
+        {bot.apps.length > 0 && <p className="mt-auto pt-2 text-[12px] text-ink-tertiary">
+          {t("readyBots.worksWith", { apps: bot.apps.map((app) => APP_LABELS[app] ?? app).join(", ") })}
         </p>}
       </article>; })}
     </div>

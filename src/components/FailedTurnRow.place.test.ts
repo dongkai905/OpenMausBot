@@ -31,11 +31,14 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.owne
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 const { FailedTurnRow } = await import("./ChatView");
-const { panelCloudRefusal, placeRowViewFor } = await import("@/lib/place-view");
+const { placeRowViewFor } = await import("@/lib/place-view");
 
 
 const stored = (place: PlaceRow): NonNullable<Message["tool"]> => failedTurnTool(placeRowText(place), { place });
-const hours: PlaceRow = { state: "cc-no-hours", params: { bot: "Scout", plan: "Pro", hours: 50, month: "November" }, source: "works-on" };
+/** A place the model cannot use: the one row a person can act on. */
+const cannot: PlaceRow = { state: "vm-cannot", params: { bot: "Scout", model: "Claude" }, source: "works-on" };
+/** A place that did not start, and where the conversation itself may retry. */
+const failed: PlaceRow = { state: "place-failed", params: { bot: "Scout", cause: "It did not start." }, source: "auto-pin" };
 
 function show(tool: NonNullable<Message["tool"]>, onRetry?: () => void) {
   const html = renderToStaticMarkup(createElement(FailedTurnRow, { tool, engine: undefined, botId: "scout", threadId: "thread-scout", onRetry }));
@@ -52,24 +55,23 @@ beforeEach(() => {
 });
 
 describe("J11: a failed place's row", () => {
-  it("says no hours are left in one line, with one button: See your plan", () => {
-    const { html, buttons } = show(stored(hours), vi.fn());
-    expect(html).toContain("This month&#x27;s 50 cloud desktop hours are used up. They come back on 1 November.");
+  it("says the place cannot run, with one button: Choose a model", () => {
+    const { html, buttons } = show(stored(cannot), vi.fn());
+    expect(html).toContain("Claude can&#x27;t use a private desktop.");
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]).toContain("See your plan");
+    expect(buttons[0]).toContain("Choose a model");
     expect(html).not.toContain("Retry");
     expect(html).not.toContain("<details");
   });
 
   it("offers Try again only where the conversation can retry", () => {
-    const passing = stored({ state: "cc-unavailable", params: { bot: "Scout" }, source: "works-on" });
-    expect(show(passing, vi.fn()).buttons).toHaveLength(1);
-    expect(show(passing, vi.fn()).buttons[0]).toContain("Try again");
-    expect(show(passing).buttons).toHaveLength(0);
+    expect(show(stored(failed), vi.fn()).buttons).toHaveLength(1);
+    expect(show(stored(failed), vi.fn()).buttons[0]).toContain("Try again");
+    expect(show(stored(failed)).buttons).toHaveLength(0);
   });
 
   it("leads a person's pin back to the grid's choice in Simple, and to the composer's in Advanced", () => {
-    const pinned = stored({ state: "cc-no-start", params: { bot: "Scout" }, source: "pin" });
+    const pinned = stored({ ...failed, source: "pin" });
     expect(show(pinned).buttons[0]).toContain("Use Cloud desktop");
     fixture.advanced = true;
     expect(show(pinned).buttons[0]).toContain("Clear this conversation&#x27;s place");
@@ -77,19 +79,16 @@ describe("J11: a failed place's row", () => {
 
   it("gives a User no button that changes a setting, and says who can", () => {
     fixture.ownerOrAdmin = false;
-    const { html, buttons } = show(stored(hours), vi.fn());
-    expect(html).toContain("They come back on 1 November. Ask an Admin to change it.");
+    const { html, buttons } = show(stored(cannot), vi.fn());
+    expect(html).toContain("Ask an Admin to change it.");
     expect(buttons).toHaveLength(0);
   });
 
-  it("reads the Boat sign-up as My Cloud's on a desktop with a paid plan", () => {
-    const needsKey: PlaceRow = { state: "cc-needs-key", params: { bot: "Scout" }, source: "works-on" };
-    expect(show(stored(needsKey)).html).toContain("Bots here can get their own cloud desktops from Boat, a paid service.");
-    const seat = { server: "mac", plan: true, role: "admin", mode: "simple" } as const;
-    expect(placeRowViewFor(needsKey, seat)).toMatchObject({
-      state: "cc-on-my-cloud", line: "Cloud desktops from your plan work for Cloud bots for now.", action: { id: "open-my-cloud" },
+  it("reads the same row the way the app words it", () => {
+    const seat = { server: "mac", role: "admin", mode: "simple" } as const;
+    expect(placeRowViewFor(cannot, seat)).toMatchObject({
+      state: "vm-cannot", line: "Claude can't use a private desktop. Choose a model that can, such as Claude or ChatGPT.", action: { id: "choose-model" },
     });
-    expect(placeRowViewFor(needsKey, { ...seat, server: "my-cloud" }).state).toBe("cc-needs-key");
   });
 });
 
@@ -100,13 +99,9 @@ describe("the phone row", () => {
 
   it("carries the line and its action in words, whole, for every source", () => {
     const rows: Array<[PlaceRow, string]> = [
-      [hours, "This month's 50 cloud desktop hours are used up. They come back on 1 November. See your plan on the Plan page."],
-      [{ state: "cc-unavailable", params: { bot: "Scout" }, source: "auto-pin" },
-        "Cloud desktops can't start right now. It isn't anything you did. This conversation is back on Auto. Send your message again."],
-      [{ state: "cc-unavailable", params: { bot: "Scout" }, source: "routine" },
-        "Cloud desktops can't start right now. It isn't anything you did. Change where this routine runs."],
-      [{ state: "cc-at-once", params: { bot: "Bo", plan: "Personal", max: 1, holders: ["Ada"] }, source: "works-on" },
-        "Your Personal plan includes 1 cloud desktop, and Ada has it. Manage your cloud desktops in Settings → Bot desktops."],
+      [cannot, "Claude can't use a private desktop. Choose a model that can, such as Claude or ChatGPT. Choose another model in Scout's settings."],
+      [failed, "It did not start. This conversation is back on Auto. Send your message again."],
+      [{ ...failed, source: "pin" }, "It did not start. Clear this conversation's place in the composer to continue."],
     ];
     for (const [place, words] of rows) {
       const tool = stored(place);
@@ -114,17 +109,5 @@ describe("the phone row", () => {
       expect(phoneCause(onPhone.name)).toBe(words);
       expect(failedTurnCause(onPhone.name)).toBe(words);
     }
-  });
-});
-
-describe("the computer panel's refused cloud desktop", () => {
-  const TRIAL = "Your Pro free trial's 20 cloud computer hours are used up. Your full allowance starts with your first payment on 14 Nov.";
-  it("reads the Admin's limit from the home's error body, and a free trial's words from an Admin that sends none", () => {
-    const answered = (body: Record<string, unknown>) => Object.assign(new Error(String(body.error)), { status: 500, body });
-    expect(panelCloudRefusal(answered({ error: "Words this app doesn't know.", cloudLimit: { reason: "at_once", plan: "Max", limit: 4, used: 4 } }), "Words this app doesn't know.", true))
-      .toEqual({ state: "cc-at-once", params: { plan: "Max", max: 4 } });
-    expect(panelCloudRefusal(answered({ error: TRIAL }), TRIAL, true)).toEqual({ state: "cc-no-hours", params: { trial: true } });
-    expect(panelCloudRefusal(answered({ error: "Cloud computers are busy right now. Try again in a few minutes." }), "Cloud computers are busy right now. Try again in a few minutes.", true).state)
-      .toBe("cc-unavailable");
   });
 });

@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { FileText, FolderOpen, Plus, Server } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { FolderOpen, Plus, Server } from "lucide-react";
 
-import { appSwitchPatch } from "@/lib/bot-app-access";
-import { cn } from "@/lib/cn";
+import { appSwitchPatch } from "@/lib/bot-apps";
 import { skillsLibraryEnabled } from "@/lib/feature-flags";
 import { t } from "@/lib/i18n";
 import { mcpServersForBot, mcpServersOfBot, mcpSwitch, useMcpServers } from "@/lib/mcp-servers";
@@ -12,11 +11,9 @@ import { shortPath } from "@/lib/short-path";
 import { skillImportLines } from "@/lib/skill-import";
 import { useStore, type Bot } from "@/state/store";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
-import { connectAppFromBot } from "../AppGrantPrompt";
 import { ServiceIcon } from "../ServiceIcon";
 import { useWorkingFolder } from "../bot-settings/AccessSection";
 import { useBotEditor } from "../bot-settings/BotEditorContext";
-import { inputCls } from "../bot-settings/field";
 import { OrgSkillsCard } from "../bot-settings/OrgSkillsCard";
 import { SkillReviewDialog, skillSwitchOn, useManagedSkills, type ManagedSkill } from "../bot-settings/SkillsSection";
 import { useBotApps, type BotApp } from "../bot-settings/useBotApps";
@@ -26,7 +23,7 @@ import { BrowserLogins } from "./browser-logins";
 import { useOpenComputer, WherePage } from "./ComputerTab";
 import { SettingsPage } from "./SettingsPage";
 import type { SimplePageId } from "./page-registry";
-import { BotSwitch, buttonCls, Card, ColRow, LinkRow, NoteRow, RadioRow, RowIcon, rowCls, RowText, SwitchRow, TextRow, TrashButton } from "./rows";
+import { BotSwitch, buttonCls, Card, LinkRow, NoteRow, RadioRow, RowIcon, rowCls, RowText, SwitchRow, TextRow, TrashButton } from "./rows";
 
 type Derived = ReturnType<typeof useBotSettingsDerived>;
 
@@ -114,7 +111,10 @@ export function AppsPage({ bot, derived }: PageContext) {
         <LinkRow
           data-panel-link="add-app"
           icon={Plus}
-          onClick={() => connectAppFromBot(dispatch, bot.id)}
+          onClick={() => {
+            dispatch({ type: "toggleSettings", open: false });
+            dispatch({ type: "togglePlugins", open: true, surface: "apps" });
+          }}
         >
           {t("botPanel.apps.connectAnother")}
         </LinkRow>

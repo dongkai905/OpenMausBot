@@ -4,7 +4,7 @@ import { api } from "@/state/store";
 import { CLOUD_SETUP_HIDDEN, CLOUD_WELCOME_DONE, welcomeStepHint } from "./cloud-setup";
 import {
   cloudFirstRun, cloudWelcomeShown, cloudWelcomeVisible, dropFinishedWelcome, endWelcomeHere, keepFinishedWelcome, markWelcomeSeen, noteWelcomeHints, resetCloudWelcome,
-  returnToWelcome, saveWelcomeHints, stepAsideWelcome, takeWelcomeRequest, useCloudWelcome, WELCOME_SAVE_RETRY_MS, welcomeCredit,
+  returnToWelcome, saveWelcomeHints, stepAsideWelcome, takeWelcomeRequest, useCloudWelcome, WELCOME_SAVE_RETRY_MS,
   withEarlyHints,
 } from "./cloud-welcome";
 import { EMPTY_ONBOARDING } from "./onboarding";
@@ -19,23 +19,6 @@ describe("cloudFirstRun", () => {
     expect(cloudFirstRun({ welcome: false, intent: true, signIn: true })).toBe("intent");
     expect(cloudFirstRun({ welcome: false, intent: false, signIn: true })).toBe("sign-in");
     expect(cloudFirstRun({ welcome: false, intent: false, signIn: false })).toBeNull();
-  });
-});
-
-describe("welcomeCredit", () => {
-  it("names the amount left where the desktop app's plan says it, and still says there is credit without it", () => {
-    const plan = { status: "paid" as const, credit: { grantedUsd: 5, remainingUsd: 4.2, state: "active" as const } };
-    expect(welcomeCredit([{ trialCredit: "active" }], plan)).toEqual({ state: "active", left: 4.2 });
-    expect(welcomeCredit([{ trialCredit: "active" }], null)).toEqual({ state: "active", left: null });
-    expect(welcomeCredit([{}], plan)).toEqual({ state: "active", left: 4.2 });
-  });
-
-  it("says when the credit is spent or gone, and is quiet without one", () => {
-    expect(welcomeCredit([{ trialCredit: "used_up" }], null)).toEqual({ state: "used_up" });
-    expect(welcomeCredit([{ trialCredit: "ended" }], null)).toEqual({ state: "ended" });
-    expect(welcomeCredit([{}], { status: "paid", credit: { grantedUsd: 5, remainingUsd: 0, state: "used_up" } })).toEqual({ state: "used_up" });
-    expect(welcomeCredit([{}], null)).toBeNull();
-    expect(welcomeCredit([], { status: "paid" })).toBeNull();
   });
 });
 

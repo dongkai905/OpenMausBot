@@ -39,9 +39,7 @@ export interface ConfigStatus {
   fleet?: { available: boolean };
   budgets?: { monthlyUsd?: number; warnAtPercent?: number };
   billing?: { currency?: string; prices?: Record<string, { inputPerMillion: number; outputPerMillion: number; cachedInputPerMillion?: number }> };
-  composio: SavedKey & { mode?: "managed" | "self-hosted" | "unavailable" };
   /** `included`: cloud computers come with Cloud Pro, no key is saved. */
-  box: SavedKey & { included?: boolean };
   vps: { configured: boolean; sshAlias: string };
   rooms: { turnTimeoutMinutes: number };
   /** Per-call ceiling (minutes) for a bot's MCP tools. Absent from servers
@@ -161,7 +159,7 @@ export interface ManagedPolicySummary {
   companyModelsOnly: boolean;
   allowedEngines: "all" | string[];
   mcp: { allowCustom: boolean; allowlist: string[] };
-  computers: { thisComputer: boolean; localVm: boolean; box: boolean; vps: boolean };
+  computers: { thisComputer: boolean; localVm: boolean; vps: boolean };
   remoteAccess: boolean;
   /** Connected apps by service slug; absent from an older Team Cloud and from an organisation's policy. */
   apps?: { allowAll: boolean; allowlist: string[] };

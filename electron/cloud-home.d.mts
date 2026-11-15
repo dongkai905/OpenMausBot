@@ -57,8 +57,6 @@ export interface CloudTrial {
    * the way down. */
   switchTo?: { tier: CloudPlanTier; amount: number };
 }
-/** The trial's AI credit, in US dollars. */
-export interface CloudCredit { grantedUsd: number; remainingUsd: number; state: "active" | "used_up" }
 /** One allowance of the plan: `used` of `max` this month in its own unit (hours, characters, calls, US dollars; GB for
  * `storage`, the one that isn't monthly). `usedUp`: none left, whichever limit was reached. */
 export type CloudUsageKind = "computerHours" | "voice" | "decisions" | "x" | "research" | "storage";
@@ -109,7 +107,6 @@ export interface CloudOffer {
   plans: CloudOfferPlan[];
   /** The plan preselected (a tier in `plans`). */
   recommended: string;
-  creditUsd?: number;
   /** Days before a trial ends that its reminder email goes out, while the Admin sends one. */
   reminderDays?: number;
   refundDays?: number;
@@ -143,7 +140,6 @@ export declare function cloudUnreachableText(state: unknown, origin?: string | n
 export declare function parseCloudPurchase(input: unknown): CloudPurchase | null;
 export declare const CLOUD_TRIAL_STATES: readonly CloudTrialState[];
 export declare function parseCloudTrial(input: unknown): CloudTrial | null;
-export declare function parseCloudCredit(input: unknown): CloudCredit | null;
 export declare const CLOUD_USAGE_KINDS: readonly CloudUsageKind[];
 export declare function parseCloudUsage(input: unknown): CloudUsage | null;
 export declare function parseCloudRoom(input: unknown): CloudRoom | null;

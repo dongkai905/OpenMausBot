@@ -14,13 +14,10 @@ export const CREDENTIAL_ENV_NAMES = [
   "OMB_DEEPSEEK_API_KEY",
   "OMB_ANTHROPIC_API_KEY",
   "OMB_ANTHROPIC_API_URL",
-  "OMB_HOSTED_MODEL_TOKEN",
-  "OMB_HOSTED_MODELS",
   "OPENAI_COMPAT_API_KEY",
   "OPENAI_COMPAT_URL",
   "OMB_OPENAI_API_KEY",
   "OMB_OPENROUTER_API_KEY",
-  "BOX_TOKEN",
   "OPENCODE_API_KEY",
   "OMB_TTS_KEY",
   "OMB_FISH_AUDIO_API_KEY",
@@ -34,19 +31,13 @@ export const CREDENTIAL_ENV_NAMES = [
   "OMB_OPENAI_LIVE_KEY",
   "OMB_TREG_KEY",
   "OMB_POSTIZ_API_KEY",
-  "COMPOSIO_API_KEY",
-  "OMB_COMPOSIO_BROKER_TOKEN",
-  "OMB_CLOUD_BOAT_TOKEN",
   "OMB_CLOUD_VOICE_TOKEN",
   "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN",
   "OMB_CLOUD_X_TOKEN",
   "OMB_CLOUD_HOSTING_TOKEN",
-  "OMB_CLOUD_CONNECTED_APPS_GRANT",
   // Private even though they are not traditional API credentials.
   "OMB_BROWSER_CONNECTION",
   "OMB_USER_DATA",
-  "OMB_BOAT_API",
 ];
 
 // Kept in parity with server/redact.ts: unmistakable token formats are masked wherever they appear, keyed or not.

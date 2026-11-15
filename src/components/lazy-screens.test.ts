@@ -116,15 +116,15 @@ describe("lazyScreen", () => {
     const load = vi.fn<() => Loaded>()
       .mockRejectedValueOnce(new TypeError("Failed to fetch dynamically imported module"))
       .mockResolvedValue(Label);
-    const Screen = lazyScreen("TriggersPage", load);
-    render(createElement(Screen, { text: "Triggers" }));
+    const Screen = lazyScreen("TeamMapPage", load);
+    render(createElement(Screen, { text: "Team map" }));
     await settle();
     expect(document.querySelector('[role="alert"]')).not.toBeNull();
     render(createElement("p"));
     expect(document.querySelector('[role="alert"]')).toBeNull();
-    render(createElement(Screen, { text: "Triggers" }));
+    render(createElement(Screen, { text: "Team map" }));
     await settle();
-    expect(document.body.textContent).toBe("Triggers");
+    expect(document.body.textContent).toBe("Team map");
     expect(document.querySelector('[role="alert"]')).toBeNull();
     expect(load).toHaveBeenCalledTimes(2);
   });
@@ -263,7 +263,7 @@ describe("launch bundle", () => {
     const deferred = [
       "ActivityPanel", "BotSettingsDialog", "CloudAddDialog", "ComputerPanel", "InspectorPanel", "KeyboardShortcutsModal",
       "LocalVmWorkspace", "NewBotDialog", "PhoneAppDialog", "PhoneSetupFlow", "PluginsPanel", "published-apps/PublishedAppsPage", "RemoteAgentSettingsPanel", "remote-desktop-panel",
-      "SettingsModal", "ShareTeamDialog", "TeamLibraryPanel", "TeamMapPage", "TriggersPage", "room-panel/RoomPanel",
+      "SettingsModal", "ShareTeamDialog", "TeamLibraryPanel", "TeamMapPage", "room-panel/RoomPanel",
     ].map((name) => `components/${name}.tsx`);
     expect(deferred.filter((file) => reached.has(file))).toEqual([]);
     expect(reached.has("lib/team-import.ts"), "the team library brings the YAML parser in").toBe(false);

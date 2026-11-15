@@ -17,7 +17,7 @@ const statusChecks = () => api.mock.calls.filter(([path]) => String(path).includ
 async function render(connector: Partial<NonNullable<Message["connector"]>>) {
   const message: Message = {
     id: "m1", role: "bot", kind: "connector", at: 1,
-    connector: { slug: "whatsapp", label: "WhatsApp", description: "Send messages", status: "authorizing", resumeKey: "r1", alias: "business", ...connector },
+    connector: { source: "mcp", slug: "whatsapp", label: "WhatsApp", description: "Send messages", status: "authorizing", resumeKey: "r1", alias: "business", ...connector },
   };
   await act(async () => root.render(createElement(ConnectorCard, { botId: "atlas", threadId: "thread", message })));
 }

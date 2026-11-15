@@ -34,7 +34,7 @@ export interface FillLoginTurnDeps {
   remember: FillLoginDeps["remember"];
   stepContext(bot: BotRecord, turn: Turn): StepContext;
   /** Absent where no mailbox can be read for a sign-in. */
-  mailCodes?: Pick<LoginMailCodes, "find" | "offerConnect">;
+  mailCodes?: Pick<LoginMailCodes, "find">;
   /** False once the turn that asked has ended. */
   turnActive?(turn: Turn): boolean;
 }
@@ -63,12 +63,6 @@ export function createFillLoginTurn(deps: FillLoginTurnDeps) {
     }
     const chrome = deps.myChrome(current) ? ", which is the person's own Chrome (My Chrome), signed in as them" : "";
     return { ok: false, text: `${ONLY_IN_BROWSER}${notHere}. OpenMausBot is moving this conversation to your own browser${chrome}. End this turn now without using the screen tools: the request continues there with your browser tools. Open the site's sign-in page in that browser, then call fill_login.` };
-  }
-
-  async function connectMailbox(bot: BotRecord, turn: Turn, outcome: FillLoginOutcome): Promise<Answer> {
-    const offer = await deps.mailCodes!.offerConnect(bot, turn).catch(() => ({ shown: false } as { shown: boolean; line?: string }));
-    if (offer.shown) return { ok: outcome.ok, text: `${outcome.text} OpenMausBot showed the person a secure Connect card for Gmail. End this turn now: you continue automatically once it is connected, then call fill_login again.` };
-    return { ok: outcome.ok, text: `${outcome.text} ${offer.line ?? CODE_FROM_INBOX}` };
   }
 
   async function fillLoginForTurn(bot: BotRecord, capability: Turn, rawUsername: unknown, rawSubmit: unknown, rawEmail?: unknown): Promise<Answer> {
@@ -102,7 +96,7 @@ export function createFillLoginTurn(deps: FillLoginTurnDeps) {
         ...(deps.mailCodes ? { emailCode: (ask) => deps.mailCodes!.find(current, capability, ask, () => deps.turnActive?.(capability) !== false) } : {}),
       }), deps.stepContext(current, capability));
       if (outcome.ok && outcome.loginId) deps.logins.markUsed(outcome.loginId);
-      if (outcome.wantsMailbox && deps.mailCodes) return await connectMailbox(current, capability, outcome);
+      if (outcome.wantsMailbox && deps.mailCodes) return { ok: outcome.ok, text: `${outcome.text} ${CODE_FROM_INBOX}` };
       return { ok: outcome.ok, text: outcome.text };
     } catch (error) {
       if (error instanceof Error && error.message === BROWSER_CONTROL_REFUSAL) {

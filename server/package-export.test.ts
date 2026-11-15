@@ -24,7 +24,7 @@ describe("package export", () => {
           modelSelection: { instanceId: "private-engine", model: "secret-model", effort: "medium" },
           resumeCursors: { provider: "secret-session" },
           chiefOfStaff: true,
-          composio: true,
+          apps: true,
           connectorTools: { gmail: { tools: "*" } },
           cwd: "/private/path",
           approvalMode: "full",
@@ -213,18 +213,6 @@ describe("whole-team export (package v2)", () => {
     input.bots[1] = { ...input.bots[1]!, recordBrowserSteps: true };
     const agents = createTeamPackageExport(input).document.package.agents;
     expect(agents.map((agent) => agent.recordBrowserSteps)).toEqual([undefined, true]);
-  });
-
-  it("adds starter notes only when asked, within the caps", () => {
-    expect(createTeamPackageExport(fixture()).document.package.agents.some((agent) => agent.seed)).toBe(false);
-    const withNotes = createTeamPackageExport({ ...fixture(), memoryByBot: new Map([["lead", [
-      { path: "MEMORY.md", text: "- Prefers short answers.\n" },
-      { path: "memory/pricing.md", text: "List price 49.\n" },
-      { path: "memory/huge.md", text: "x".repeat(300 * 1024) },
-      { path: "memory/empty.md", text: "   " },
-    ]]]) });
-    expect(withNotes.document.package.agents[0]?.seed).toEqual({ memory: { "MEMORY.md": "- Prefers short answers.\n", "memory/pricing.md": "List price 49.\n" } });
-    expect(withNotes.skipped).toContainEqual({ part: 'agents[morgan].seed.memory["memory/huge.md"]', reason: "notes_too_large" });
   });
 
   it("removes secrets from text and says where", () => {

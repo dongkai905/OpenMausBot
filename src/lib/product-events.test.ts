@@ -34,14 +34,14 @@ beforeEach(() => {
 
 describe("why a key save failed", () => {
   it("calls it rejected only when the provider refused the key", () => {
-    expect(keySaveFailure(new ApiError("boat.dev rejected that key", 400, { error: "boat.dev rejected that key", code: "key_rejected" }))).toBe("rejected");
-    expect(keySaveFailure(new Error("Error invoking remote method 'credential:set': KeyRejected: That doesn't look like a Boat API key"))).toBe("rejected");
+    expect(keySaveFailure(new ApiError("the provider refused that key", 400, { error: "the provider refused that key", code: "key_rejected" }))).toBe("rejected");
+    expect(keySaveFailure(new Error("Error invoking remote method 'credential:set': KeyRejected: That doesn't look like a valid API key"))).toBe("rejected");
   });
 
   it("calls every other failure an error", () => {
     for (const cause of [
       new ApiError("bad request", 400, { error: "bad request" }),
-      new ApiError("hosted models", 403, { error: "This workspace uses hosted models" }),
+      new ApiError("forbidden here", 403, { error: "This workspace does not allow this key" }),
       new ApiError("finish deleting first", 409, { error: "busy" }),
       new ApiError("unavailable", 503, {}),
       new ApiError("decider", 400, { code: "decider_rejected" }),
@@ -65,7 +65,7 @@ describe("what a saved key's check said", () => {
   });
 
   it("is ok for keys the server checks before saving, and unverified for the rest", () => {
-    for (const provider of ["boat", "composio", "elevenlabs", "fish_audio"] as const) expect(savedKeyResult(provider)).toBe("ok");
+    for (const provider of ["elevenlabs", "fish_audio"] as const) expect(savedKeyResult(provider)).toBe("ok");
     for (const provider of ["openai_image", "custom_endpoint", "openai", "other"] as const) expect(savedKeyResult(provider)).toBe("unverified");
   });
 });
@@ -77,11 +77,11 @@ describe("what reaches PostHog", () => {
     const analytics = await import("./analytics");
     const events = await import("./product-events");
     await analytics.initAnalytics();
-    events.keySaved("boat", "computer_panel", "rejected");
+    events.keySaved("treg", "apps", "rejected");
     events.keyRemoved("anthropic", "settings");
     events.keySaved("sk-ant-api03-ZZtestSECRET0123456789" as never, "https://evil.example.com" as never, "ok");
     expect(ph.captured.filter(({ event }) => event.startsWith("api_key_"))).toEqual([
-      { event: "api_key_saved", props: { provider: "boat", via: "computer_panel", result: "rejected" } },
+      { event: "api_key_saved", props: { provider: "treg", via: "apps", result: "rejected" } },
       { event: "api_key_removed", props: { provider: "anthropic", via: "settings" } },
       { event: "api_key_saved", props: { provider: "other", via: "other", result: "ok" } },
     ]);

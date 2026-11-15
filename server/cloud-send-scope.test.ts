@@ -8,13 +8,13 @@ const bot = (id: string, extra: Partial<BotRecord> = {}) => ({ id, name: id, sou
 
 function sources(bots: BotRecord[]): CloudSendSources {
   return { appVersion: "1", bots: () => bots, greetingOnly: () => false, skills: () => [{ name: "notes", sha256: "a".repeat(64), enabled: true }], picture: () => null, logins: () => [], onePassword: () => null, settings: () => ({}),
-    move: { botParts: () => ({}), items: (carried) => [...carried].flatMap((id) => [{ key: `routine:r-${id}`, kind: "routine" as const, label: "r", id: `r-${id}`, bot: id, parts: {} }, { key: `call:c-${id}`, kind: "call" as const, label: "c", id: `c-${id}`, bot: id, parts: {} }]) } };
+    move: { botParts: () => ({}), items: (carried) => [...carried].flatMap((id) => [{ key: `library-skill:s-${id}`, kind: "library-skill" as const, label: "s", id: `s-${id}`, bot: id, parts: {} }]) } };
 }
 
 describe("a move of some bots", () => {
-  it("carries only the chosen bots, their skills and routines, what is the person's own, and no calendar call", () => {
+  it("carries only the chosen bots, their skills and the library skills they use, what is the person's own", () => {
     const summary = cloudSendSummary(sources([bot("a"), bot("b")]), { move: true, bots: new Set(["a"]) });
-    expect(summary.items.map((item) => item.key)).toEqual(["bot:a", "skill:a:notes", "setting:profile", "setting:language", "routine:r-a"]);
+    expect(summary.items.map((item) => item.key)).toEqual(["bot:a", "skill:a:notes", "setting:profile", "setting:language", "library-skill:s-a"]);
   });
 
   it("never carries again a bot that lives elsewhere now, from the server it left", () => {

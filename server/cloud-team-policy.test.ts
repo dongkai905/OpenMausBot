@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { remoteAccessPaths, startTeamPolicyClient, TEAM_POLICY_ADMIN_PATH, TEAM_POLICY_FILE, TEAM_POLICY_FRESH_MS, TEAM_POLICY_REFRESH_MS, teamManagedPolicy, teamPolicyDocumentSchema, teamPolicyFingerprint, teamPolicySignature, type TeamPolicyClient } from "./cloud-team-policy.ts";
-import { ManagedDesktopPolicy, type ManagedPolicy } from "./managed-policy.ts";
+import { ManagedPolicyEngine, type ManagedPolicy } from "./managed-policy.ts";
 import { excludedWorkspaceAuthPath } from "./workspace-backup-policy.ts";
 
 const TEAM = { id: "11111111-1111-4111-8111-111111111111", name: "Acme" };
@@ -53,8 +53,8 @@ describe("the document", () => {
   it("projects into the one strict shape every refusal reads, which never lapses and is never company-only", () => {
     const policy = teamManagedPolicy(teamPolicyDocumentSchema.parse(doc({ allowedEngines: ["codex"], allowedApps: ["gmail"], allowedMcpServers: ["orders"], allowedComputers: ["vps"], remoteAccess: "off", requireFreshPolicy: true })), TEAM, 4)!;
     expect(policy).toEqual({ organizationId: TEAM.id, organizationName: "Acme", expiresAt: null, version: 4, companyModelsOnly: false, allowedEngines: ["codex"],
-      mcp: { allowCustom: false, allowlist: ["orders"] }, apps: { allowAll: false, allowlist: ["gmail"] }, computers: { thisComputer: false, localVm: false, box: false, vps: true }, remoteAccess: false, team: { requireFresh: true, ownMcpOnly: false } });
-    const managed = new ManagedDesktopPolicy();
+      mcp: { allowCustom: false, allowlist: ["orders"] }, apps: { allowAll: false, allowlist: ["gmail"] }, computers: { thisComputer: false, localVm: false, vps: true }, remoteAccess: false, team: { requireFresh: true, ownMcpOnly: false } });
+    const managed = new ManagedPolicyEngine();
     managed.apply(policy);
     expect(managed.current()).not.toBeNull();
     managed.close();
@@ -208,7 +208,7 @@ describe("the fetch", () => {
 
 describe("the managed policy with a team's rules", () => {
   const managedWith = (limits: Record<string, unknown>) => {
-    const managed = new ManagedDesktopPolicy();
+    const managed = new ManagedPolicyEngine();
     managed.apply(teamManagedPolicy(teamPolicyDocumentSchema.parse(doc(limits)), TEAM, 1));
     return managed;
   };
@@ -226,7 +226,6 @@ describe("the managed policy with a team's rules", () => {
     const managed = managedWith({ allowedEngines: ["codex"], allowedApps: ["gmail"], allowedMcpServers: ["orders"], allowedComputers: ["vps"], remoteAccess: "off" });
     expect(managed.modelRefusal({ driverKind: "claudeAgent", displayName: "Claude" }, false)).toBe("Acme does not allow the Claude engine. Choose another model for this bot, or ask a team admin.");
     expect(managed.mcpRefusal("other")).toBe("Acme allows only MCP servers it has approved. Ask a team admin to add this one.");
-    expect(managed.computerRefusal("box")).toBe("Acme does not allow bots to use cloud computers. Ask a team admin.");
     expect(managed.remoteAccessRefusal()).toBe("Acme does not allow opening this Cloud on a phone or with a link. Ask a team admin.");
     expect(managed.appRefusal("google_sheets")).toBe("Acme does not allow bots to use Google Sheets. Ask a team admin.");
     for (const line of [managed.modelRefusal({ driverKind: "claudeAgent", displayName: "Claude" }, false)!, managed.computerRefusal("thisComputer")!, managed.remoteAccessRefusal()!]) {
@@ -235,18 +234,12 @@ describe("the managed policy with a team's rules", () => {
     }
     managed.close();
   });
-  it("apps: a tool runs only for an allowed app, a batch is refused whole, code that could reach any app is refused, and a longer slug isn't captured", () => {
+  it("apps: a longer slug isn't captured, and connecting to a refused app is refused", () => {
     const managed = managedWith({ allowedApps: ["gmail", "bland"] });
-    expect(managed.appsCallRefusal([{ slug: "GMAIL_SEND_EMAIL" }])).toBeUndefined();
-    expect(managed.appsCallRefusal([{ slug: "GMAIL_SEND_EMAIL" }, { slug: "SLACK_POST" }])).toMatch(/does not allow bots to use Slack/);
-    expect(managed.appsCallRefusal([{ slug: "COMPOSIO_PROXY_EXECUTE" }])).toMatch(/can't run code/);
-    expect(managed.appsCallRefusal([{ slug: "BLAND_AI_CALL" }], ["bland_ai"])).toMatch(/Bland Ai/);
-    expect(managed.appsCallRefusal([{ slug: "BLAND_CALL" }], ["bland_ai"])).toBeUndefined();
     expect(managed.appsConnectRefusal(["gmail", "notion"])).toMatch(/Notion/);
     expect(managed.appAllowed("email")).toBe(false);
     managed.close();
     const open = managedWith({ allowedEngines: ["codex"] });
-    expect(open.appsCallRefusal([{ slug: "SLACK_POST" }, { slug: "COMPOSIO_PROXY_EXECUTE" }])).toBeUndefined();
     expect(open.appAllowed("slack")).toBe(true);
     open.close();
   });

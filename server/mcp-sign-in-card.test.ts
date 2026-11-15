@@ -79,19 +79,16 @@ async function setup(options: { team?: boolean; origins?: string[]; lifetimeMs?:
   const mcpOAuth = new McpOAuthManager({ file: join(dataDir, "mcp-oauth.json"), isOwnerLive, onSettled, ...(options.lifetimeMs ? { lifetimeMs: options.lifetimeMs } : {}) });
   const team = createTeamConnectionsHost({
     team: options.team ? { id: "team-acme-1", name: "Acme" } : null,
-    dataDir, cfg: () => cfg, adminOrigin: null, harnessUrl: "http://127.0.0.1:1",
+    dataDir, cfg: () => cfg, adminOrigin: null,
     audienceOf: (threadId) => (AUDIENCES[threadId] ?? "team") as never,
     requester: (threadId) => REQUESTER[threadId] ?? null,
     roster: () => ROSTER,
-    mint: () => "capability",
     mcpOAuth,
     botMcp: () => Object.fromEntries(Object.entries(cfg.mcpServers ?? {}).map(([name, raw]) => {
       const server = raw as { url: string; headers: Record<string, string> };
       return [name, { type: "http", url: server.url, headers: server.headers } as McpServerSpec];
     })),
     isOwnerLive, onSettled,
-    brokerUrl: () => null,
-    composio: { configured: () => false } as never,
   });
   const cards = createMcpSignInCards({
     store, cfg: () => cfg, mcpOAuth, followCard: () => {},
@@ -399,7 +396,7 @@ describe("the Sign in card", () => {
     expect(await f.authorize(shared, session("ada@acme.test"))).toEqual({ status: 409, body: { error: "Only an admin of this installation can sign in to Linear." } });
     expect(f.provider.counts.register).toBe(0);
 
-    f.team.scopes.set("mcp", "linear", "person");
+    f.team.scopes.set("linear", "person");
     const own = await f.signIn("ada-chat");
     expect(own.status).toBe(202);
     expect(await f.authorize(own.card, session("cleo@acme.test"), ON_THE_MAC, "ada-chat")).toEqual({ status: 409, body: { error: "Only ada@acme.test can sign in to this." } });

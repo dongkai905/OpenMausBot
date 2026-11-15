@@ -42,17 +42,16 @@ export interface OverviewFacts {
     | "cwd"
     | "autoApprove"
     | "approvalMode"
-    | "composio"
+    | "apps"
     | "connectorTools"
     | "browser"
     | "chiefOfStaff"
     | "managedSections"
   >;
   skills: Array<{ name: string; description: string; enabled: boolean }>;
-  engine: { agentsMcp?: boolean; composioMcp?: boolean; browserMcp?: boolean; computerMcp?: boolean } | null;
+  engine: { agentsMcp?: boolean; browserMcp?: boolean; computerMcp?: boolean } | null;
   browserEnabled?: boolean;
   cloudHome?: boolean;
-  connectedApps: { configured: boolean; authoritative: boolean; services: string[] };
   sectionPeers: number;
   timeZone: string;
   recent: Array<{ at: number; summary: string }>;
@@ -76,29 +75,6 @@ function doesLines(facts: OverviewFacts): string[] {
     lines.push(`Knows how to ${lowerFirst(skill.description || skill.name)}.`);
   }
   return lines;
-}
-
-export async function connectedAppsFacts(
-  configured: boolean,
-  availability: "configured" | "unconfigured" | "unreadable",
-  read: () => Promise<Record<string, { connected: boolean }>>,
-): Promise<OverviewFacts["connectedApps"]> {
-  let authoritative = availability !== "unreadable";
-  let services: string[] = [];
-  if (configured && authoritative) {
-    try {
-      services = Object.entries(await read())
-        .filter(([, state]) => state.connected)
-        .map(([slug]) => slug);
-    } catch {
-      authoritative = false;
-    }
-  }
-  return { configured, authoritative, services };
-}
-
-function couldUseApps(facts: OverviewFacts): boolean {
-  return facts.bot.composio !== false && facts.connectedApps.configured && Boolean(facts.engine?.composioMcp);
 }
 
 export function grantsSummary(connectorTools: BotRecord["connectorTools"]): BotOverviewGrant[] | undefined {
@@ -135,13 +111,6 @@ function reachesLines(facts: OverviewFacts): string[] {
   const computer = computerReach(facts.bot.computer, facts.cloudHome);
   if (computer) lines.push(computer);
   lines.push(facts.bot.cwd ? `Works in ${facts.bot.cwd}.` : "Works in its private workspace.");
-  const apps = facts.connectedApps;
-  if (couldUseApps(facts) && apps.authoritative && apps.services.length > 0) {
-    const count = apps.services.length;
-    lines.push(`Can use ${count} connected app${count === 1 ? "" : "s"}: ${apps.services.join(", ")}.`);
-  } else if (couldUseApps(facts) && !apps.authoritative) {
-    lines.push("Connected apps could not be checked.");
-  }
   if (facts.browserEnabled && facts.engine?.browserMcp && facts.bot.browser !== false && facts.bot.computer !== "off") lines.push("Has the built-in browser.");
   const peers = facts.sectionPeers;
   if (facts.engine?.agentsMcp && peers > 0) lines.push(peers === 1 ? "Can talk to the other bot." : `Can talk to all ${peers} other bots, in any department.`);
@@ -157,9 +126,6 @@ function wontLines(facts: OverviewFacts): string[] {
   const mode = approvalModeFor(facts.bot);
   if (mode === "ask") lines.push("Command approvals use Ask mode; saved permissions and provider rules still apply.");
   if (mode === "custom") lines.push("Command approvals follow the provider's custom configuration.");
-  if (!couldUseApps(facts) || (facts.connectedApps.authoritative && facts.connectedApps.services.length === 0)) {
-    lines.push("Has no connected apps.");
-  }
   if (facts.bot.computer === "off") lines.push("Can't use a computer.");
   if (mode !== "full") lines.push("Profile proposal cards require your approval.");
   return lines;
@@ -188,19 +154,10 @@ const DEFAULT_BOT_NAMES = /^(new bot|bot|untitled)(\s*\d+)?$/i;
 export function setupSteps(facts: OverviewFacts): SetupStep[] {
   const named = facts.bot.name.trim() !== "" && !DEFAULT_BOT_NAMES.test(facts.bot.name.trim());
   const described = facts.bot.title.trim() !== "" || facts.bot.description.trim() !== "";
-  const apps = facts.connectedApps;
   const steps: SetupStep[] = [
     { id: "identity", label: "Give it a name and a role", done: named && described, section: "identity" },
     { id: "soul", label: "Write its standing instructions", done: (facts.bot.soul ?? "").trim() !== "", section: "soul" },
     { id: "folder", label: "Choose a working folder", done: Boolean(facts.bot.cwd), section: "access" },
   ];
-  if (couldUseApps(facts)) {
-    steps.push({
-      id: "apps",
-      label: "Connect the apps it needs",
-      done: apps.authoritative && apps.services.length > 0,
-      section: "access",
-    });
-  }
   return steps;
 }

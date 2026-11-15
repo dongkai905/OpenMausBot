@@ -29,10 +29,10 @@ describe("a server card in the person's language", () => {
     store.setChiefOfStaff(chief.id);
     const idea = "<b>Save</b> the Friday checklist as a skill";
     const brief = createBrief({
-      store, dataDir: mkdtempSync(join(DATA_DIR, "brief-i18n-")), now: () => at, hosted: false, watching: () => true, mainThread: () => chief.threadId,
-      threadBusy: () => false, notify: () => {}, runs: () => [], needsYou: () => [], engineName: () => "Claude",
+      store, dataDir: mkdtempSync(join(DATA_DIR, "brief-i18n-")), now: () => at, hosted: false, mainThread: () => chief.threadId,
+      threadBusy: () => false, notify: () => {}, needsYou: () => [], engineName: () => "Claude",
       hostTimeZone: () => "UTC", language: () => "en", session: () => null, address: () => undefined,
-      failRun: () => {}, keep: () => {}, items: () => null, ideas: () => ({ ideas: [idea], conversations: count }),
+      ideas: () => ({ ideas: [idea], conversations: count }),
     });
     await brief.active("desktop", "UTC", "en");
     const written = store.messagesFor(chief.threadId).findLast((message) => message.serverCard)!;

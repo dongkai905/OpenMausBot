@@ -325,7 +325,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
         : undefined;
       // No connected apps (absence would mean allowed) and no approval level: an imported bot starts at the defaults.
       store.patchBot(created.id, {
-        composio: false,
+        apps: false,
         connectorTools: {},
         // The publisher's choice, with no card: recording only keeps evidence in this workspace.
         ...(agent?.recordBrowserSteps === true ? { recordBrowserSteps: true } : {}),

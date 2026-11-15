@@ -73,7 +73,7 @@ describe("what a conversation shows about a teammate's work", () => {
       messagesFor: () => lines,
       patchMessage: (_threadId: string, id: string, patch: Partial<Message>) => { const line = lines.find((one) => one.id === id)!; Object.assign(line, patch); return line; },
     };
-    const goals = createGoalCards({ store: store as never, routines: () => null, notify: () => {}, routineSourceOwner: () => null, routineSourceThread: () => null });
+    const goals = createGoalCards({ store: store as never, notify: () => {} });
     const run = goals.start("room", biber, "Ship the release", "run-1");
     expect(lines[0]!.text).toBe("Ziel in Arbeit: Biber koordiniert dieses Ziel.");
     expect(lines[0]!.goalRun?.detail).toBe("Biber koordiniert dieses Ziel.");

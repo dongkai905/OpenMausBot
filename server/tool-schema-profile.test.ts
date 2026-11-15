@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { TOOL_LIST as BROWSER_TOOLS } from "./browser/tools.ts";
-import { CLOUD_COMPUTER_TOOLS } from "./cloud-computer-tools.ts";
 import { DATA_TOOLS } from "./data/tools.ts";
 import bridgedAgents from "./drivers/agents-catalog-goldens/bridged.tools-list.json" with { type: "json" };
 import fullAgents from "./drivers/agents-catalog-goldens/full.tools-list.json" with { type: "json" };
@@ -162,7 +161,7 @@ describe("the schema profile a tool list is fitted to", () => {
 describe("OpenMausBot's own tools", () => {
   const catalogs: Array<[string, ReadonlyArray<{ name: string; inputSchema: unknown }>]> = [
     ["agents (full)", fullAgents.tools], ["agents (bridged)", bridgedAgents.tools], ["browser", BROWSER_TOOLS],
-    ["data", DATA_TOOLS], ["cloud computer", CLOUD_COMPUTER_TOOLS],
+    ["data", DATA_TOOLS],
   ];
 
   it.each(catalogs)("fit every profile as written: %s", (_name, tools) => {

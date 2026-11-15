@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CalendarEvent, EmailHeader } from "../connected-reads.ts";
+import type { CalendarEvent, EmailHeader } from "../mail-facts.ts";
 import {
   answered, clashes, EMAIL_MAX_AGE_MS, emailSince, FIRST_MAIL_LOOK_BACK_MS, fingerprint, mergeMeetings, nextMeetingDue, planMail, planMeetings, PREP_LEAD_MS, REMINDER_LEAD_MS, TRIAGE_BATCH,
 } from "./check-plan.ts";

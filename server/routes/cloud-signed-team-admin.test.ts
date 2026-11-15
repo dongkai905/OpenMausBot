@@ -13,7 +13,6 @@ import { createCloudSignedRoutes } from "./cloud-signed.ts";
 const secret = "S".repeat(43);
 const team = { id: "team-7f3a", name: "Acme" };
 const summary: TeamAdminSummary = teamAdminSummary({
-  apps: { gmail: { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: "ca_1", alias: "team@acme.test", status: "ACTIVE" }] }, slack: { connected: false, pending: false, status: "not_connected", accounts: [] } },
   mcp: [{ name: "linear", type: "http", url: "https://mcp.linear.app/sse?token=never-shown", headerKeys: ["Authorization"], enabled: true, auth: "signed-in" },
     { name: "files", command: "npx", envKeys: ["FILES_TOKEN"], enabled: false }],
   status: { treg: { configured: true }, anthropic: { configured: true, everyClaudeBot: true }, openai: { configured: false }, openrouter: { configured: false } },
@@ -52,7 +51,6 @@ describe("the Team admin's signed read and changes", () => {
   it("the summary says names, states and identities only: never a key, header, environment value or any part of an MCP address but its host", () => {
     expect(summary).toEqual({
       v: 1,
-      apps: { available: true, services: [{ slug: "gmail", status: "ACTIVE", accounts: [{ id: "ca_1", alias: "team@acme.test", status: "ACTIVE" }] }] },
       mcp: [{ name: "linear", transport: "http", host: "mcp.linear.app", enabled: true, signedIn: true, secrets: ["Authorization"] },
         { name: "files", transport: "stdio", host: null, enabled: false, signedIn: null, secrets: ["FILES_TOKEN"] }],
       keys: [{ id: "treg", configured: true }, { id: "voice", configured: false, included: true }],
@@ -60,7 +58,7 @@ describe("the Team admin's signed read and changes", () => {
         engines: [{ id: "claude", name: "Claude", authenticated: true, account: { email: "mira@gmail.com", organization: null, method: "login" } }, { id: "codex", name: "Codex", authenticated: false, account: null }] },
     });
     expect(JSON.stringify(summary)).not.toMatch(/never-shown|token=|sse\?/);
-    expect(teamAdminSummary({ apps: null, mcp: [], status: {}, voice: { key: true, included: false }, engines: [] })).toMatchObject({ apps: { available: false, services: [] }, keys: [{ id: "treg", configured: false }, { id: "voice", configured: true }] });
+    expect(teamAdminSummary({ mcp: [], status: {}, voice: { key: true, included: false }, engines: [] })).toMatchObject({ keys: [{ id: "treg", configured: false }, { id: "voice", configured: true }] });
   });
 
   it("answers the Admin's signed read on a Team Cloud, and refuses a wrong key, a replay and an unsigned read", async () => {

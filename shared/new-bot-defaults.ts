@@ -6,7 +6,7 @@ export type BotDefaultsProfile = Partial<Pick<WireBot,
   "name" | "title" | "description" | "soul" | "notifications" | "avatarUrl" | "avatarCrop" |
   "mascotBody" | "mascotFaceColor" | "color" | "voice" | "speakReplies" | "section" | "modelSelection" |
   "cloudBackend" | "autoStartVps" | "approvalMode" | "alwaysAllow" | "chiefOfStaff" |
-  "managedSections" | "composio" | "browser" | "voiceNotes"
+  "managedSections" | "apps" | "browser" | "voiceNotes"
 >> & {
   mascotExpression?: string | null;
   computer?: WireBot["computer"] | null;

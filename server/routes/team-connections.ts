@@ -1,9 +1,7 @@
 import { userError } from "../user-errors.ts";
 // A Team Cloud's connections, the team's or each person's.
-//   PUT /api/team/connection-scopes { kind: "app" | "mcp", id, scope: "team" | "person" }   an admin: who connects it
-//   GET /api/team/my-connections                                                           the person's own, and what is theirs to connect
-//   POST /api/team/my-connections/apps/:slug/connect            → { url }   their own sign-in to the app (a new tab)
-//   DELETE /api/team/my-connections/apps/:slug
+//   PUT /api/team/connection-scopes { kind: "mcp", id, scope: "team" | "person" }   an admin: who connects it
+//   GET /api/team/my-connections                                                           the person's own
 //   POST /api/team/my-connections/mcp/:name/sign-in             → { auth }  their own sign-in to the server (a new tab)
 //   PUT /api/team/my-connections/mcp/:name/key { value, url? }              their own key, never read back
 //   DELETE /api/team/my-connections/mcp/:name
@@ -16,10 +14,9 @@ import { McpOAuthError, McpSignInError, mcpCallbackOrigin } from "../mcp-oauth.t
 import { isRemoteMcpServer, mcpServerNotFound, parseStoredMcpServer } from "../mcp-registry.ts";
 import { personKey } from "../person-key.ts";
 import { provesSameOrigin, requestOrigin, type RequestAuth } from "../request-auth.ts";
-import { APP_SLUG, appLabel, MCP_NAME, personKeyHeader } from "../team-connections.ts";
+import { MCP_NAME, personKeyHeader } from "../team-connections.ts";
 import { sessionMember } from "./team-phone.ts";
 import { PASS, type RouteHandler } from "./table.ts";
-import type * as Composio from "../composio.ts";
 
 export const CONNECTION_SCOPES_PATH = "/api/team/connection-scopes";
 export const MY_CONNECTIONS_PATH = "/api/team/my-connections";
@@ -27,11 +24,10 @@ export const MY_CONNECTIONS_PATH = "/api/team/my-connections";
 export interface TeamConnectionRouteDeps {
   host: TeamConnectionsHost;
   cfg: () => AppConfig;
-  composio: Pick<typeof Composio, "configured" | "connectedServices" | "authorizeService" | "removeService">;
   /** This server's own https address, where a member's MCP sign-in comes back. */
   publicOrigin: string | null;
-  /** The team's rules: an app or server they don't allow can't be connected by anyone. */
-  policy?: { appRefusal(slug: string): string | undefined; mcpRefusal(name: string, url?: string): string | undefined };
+  /** The team's rules: a server they don't allow can't be connected by anyone. */
+  policy?: { mcpRefusal(name: string, url?: string): string | undefined };
   /** An admin's change, for the team's admin activity. */
   record?(auth: RequestAuth, row: Omit<AdminActionRow, "at" | "actor">): void;
 }
@@ -53,46 +49,33 @@ export function createTeamConnectionRoutes(deps: TeamConnectionRouteDeps): Route
       if (method !== "PUT") return json(res, 405, { error: "method not allowed" });
       const body = await readBody(req);
       const kind = body?.kind, id = typeof body?.id === "string" ? body.id.trim().toLowerCase() : "", scope = body?.scope;
-      if ((kind !== "app" && kind !== "mcp") || (scope !== "team" && scope !== "person") || !(kind === "app" ? APP_SLUG : MCP_NAME).test(id)) {
-        return json(res, 400, { error: "Name an app or an MCP server, and who connects it: the team or each person." });
+      if (kind !== "mcp" || (scope !== "team" && scope !== "person") || !MCP_NAME.test(id)) {
+        return json(res, 400, { error: "Name an MCP server, and who connects it: the team or each person." });
       }
-      if (kind === "mcp") {
-        const found = server(id);
-        if (!found) return json(res, 404, { error: mcpServerNotFound(id) });
-        if (scope === "person" && !isRemoteMcpServer(found)) return json(res, 409, { error: "Only a server reached by its address can be connected by each person." });
-      }
-      const before = deps.host.scopes.scope(kind, id);
+      const found = server(id);
+      if (!found) return json(res, 404, { error: mcpServerNotFound(id) });
+      if (scope === "person" && !isRemoteMcpServer(found)) return json(res, 409, { error: "Only a server reached by its address can be connected by each person." });
+      const before = deps.host.scopes.scope(id);
       if (before !== scope) {
-        deps.host.scopes.set(kind, id, scope);
-        deps.record?.(auth, { category: kind === "mcp" ? "mcp" : "config", action: `${kind}.update`, target: { kind, id },
+        deps.host.scopes.set(id, scope);
+        deps.record?.(auth, { category: "mcp", action: "mcp.update", target: { kind, id },
           changed: [scope === "person" ? "each person connects their own" : "connected for the whole team"] });
       }
-      return json(res, 200, { scopes: { apps: deps.host.scopes.person("app"), mcp: deps.host.scopes.person("mcp") } });
+      return json(res, 200, { scopes: { apps: [] as string[], mcp: deps.host.scopes.person() } });
     }
 
     // Everything below is the person's own: a session the Admin opened for a member, never the loopback or a device.
     const member = auth.kind === "session" ? sessionMember(auth.session) : null;
-    if (!member || auth.kind !== "session") return json(res, 403, { error: `Sign in to ${team.name} to connect your own apps.` });
+    if (!member || auth.kind !== "session") return json(res, 403, { error: `Sign in to ${team.name} to connect your own servers.` });
     const person = personKey({ id: "", email: member.member.email });
     const email = member.member.email;
 
     if (path === MY_CONNECTIONS_PATH) {
       if (method !== "GET") return json(res, 405, { error: "method not allowed" });
-      const apps = deps.host.personApps();
-      const access = deps.host.people.appsAccess(person);
-      const states = access && apps.length ? await deps.composio.connectedServices(...deps.host.via(access)).catch(() => null) : null;
-      const again = apps.length > 0 && deps.host.people.appsElsewhere(person);
       return json(res, 200, {
         team: { id: team.id, name: team.name },
         link: deps.host.link(),
         email,
-        ...(deps.host.ownAppsNeedKey() ? { ownApps: "needs-key" as const } : {}),
-        apps: apps.map((slug) => {
-          const state = states?.[slug];
-          return { slug, name: appLabel(slug), connected: state?.connected === true,
-            ...(again && state?.connected !== true ? { reconnect: true as const } : {}),
-            accounts: (state?.accounts ?? []).map((account) => ({ id: account.id, alias: account.alias?.trim() || null, status: account.status })) };
-        }),
         mcp: deps.host.personMcp().flatMap((name) => {
           const stored = server(name);
           if (!stored || !isRemoteMcpServer(stored)) return [];
@@ -102,36 +85,6 @@ export function createTeamConnectionRoutes(deps: TeamConnectionRouteDeps): Route
             offers: stored.oauth || !Object.keys(stored.headers).length ? "sign-in" : "key" }];
         }),
       });
-    }
-
-    const app = /^\/api\/team\/my-connections\/apps\/([^/]+)(\/connect)?$/.exec(path);
-    if (app) {
-      const slug = decodeURIComponent(app[1]!).toLowerCase();
-      if (!APP_SLUG.test(slug) || !deps.host.personApps().includes(slug)) {
-        return json(res, 409, { error: `${appLabel(slug)} is ${team.name}'s, connected once for everyone by an admin.` });
-      }
-      if (app[2] && method === "POST") {
-        const refused = deps.policy?.appRefusal(slug);
-        if (refused) return json(res, 403, { error: refused, code: "managed_policy" });
-        if (deps.host.ownAppsNeedKey()) return json(res, 409, { ...userError("serverError.team.ownAppsNeedKey", { team: team.name }), code: "own_apps_need_key" });
-        try {
-          const access = await deps.host.people.ensureAppsAccess(person, email);
-          if (!access) return json(res, 503, { error: "Connected apps aren't available on this Cloud right now. Try again in a minute." });
-          const [asThem, installation] = deps.host.via(access);
-          const started = await deps.composio.authorizeService(asThem, slug, null, installation);
-          deps.host.people.appConnecting(person, slug);
-          return json(res, 200, started);
-        } catch (error) {
-          const status = (error as { status?: number }).status;
-          return json(res, typeof status === "number" && status >= 400 && status < 500 ? status : 502, { error: error instanceof Error ? error.message : "The app's sign-in couldn't start." });
-        }
-      }
-      if (!app[2] && method === "DELETE") {
-        const access = deps.host.people.appsAccess(person);
-        if (access) { const [asThem, installation] = deps.host.via(access); await deps.composio.removeService(asThem, slug, installation); }
-        return json(res, 200, { ok: true });
-      }
-      return json(res, 405, { error: "method not allowed" });
     }
 
     const mcp = /^\/api\/team\/my-connections\/mcp\/([a-z][a-z0-9_-]{0,31})(\/sign-in|\/key)?$/.exec(path);

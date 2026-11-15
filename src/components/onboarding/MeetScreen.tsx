@@ -118,7 +118,7 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
         )}
         {signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}
       </div>
-      {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
+      {dialog && <ConnectAiDialog tested={tested} onClose={() => setDialog(false)} />}
     </div>
   );
 }

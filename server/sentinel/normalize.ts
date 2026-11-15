@@ -15,7 +15,7 @@ export function normalizeSignatureText(text: string): string {
     .replace(/\b[A-Za-z]:\\[^\s:]+/g, "<path>")
     .replace(/(?:~|\.{1,2})?(?:\/[^\s/:'",)]+)+\/?/g, "<path>")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>")
-    // hex ids and prefixed ids (tu-123-4, bx_9f2c…): letters and digits mixed
+    // hex ids and prefixed ids (tu-123-4, ov-9f2c…): letters and digits mixed
     .replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}\b/gi, "<id>")
     .replace(/\b[a-z]{1,6}[_-](?=[\w-]*\d)[\w-]{4,}\b/gi, "<id>")
     .replace(/\b\d+(?:[.,:]\d+)*\b/g, "<n>")
@@ -64,7 +64,7 @@ export function signatureOf(kind: string, ...parts: Array<string | undefined>): 
 
 // Reserved: people cannot name their own MCP servers after these.
 const HARNESS_SERVERS = new Set([
-  "ogb", "computer", "agents", "composio", "data", "browser", "phone", "dweb",
+  "ogb", "computer", "agents", "data", "browser", "phone", "dweb",
   "openmausbot", "openmausbot_connectors", "openmausbot_phone",
 ]);
 const SHELL_TOOLS = new Set(["bash", "shell", "exec", "exec_command", "local_shell", "run_command", "terminal"]);

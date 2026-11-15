@@ -45,10 +45,10 @@ describe("Share as preset", () => {
   it("counts preset bots in a team file", () => {
     const document = parsePackageDocument(fixture("full-team.v2.json"));
     const preview: ShareResponse = { document, filename: "f", summary: packageSummary(document), choices: { skills: [] }, redacted: [], skipped: [] };
-    expect(text(renderToStaticMarkup(createElement(ShareTeamContents, { preview, includeMemory: true, localSkips: [] })))).toContain("Preset bots 1 · Support agent");
+    expect(text(renderToStaticMarkup(createElement(ShareTeamContents, { preview, localSkips: [] })))).toContain("Preset bots 1 · Support agent");
     const withoutPresets = parsePackageDocument({ ...fixture("full-team.v2.json"), package: { ...fixture("full-team.v2.json").package, presets: undefined } });
     const plain: ShareResponse = { ...preview, document: withoutPresets, summary: packageSummary(withoutPresets) };
-    expect(text(renderToStaticMarkup(createElement(ShareTeamContents, { preview: plain, includeMemory: true, localSkips: [] })))).not.toContain("Preset bots");
+    expect(text(renderToStaticMarkup(createElement(ShareTeamContents, { preview: plain, localSkips: [] })))).not.toContain("Preset bots");
   });
 
   it("previews a preset file's import as preset bots for New bot, with no team members", () => {

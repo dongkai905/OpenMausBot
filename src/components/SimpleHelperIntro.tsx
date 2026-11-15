@@ -11,11 +11,10 @@ import { greetingName } from "../../shared/greeting-name";
 import { followupText, type HelperFollowupFacts } from "../../shared/helper-followup";
 import { BotAvatar } from "./Avatar";
 import { joinedCorners, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX } from "./chat-bubble";
-import { loadAppCards } from "./bot-settings/useBotApps";
 import { engineReady } from "./EngineLibrary";
 import { IntroChips } from "./HelperSetup";
 import { usePrefersReducedMotion } from "./mascot-clock";
-import { preloadConnectedApps } from "@/lib/connected-apps";
+import { type EmailStatus } from "../../shared/email";
 
 /** How long after the part before each part arrives, when a first run has just landed here: the three lines, the typing
  * row, the follow-up and its chips. With no AI there is no typing row, and the follow-up comes `noAi` after the last line. */
@@ -64,9 +63,8 @@ function useLookAround(deep: boolean): Look {
   const [found, setFound] = useState<Look>({ apps: null, settled: false });
   useEffect(() => {
     let active = true;
-    const apps = Promise.all([preloadConnectedApps(), loadAppCards()])
-      .then(([inventory, cards]) => Object.entries(inventory.services).filter(([, status]) => status.connected)
-        .map(([slug]) => cards.get(slug)?.label ?? slug))
+    const apps = api<EmailStatus>("/api/email")
+      .then((status) => status.state === "connected" ? [t("email.title")] : [])
       .catch(() => null);
     const phones = api<{ phones?: unknown[] }>("/api/phones").then((response) => (response.phones?.length ?? 0) > 0).catch(() => undefined);
     const look = deep && localSetupImport(false) ? detectSetupWithin(setupImportApi) : null;

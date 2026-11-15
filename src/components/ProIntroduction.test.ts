@@ -15,7 +15,7 @@ vi.mock("@/state/store", () => ({ useStore: () => ({ dispatch: f.dispatch }),
 import { ProSettingsCard, proOfferAvailable } from "./ProIntroduction";
 
 const PLANS = [{ tier: "starter", label: "Starter", amount: 1500, trialDays: 7 }, { tier: "pro", label: "Pro", amount: 4900, trialDays: 7 }];
-const TRIAL: CloudOffer = { plans: PLANS, recommended: "pro", creditUsd: 5, refundDays: 14 };
+const TRIAL: CloudOffer = { plans: PLANS, recommended: "pro", refundDays: 14 };
 const signedOut = { status: "signed-out" } as const;
 const plan = (extra: Partial<CloudAccountState> = {}): CloudAccountState => ({ status: "connected", account: { id: "a", email: "person@example.test" },
   entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 1 }, ...extra });

@@ -7,7 +7,6 @@ import { appMountFor, gateServer, mcpStdioServer, type AppMount } from "../mcp-g
 import { AGENTS_ENV_HEADER, OWN_MCP_HTTP_PATH } from "../routes/own-mcp-http-path.ts";
 import { TOOL_SCHEMA_PROFILE_ENV, toolSchemaProfileFor, type ToolSchemaProfileId } from "../tool-schema-profile.ts";
 import { AGENTS_MCP_ENV } from "./agents-mcp-env.ts";
-import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { shareToolBudget, TOOL_LIMIT_ENV, TOOL_LIMIT_HEADER } from "../tool-count-limit.ts";
 import { agentsToolList } from "./agents-mcp.ts";
 
@@ -29,13 +28,11 @@ export function turnStdioMcpServers(turn: SendTurnInput, options: { schemaProfil
     if (server) servers.push({ name, command: server.command, args: server.args, env: server.env ?? {} });
   };
   add("agents", turn.integrations?.agents);
-  add("composio", turn.integrations?.composio);
-  add(OWN_APPS_SERVER, turn.integrations?.composioOwn);
   add("browser", turn.integrations?.browser);
   add("data", turn.integrations?.data);
   add("email", turn.integrations?.email);
   add("device", turn.integrations?.device);
-  // Cua connections expose Cua Driver's own MCP server; a cloud turn runs on its boat, so none is mounted.
+  // Cua connections expose Cua Driver's own MCP server; a cloud turn runs on its own machine, so none is mounted.
   add("computer", turn.integrations?.localComputer);
   // User servers after the built-ins: a residual name collision keeps the built-in.
   for (const [name, server] of Object.entries(turn.integrations?.custom ?? {})) {

@@ -56,7 +56,6 @@ Use only mapped, tested commands:
 - [MausBot, everyone's helper](mausbot.md)
 - [Profile proposal and credential-card lifecycle](proposal-cards.md)
 - [Full Access without duplicate approvals](full-access.md)
-- [Gmail draft creation, send approval and revision](gmail-drafts.md)
 - [Exact command allowlist UI and saved rules](command-allowlist.md)
 - [The safety floor: a never-list no grant can allow](safety-floor.md)
 - [Waiting for an occupied desktop](computer-wait.md)
@@ -158,10 +157,6 @@ The [X card fixture](x-connector.md) checks the Apps page's X card: a plan's
 included calls with the month's use, the person's own treg key (saved, tested,
 removed, used first) and a used-up month, against loopback stand-ins for treg
 and the relay.
-
-The [Connected Apps OAuth fixture](connected-apps-oauth.md) checks blocked-popup
-recovery, safe authorization links and abandoned-account retries through real
-renderer components and isolated HTTP routes.
 
 The [desktop server connection smoke](desktop-server-connection.md) mounts the
 real Settings connection component in disposable Electron windows.

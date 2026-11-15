@@ -228,7 +228,7 @@ describe("SecretRequestCard mailbox", () => {
 });
 
 describe("SecretRequestCard key analytics", () => {
-  const KEY = "boat_ZZtestSECRET0123456789abcdef";
+  const KEY = "sk_ZZtestSECRET0123456789abcdef";
   type Props = { children?: ReactNode; type?: string; onChange?: (event: { target: { value: string } }) => void; onSubmit?: (event: { preventDefault(): void }) => void };
   const nodes = (tree: ReactNode): Array<ReactElement<Props>> =>
     Children.toArray(tree).flatMap((child) => isValidElement<Props>(child) ? [child, ...nodes(child.props.children)] : []);
@@ -255,23 +255,23 @@ describe("SecretRequestCard key analytics", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("reports a Boat key saved over the desktop bridge once, even when only the resume is retried", async () => {
-    const setCredential = vi.fn().mockResolvedValue({ box: { configured: true } });
+  it("reports a key saved over the desktop bridge once, even when only the resume is retried", async () => {
+    const setCredential = vi.fn().mockResolvedValue({ openai: { configured: true } });
     vi.stubGlobal("window", { ogb: { setCredential } });
     fixture.api.mockRejectedValueOnce(new Error("resume failed")).mockResolvedValueOnce({ ok: true });
-    await submit("boxToken");
-    card("boxToken").find((node) => node.type === "form")!.props.onSubmit!({ preventDefault: () => {} });
+    await submit("openaiApiKey");
+    card("openaiApiKey").find((node) => node.type === "form")!.props.onSubmit!({ preventDefault: () => {} });
     await flush();
-    expect(setCredential).toHaveBeenCalledExactlyOnceWith("boxToken", KEY);
+    expect(setCredential).toHaveBeenCalledExactlyOnceWith("openaiApiKey", KEY);
     expect(fixture.api).toHaveBeenCalledTimes(2);
-    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "boat", via: "chat_request", result: "ok" }]]);
+    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "openai", via: "chat_request", result: "unverified" }]]);
     for (const fragment of [KEY, KEY.slice(0, 6), KEY.slice(-6), String(KEY.length)]) expect(JSON.stringify(fixture.track.mock.calls)).not.toContain(fragment);
   });
 
-  it("reports a Boat key boat.dev refused as rejected", async () => {
-    vi.stubGlobal("window", { ogb: { setCredential: vi.fn().mockRejectedValue(new Error("Error invoking remote method 'credential:set': KeyRejected: That doesn't look like a Boat API key")) } });
-    await submit("boxToken");
-    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "boat", via: "chat_request", result: "rejected" }]]);
+  it("reports a key the provider refused as rejected", async () => {
+    vi.stubGlobal("window", { ogb: { setCredential: vi.fn().mockRejectedValue(new Error("Error invoking remote method 'credential:set': KeyRejected: That doesn't look like a valid API key")) } });
+    await submit("openaiApiKey");
+    expect(fixture.track.mock.calls).toEqual([["api_key_saved", { provider: "openai", via: "chat_request", result: "rejected" }]]);
   });
 
   // Even with the desktop bridge, the 1Password token goes to this server's Logins (which checks it with 1Password),
@@ -302,14 +302,6 @@ describe("SecretRequestCard key analytics", () => {
     await submit("openaiApiKey", "sk-ZZtestSECRET0123456789");
     expect(setCredential).not.toHaveBeenCalled();
     expect(fixture.api.mock.calls[0]).toEqual(["/api/config", { method: "PUT", body: JSON.stringify({ openai: { key: "sk-ZZtestSECRET0123456789" } }) }]);
-  });
-
-  it("saves the Composio key in the desktop store's slot, as Settings does", async () => {
-    const setCredential = vi.fn().mockResolvedValue({ composio: { configured: true } });
-    vi.stubGlobal("window", { ogb: { setCredential } });
-    fixture.api.mockResolvedValueOnce({ ok: true });
-    await submit("composioApiKey", "ak_ZZtestSECRET0123456789");
-    expect(setCredential).toHaveBeenCalledExactlyOnceWith("composioApiKey", "ak_ZZtestSECRET0123456789");
   });
 
   // A custom secret goes only to its own card's save, which resumes the bot: never Settings, the desktop store or an event.

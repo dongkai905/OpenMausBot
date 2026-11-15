@@ -7,7 +7,7 @@
 // lines; nothing new may exceed HARD_CAP, and the files listed above the cap
 // are the ones that program takes apart. Tests, fixtures, goldens and
 // vendored code are not counted.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
@@ -21,37 +21,30 @@ const LINES: Record<string, number> = {
   "electron/main.mjs": 3160,
   "server/store.ts": 2291,
   "src/components/Sidebar.tsx": 1687,
-  "server/drivers/claude.ts": 2090,
   "server/drivers/acp/core.ts": 1704,
-  "server/drivers/codex.ts": 1718,
-  "server/routines.ts": 1567,
   "src/components/ComputerPanel.tsx": 1782,
-  "src/components/RoutineCalendarPage.tsx": 1622,
   "server/config.ts": 1245,
   "src/components/ChatView.tsx": 1295,
-  "server/routine-requests.ts": 1474,
   "src/components/GroupView.tsx": 1220,
   "src/components/LocalComputerSection.tsx": 1437,
   "src/components/CursorAvatar.tsx": 1324,
   "server/skills.ts": 1379,
-  "server/composio.ts": 1038,
   "server/vps-computer.ts": 1287,
   "scripts/mcp-server.ts": 1411,
-  "server/boat.ts": 1257,
-  "server/drivers/pi.ts": 1033,
   "server/plan-usage.ts": 1046,
   "server/container-computer.ts": 1175,
   "src/components/ModelPicker.tsx": 1039,
   "src/components/PhoneSetupFlow.tsx": 1089,
   "server/cli.ts": 1062,
   "src/components/AttachmentPreview.tsx": 1035,
-  "server/meetings/meetbot.ts": 1047,
 };
 
 function sourceFiles(): string[] {
   const out = execFileSync("git", ["ls-files", "server", "shared", "src", "scripts", "evals", "electron", "companion"], { cwd: ROOT, encoding: "utf8" });
   return out.split("\n").filter((file) => /\.(ts|tsx|mjs|cjs)$/.test(file))
-    .filter((file) => !file.includes(".test.") && !file.includes("/testing/") && !file.includes("goldens") && !file.startsWith("electron/vendor/"));
+    .filter((file) => !file.includes(".test.") && !file.includes("/testing/") && !file.includes("goldens") && !file.startsWith("electron/vendor/"))
+    // A file deleted in this branch is still tracked until it is committed; it has no lines to count.
+    .filter((file) => existsSync(new URL(file, ROOT)));
 }
 
 const count = (file: string) => readFileSync(new URL(file, ROOT), "utf8").split("\n").length - 1;

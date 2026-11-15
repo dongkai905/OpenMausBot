@@ -28,7 +28,7 @@ const render = (connector: Partial<NonNullable<Message["connector"]>>) => flushS
     role: "bot",
     kind: "connector",
     at: 1,
-    connector: { slug: "linear", label: "Linear", description: "Read issues", status: "required", resumeKey: "resume1", ...connector },
+    connector: { source: "mcp", slug: "linear", label: "Linear", description: "Read issues", status: "required", resumeKey: "resume1", ...connector },
   },
 })));
 const press = (label: string) => {
@@ -64,13 +64,5 @@ describe("ConnectorCard authorize refusal", () => {
     expect(host.innerHTML).not.toContain("mcp.linear.app");
     expect(links()).toEqual([]);
     expect(fixture.openExternal).not.toHaveBeenCalled();
-  });
-
-  it("keeps a Composio app's 409 as the card's error", async () => {
-    render({ source: "composio" });
-    press("Connect securely");
-    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toBe(SENTENCE));
-    expect(host.querySelector('[role="status"]')).toBeNull();
-    expect(links()).toEqual([]);
   });
 });

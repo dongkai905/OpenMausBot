@@ -2,12 +2,11 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ManagedDesktopBridge } from "../../../electron/managed-desktop.mjs";
 import { setLocale } from "@/lib/i18n";
 import type { InstanceInfo } from "@/state/store";
 
 const f = vi.hoisted(() => ({
-  instances: [] as InstanceInfo[], dispatch: vi.fn(), row: null as null | { bridge: unknown; onOpenSettings: () => void },
+  instances: [] as InstanceInfo[], dispatch: vi.fn(),
   check: (): Promise<object> => Promise.resolve({ ok: true }), checks: [] as string[], fail: false, config: {} as Record<string, unknown>, brand: "default", opened: [] as string[],
 }));
 vi.mock("@/state/store", () => ({
@@ -28,16 +27,15 @@ vi.mock("@/components/EngineSetup", async () => {
     h("div", { "data-engine-setup": instance.instanceId, "data-intent": intent, "data-description": description }) };
 });
 // The row has its own tests; here only whether the first screen offers it.
-vi.mock("./beats/OrganisationRow", () => ({ OrganisationRow: (props: NonNullable<typeof f.row>) => { f.row = props; return null; } }));
 const { ConnectAi, ConnectAiDialog } = await import("./ConnectAi");
 const { useWelcomeAi } = await import("./welcome-ai");
 const { useStore } = await import("@/state/store");
 const { track } = await import("@/lib/analytics");
 
 /** As the first screen has it: the AI it stands on, tested once, handed to the block. */
-function FirstScreenAi({ hosted = false }: { hosted?: boolean }) {
+function FirstScreenAi() {
   const { state } = useStore();
-  return createElement(ConnectAi, { hosted, tested: useWelcomeAi(state.instances, !hosted) });
+  return createElement(ConnectAi, { tested: useWelcomeAi(state.instances, true) });
 }
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,11 +43,10 @@ const engine = (instanceId: string, driverKind: string, displayName: string, rea
   instanceId, driverKind, displayName, install: { docsUrl: "https://example.test" },
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] },
 });
-const bridge = { onState: vi.fn(), state: vi.fn() } as unknown as ManagedDesktopBridge;
 let host: HTMLDivElement, root: Root;
 const text = () => host.textContent ?? "";
-const show = async (extra: { hosted?: boolean } = {}) => {
-  await act(async () => { root.render(createElement(FirstScreenAi, extra)); });
+const show = async () => {
+  await act(async () => { root.render(createElement(FirstScreenAi)); });
 };
 /** Every other way is listed under the recommended one, with nothing to unfold. */
 const otherWays = async () => {
@@ -63,7 +60,6 @@ beforeEach(() => {
   f.instances = [engine("grok", "customAcp", "Grok", false), engine("claude", "customAcp", "Claude", false), engine("agent-two", "customAcp", "Codex", false)];
   f.dispatch.mockReset(); f.config = {}; f.brand = "default"; f.opened = [];
   vi.mocked(track).mockClear();
-  f.row = null;
   f.fail = false;
   vi.stubGlobal("ogb", undefined);
   host = document.createElement("div");
@@ -214,21 +210,6 @@ describe("connecting an AI on the first screen", () => {
     expect(host.querySelector("[data-ai-connected]")).toBeNull();
     expect(host.querySelector("[data-ai-backup]")?.textContent).toBe("OpenCode's free model is ready as a backup. For the best answers, connect an AI you already use.");
     expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("claude");
-  });
-
-  it("offers the organization sign-in under Other ways on this computer's own window only", async () => {
-    await show();
-    await otherWays();
-    expect(f.row).toBeNull();
-    vi.stubGlobal("ogb", { organization: bridge });
-    window.ogb = { organization: bridge } as unknown as typeof window.ogb;
-    await show({ hosted: true });
-    expect(f.row).toBeNull();
-    await show();
-    expect(f.row?.bridge).toBe(bridge);
-    f.row!.onOpenSettings();
-    expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "organization" });
-    delete window.ogb;
   });
 
   it("opens as the Connect an AI dialog, which Escape and a click outside close", async () => {

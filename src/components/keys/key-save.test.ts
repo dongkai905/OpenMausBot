@@ -42,7 +42,7 @@ describe("saving an AI provider key", () => {
     await saveKey(keyEntry("openai").target!, "fixture-key", false);
     expect(setCredential).not.toHaveBeenCalled();
     expect(fixture.api).toHaveBeenCalledOnce();
-    await saveKey(keyEntry("box").target!, "fixture-key", false);
-    expect(setCredential).toHaveBeenCalledExactlyOnceWith("boxToken", "fixture-key");
+    await saveKey(keyEntry("treg").target!, "fixture-key", false);
+    expect(setCredential).toHaveBeenCalledExactlyOnceWith("tregApiKey", "fixture-key");
   });
 });

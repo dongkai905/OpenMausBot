@@ -13,7 +13,6 @@ import {
   fleetLayout,
   initPlan,
   initialConfig,
-  MANAGED_OPENROUTER,
   instanceEnv,
   parseRegistry,
   resumePlan,
@@ -200,20 +199,18 @@ describe("plans", () => {
     expect(argvOf(upgradePlan({ registry: suspendPlan({ registry: two, slug: "globex", layout }).registry }))).toEqual(["npm install -g openmausbot@latest", "systemctl restart openmausbot@acme.service"]);
   });
 
-  it("seeds only the trusted portal gateway and reserves the portal hostname", () => {
+  it("seeds only the trusted portal and reserves the portal hostname", () => {
     const registry = emptyRegistry("example.test");
-    const seed = { admins: ["owner@example.test"], members: [], portalUrl: "https://admin.example.test", anthropicUrl: "https://admin.example.test/api/gateway/acme/anthropic", anthropicKey: "workspace-scoped-token" };
+    const seed = { admins: ["owner@example.test"], members: [], portalUrl: "https://admin.example.test", anthropicKey: "workspace-scoped-token" };
     const plan = createPlan({ registry, slug: "acme", seed, now, layout });
     const env = plan.steps.find((step) => step.kind === "write" && step.path.endsWith("/acme.env"));
     expect(env).toMatchObject({ mode: 0o600, content: expect.stringContaining("OMB_ADMIN_URL=https://admin.example.test\nOMB_ADMIN_WORKSPACE=acme") });
     expect(env).not.toHaveProperty("owner");
     const config = plan.steps.find((step) => step.kind === "write" && step.path.endsWith("/config.json"));
-    expect(config).toMatchObject({ owner: "omb-acme", content: expect.stringContaining('"url": "https://admin.example.test/api/gateway/acme/anthropic"') });
+    expect(config).toMatchObject({ owner: "omb-acme", content: expect.stringContaining('"key": "workspace-scoped-token"') });
     for (const portalUrl of ["http://admin.example.test", "https://admin.example.test/", "https://user:secret@admin.example.test", "https://admin.example.test/path"]) {
       expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, portalUrl }, layout })).toThrow("HTTPS origin");
     }
-    expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, anthropicUrl: "https://other.example.test" }, layout })).toThrow("workspace's portal gateway");
-    expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, portalUrl: undefined }, layout })).toThrow("requires portalUrl");
     expect(() => createPlan({ registry, slug: "admin", seed, layout })).toThrow("reserved for the admin portal");
   });
 
@@ -239,30 +236,13 @@ describe("plans", () => {
     ]);
   });
 
-  it("seeds private agentful OpenRouter config, including an empty catalog for later assignments", () => {
-    const seed = { admins: ["owner@example.test"], members: [], portalUrl: "https://admin.example.test", openrouterKey: "workspace-scoped-token", openrouterUrl: "https://admin.example.test/api/gateway/acme/openrouter/v1", openrouterModels: ["anthropic/claude-sonnet-4"], openrouterDefault: true };
+  it("seeds no provider config of its own: the workspace's own keys are the only ones it runs", () => {
+    const seed = { admins: ["owner@example.test"], members: [], portalUrl: "https://admin.example.test", anthropicKey: "workspace-scoped-token" };
     const registry = emptyRegistry("example.test");
     const plan = createPlan({ registry, slug: "acme", seed, layout });
-    const config = plan.steps.find((step) => step.kind === "write" && step.path.endsWith("/opencode.json"));
-    expect(config).toMatchObject({ owner: "omb-acme", mode: 0o600 });
-    expect(config?.kind === "write" && JSON.parse(config.content)).toEqual({ provider: { [MANAGED_OPENROUTER]: {
-      npm: "@ai-sdk/openai-compatible", name: "Managed OpenRouter",
-      options: { baseURL: seed.openrouterUrl, apiKey: seed.openrouterKey }, models: { "anthropic/claude-sonnet-4": { name: "anthropic/claude-sonnet-4" } },
-    } } });
-    expect(plan.steps.filter((step) => step.kind === "mkdir" && step.path.includes("/.config"))).toEqual([
-      { kind: "mkdir", path: "/var/lib/openmausbot/acme/.config", mode: 0o700, owner: "omb-acme" },
-      { kind: "mkdir", path: "/var/lib/openmausbot/acme/.config/opencode", mode: 0o700, owner: "omb-acme" },
-    ]);
-    expect(JSON.parse(initialConfig(seed)).defaultModelSelection).toEqual({ instanceId: "opencodeGo", model: `${MANAGED_OPENROUTER}/anthropic/claude-sonnet-4` });
-    expect(JSON.parse(initialConfig({ ...seed, openrouterDefault: false, anthropicKey: "other-scoped-token" }))).not.toHaveProperty("defaultModelSelection");
-    const empty = createPlan({ registry, slug: "acme", seed: { ...seed, openrouterModels: [], openrouterDefault: false }, layout });
-    const emptyConfig = empty.steps.find((step) => step.kind === "write" && step.path.endsWith("/opencode.json"));
-    expect(emptyConfig?.kind === "write" && JSON.parse(emptyConfig.content).provider[MANAGED_OPENROUTER].models).toEqual({});
-    for (const openrouterUrl of ["https://evil.example.test/v1", "https://admin.example.test/api/gateway/other/openrouter/v1", `${seed.openrouterUrl}?key=secret`]) {
-      expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, openrouterUrl }, layout })).toThrow("workspace's portal gateway");
-    }
-    expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, portalUrl: undefined }, layout })).toThrow("workspace's portal gateway");
-    expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, openrouterModels: [] }, layout })).toThrow("requires a model assignment");
-    for (const openrouterModels of [["bad\nmodel"], Array(101).fill("provider/model")]) expect(() => createPlan({ registry, slug: "acme", seed: { ...seed, openrouterModels }, layout })).toThrow("valid model IDs");
+    expect(plan.steps.filter((step) => step.kind === "write" && step.path.endsWith("/opencode.json"))).toEqual([]);
+    expect(plan.steps.filter((step) => step.kind === "mkdir" && step.path.includes("/.config"))).toEqual([]);
+    expect(JSON.parse(initialConfig(seed))).toEqual({ signIn: { admins: ["owner@example.test"], members: [] }, anthropic: { key: "workspace-scoped-token" } });
+    expect(JSON.parse(initialConfig(seed))).not.toHaveProperty("defaultModelSelection");
   });
 });

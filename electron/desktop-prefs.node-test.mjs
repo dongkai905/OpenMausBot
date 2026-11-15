@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const environments = require("./environments.cjs");
 const localOrigin = require("./local-origin.cjs");
 
-const POPUP = "whats-new-2026-11", BOAT = "boat-credit-2026-11", GROK = "grok-move-2026-11", MODELGO = "modelgo-offer-2026-11";
+const POPUP = "whats-new-2026-11", GROK = "grok-move-2026-11", MODELGO = "modelgo-offer-2026-11";
 const NOON = new Date(2026, 9, 16, 12).getTime();
 const LOCAL = "http://127.0.0.1:18799", CLOUD = "https://omb-u-1.fly.dev", VPS = "https://bots.example.test";
 
@@ -20,13 +20,13 @@ test("a page on an older release keeps working with the longer list: its own ids
   let saved = { seen: [POPUP, GROK, "gone-notice"] };
   const prefs = createDesktopPrefs({ read: () => saved, write: value => { saved = structuredClone(value); } });
   assert.deepEqual(prefs.seen(), [POPUP, GROK]);
-  prefs.markSeen(BOAT);
-  assert.deepEqual(saved.seen, [POPUP, GROK, BOAT], "the new id is kept beside the ones an older page records");
-  assert.ok(prefs.seen().includes(BOAT) && prefs.seen().includes(POPUP), "the lookups an older page makes");
+  prefs.markSeen(MODELGO);
+  assert.deepEqual(saved.seen, [POPUP, GROK, MODELGO], "the new id is kept beside the ones an older page records");
+  assert.ok(prefs.seen().includes(MODELGO) && prefs.seen().includes(POPUP), "the lookups an older page makes");
 });
 
-test("What's new, Boat's credit offer and the Grok Bot move are the notices a page can record; seen and analytics survive a restart; a broken record never stops the app", () => {
-  assert.deepEqual([...DESKTOP_NOTICES], [POPUP, BOAT, GROK, MODELGO]);
+test("What's new, the Grok Bot move and the ModelGo offer are the notices a page can record; seen and analytics survive a restart; a broken record never stops the app", () => {
+  assert.deepEqual([...DESKTOP_NOTICES], [POPUP, GROK, MODELGO]);
   let saved = null;
   const writes = [];
   const prefs = createDesktopPrefs({ read: () => saved, write: value => { writes.push(value); saved = structuredClone(value); } });
@@ -35,11 +35,11 @@ test("What's new, Boat's credit offer and the Grok Bot move are the notices a pa
   assert.equal(writes.length, 0, "nothing a page names outside the list is written");
   prefs.markSeen(POPUP); prefs.markSeen(POPUP);
   assert.deepEqual(prefs.seen(), [POPUP]); assert.equal(writes.length, 1);
-  prefs.markSeen(BOAT);
-  assert.deepEqual(prefs.seen(), [POPUP, BOAT]); assert.equal(writes.length, 2);
+  prefs.markSeen(GROK);
+  assert.deepEqual(prefs.seen(), [POPUP, GROK]); assert.equal(writes.length, 2);
   prefs.setAnalytics(false);
   const restarted = createDesktopPrefs({ read: () => saved, write: value => { saved = value; } });
-  assert.deepEqual(restarted.seen(), [POPUP, BOAT]); assert.equal(restarted.analytics(), false);
+  assert.deepEqual(restarted.seen(), [POPUP, GROK]); assert.equal(restarted.analytics(), false);
   restarted.setAnalytics("yes"); assert.equal(restarted.analytics(), false, "only true turns it on");
   restarted.setAnalytics(true); assert.equal(restarted.analytics(), true);
 
@@ -130,7 +130,7 @@ test("a first run's default name for the profile goes to this computer's own pag
 
 test("This computer's own record counts on every page before its page loads on this build: an earlier close; the welcome's Cloud beat does not", async () => {
   assert.equal(ONBOARDING_CLOUD_HINT, "onboarding-cloud-v1");
-  const record = (onboarding) => () => ({ composio: { apiKey: "" }, onboarding });
+  const record = (onboarding) => () => ({ profile: { name: "Ada" }, onboarding });
   for (const [hint, seen] of [[POPUP, [POPUP]], [ONBOARDING_CLOUD_HINT, []]]) {
     const main = desktopMain({ config: record({ completedAt: "2026-10-01", version: 1, hintsSeen: ["tour-finished", hint] }) });
     for (const page of ["local", "cloud", "server"]) assert.deepEqual(await main.ask("desktop-notices:state", page), { seen, cloud: true }, `${hint} ${page}`);
@@ -141,7 +141,7 @@ test("This computer's own record counts on every page before its page loads on t
 
 test("every desktop has What's new still to show, whatever This computer's welcome record says or lacks", async () => {
   // An install from before the welcome kept a record, a welcome never finished, no config.json, or one main cannot read.
-  const records = [() => ({ onboarding: { completedAt: "", version: 0, hintsSeen: [] } }), () => ({ composio: {} }), () => null, () => "nonsense",
+  const records = [() => ({ onboarding: { completedAt: "", version: 0, hintsSeen: [] } }), () => ({ profile: { name: "Ada" } }), () => null, () => "nonsense",
     () => { throw new Error("ENOENT"); }, () => { throw new SyntaxError("Unexpected token"); }, () => ({ onboarding: { hintsSeen: POPUP } }), () => ({ onboarding: { hintsSeen: [{ id: POPUP }] } })];
   for (const config of records) {
     for (const page of ["local", "cloud", "server"]) {

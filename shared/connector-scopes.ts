@@ -2,8 +2,6 @@
 // only to read. Absent means every connected app, read and write; present, an
 // app not listed is off and "read" refuses anything that is not a read. The
 // harness enforces it at the connector relay; the app shows the control.
-import { KNOWN_READ_SLUGS } from "./outbound.ts";
-
 const READ_VERBS = new Set(["GET", "LIST", "FETCH", "SEARCH", "READ", "FIND", "RETRIEVE", "LOOKUP", "DOWNLOAD", "VIEW", "CHECK", "COUNT"]);
 
 interface ScopedCall {
@@ -13,14 +11,14 @@ interface ScopedCall {
 export type ConnectorScope = "read" | "write";
 
 export interface ConnectorScopes {
-  /** toolkit slug (lower case, Composio's) → what this bot may do with it */
+  /** app slug (lower case) → what this bot may do with it */
   apps: Record<string, ConnectorScope>;
 }
 
 const TOOLKIT_SLUG = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-/** The toolkit a Composio slug belongs to: the part before the first
- * underscore, lower-cased. A workbench API proxy belongs to no app. */
+/** The toolkit an app slug belongs to: the part before the first
+ * underscore, lower-cased. */
 export function toolkitOf(slug: string): string {
   const cut = slug.indexOf("_");
   return (cut > 0 ? slug.slice(0, cut) : slug).toLowerCase();
@@ -29,8 +27,6 @@ export function toolkitOf(slug: string): string {
 /** A read verb first means the tool reads. Creating a draft writes to the
  * account even though it sends nothing, so it is a write here. */
 export function isReadOnlyAction(slug: string, toolkit?: string): boolean {
-  if (slug === "COMPOSIO_PROXY_EXECUTE") return false;
-  if (KNOWN_READ_SLUGS.has(slug)) return true;
   const cut = toolkit ? toolkit.length : slug.indexOf("_");
   const action = cut > 0 ? slug.slice(cut + 1) : "";
   const first = action.toUpperCase().split(/[^A-Z0-9]+/).find(Boolean);
@@ -64,7 +60,7 @@ export function connectorAccessDecision(scopes: ConnectorScopes | undefined, cal
   for (const call of calls) {
     const toolkit = toolkits.filter(candidate => call.slug.startsWith(candidate.toUpperCase() + "_"))
       .sort((a, b) => b.length - a.length)[0] ?? toolkitOf(call.slug);
-    const scope = call.slug === "COMPOSIO_PROXY_EXECUTE" || !Object.hasOwn(scopes.apps, toolkit) ? undefined : scopes.apps[toolkit];
+    const scope = !Object.hasOwn(scopes.apps, toolkit) ? undefined : scopes.apps[toolkit];
     if (!scope) return { ok: false, slug: call.slug, toolkit, reason: "app" };
     if (scope === "read" && !isReadOnlyAction(call.slug, toolkit)) return { ok: false, slug: call.slug, toolkit, reason: "write" };
   }

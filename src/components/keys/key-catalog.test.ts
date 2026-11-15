@@ -10,7 +10,6 @@ const NOT_A_PERSONS_KEY: Record<string, string> = {
   OMB_ANTHROPIC_API_URL: "the address the Anthropic key goes to, set by a hosted install",
   OMB_HOSTED_MODEL_TOKEN: "a hosted install's model token",
   OMB_HOSTED_MODELS: "a hosted install's model list",
-  OMB_COMPOSIO_BROKER_TOKEN: "MausBot Cloud's connected-apps broker",
   OMB_CLOUD_BOAT_TOKEN: "MausBot Cloud's included computers",
   OMB_CLOUD_VOICE_TOKEN: "MausBot Cloud's included voice",
   OMB_CLOUD_DECIDER_TOKEN: "MausBot Cloud's included decisions",
@@ -20,7 +19,6 @@ const NOT_A_PERSONS_KEY: Record<string, string> = {
   OMB_CLOUD_CONNECTED_APPS_GRANT: "MausBot Cloud's connected apps",
   OMB_BROWSER_CONNECTION: "the app's own browser, not a credential",
   OMB_USER_DATA: "the app's own data folder, not a credential",
-  OMB_BOAT_API: "the Boat address, not a credential",
 };
 
 const electron = (file: string) => readFileSync(new URL(`../../../electron/${file}`, import.meta.url), "utf8");
@@ -59,8 +57,8 @@ describe("every credential has one home on the keys page", () => {
   // A key saved from a bot's card lands exactly where its Settings row puts it: the same desktop slot, or the same config.
   it("covers every credential a bot can ask for in a chat, saved where Settings saves it", () => {
     const homes: Record<keyof typeof CREDENTIAL_TARGETS, KeyId> = {
-      boxToken: "box", ttsKey: "elevenlabs", fishAudioKey: "fishAudio", geminiTtsKey: "geminiTts",
-      openaiImageApiKey: "imageOpenai", onePasswordToken: "onePassword", composioApiKey: "composio", openaiApiKey: "openai",
+      ttsKey: "elevenlabs", fishAudioKey: "fishAudio", geminiTtsKey: "geminiTts",
+      openaiImageApiKey: "imageOpenai", onePasswordToken: "onePassword", openaiApiKey: "openai",
       openrouterApiKey: "openrouter",
     };
     expect(Object.keys(homes).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).sort());
@@ -107,10 +105,9 @@ describe("searching the keys", () => {
   it("matches a provider's name, what the key is for, and its section's title", () => {
     expect(found("fish")).toEqual(["fishAudio"]);
     expect(found("ElevenLabs")).toEqual(["elevenlabs"]);
-    expect(found("Computers and browser")).toEqual(["box", "vps", "onePassword"]);
+    expect(found("Computers and browser")).toEqual(["vps", "onePassword"]);
     expect(found("voice")).toEqual(expect.arrayContaining(["liveCalls", "liveKey", "elevenlabs", "fishAudio"]));
     expect(found("openai")).toEqual(expect.arrayContaining(["openai", "liveCalls", "liveKey", "imageOpenai"]));
-    expect(found("gmail")).toEqual(["composio"]);
     expect(found("gemini")).toEqual(["geminiTts", "imageGemini"]);
     expect(found("no such key anywhere")).toEqual([]);
   });
@@ -119,9 +116,7 @@ describe("searching the keys", () => {
 describe("a key pasted into the wrong row", () => {
   it("names the provider the key belongs to", () => {
     expect(looksLikeOtherKey(keyEntry("openai"), "sk-ant-api03-abcdefghijkl")?.id).toBe("anthropic");
-    expect(looksLikeOtherKey(keyEntry("box"), "sk-proj-abcdefghijkl")?.id).toBe("openai");
     expect(looksLikeOtherKey(keyEntry("liveCalls"), "sk-ant-api03-abcdefghijkl")?.id).toBe("anthropic");
-    expect(looksLikeOtherKey(keyEntry("composio"), "boat_abcdefghijkl")?.id).toBe("box");
   });
 
   it("stays quiet for the row's own key and for keys with no telling shape", () => {

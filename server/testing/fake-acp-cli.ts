@@ -285,7 +285,6 @@ const dumpEnv = Object.fromEntries(
     "ANTHROPIC_API_KEY",
     "XAI_API_KEY",
     "GROK_AGENT",
-    "BOX_TOKEN",
     "OMB_TTS_KEY",
     "OMB_FISH_AUDIO_API_KEY",
     "OMB_CLOUD_READY_TOKEN",

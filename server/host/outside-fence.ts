@@ -28,7 +28,6 @@ const EXACT: ReadonlySet<string> = new Set([
   "GET /api/internal/team-library",
   "GET /api/internal/engine-limits",
   "GET /api/internal/triggers",
-  "GET /api/internal/trigger-events",
   "GET /api/internal/waits",
   "POST /api/internal/waits",
   "POST /api/internal/waits/cancel",

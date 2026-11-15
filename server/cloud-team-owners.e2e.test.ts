@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { personKey } from "./person-key.ts";
-import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const TOKEN = `ops_fake-team-${randomBytes(8).toString("hex")}`;
@@ -25,7 +24,7 @@ process.env.FAKE_CLAUDE_RELEASE = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/releas
 type Bot = { id: string; name: string; threadId: string; createdBy?: string; reportsTo?: string; chiefOfStaff?: boolean; busy?: boolean };
 type Frame = { kind: string; notification?: { kind: string; botId: string; threadId: string; title: string; body: string; forPerson?: string } };
 
-let fx: CloudSendFixture, team: CloudTeamFixture, broker: BrokerFake;
+let fx: CloudSendFixture, team: CloudTeamFixture;
 let olive = "", ada = "", bob = "";
 let fox: Bot, owl: Bot, lead: Bot;
 const sockets: Socket[] = [];
@@ -36,8 +35,7 @@ const hold = () => rmSync(release(), { force: true });
 const letGo = () => writeFileSync(release(), "");
 
 beforeAll(async () => {
-  broker = await startBrokerFake();
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-1", name: "Acme", engine: ENGINE } });
   team = fx.team!;
   letGo();
   olive = (await team.pair(OLIVE)).token!;
@@ -49,7 +47,6 @@ afterAll(async () => {
   for (const socket of sockets) socket.destroy();
   for (const stream of streams) stream.abort();
   await fx?.close();
-  await broker?.close();
 });
 
 const create = async (token: string, body: Record<string, unknown>) => {

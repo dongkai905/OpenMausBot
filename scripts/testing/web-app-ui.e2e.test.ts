@@ -56,7 +56,7 @@ async function connect(url: string) {
   try {
     const tools = await ensureUiBrowser();
     if (!tools.chrome) throw new Error("This recipe needs the pinned Chrome for Testing");
-    fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, undefined, [], undefined, build);
+    fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, undefined, [], build);
     const { url, dataDir, logPath } = fixture.info;
     const { bot } = await runControlOmb(["new-bot", "--name", "Pepper", "--url", url]) as { bot: { id: string; activeTaskId: string } };
     const profile = join(dataDir, "chrome");

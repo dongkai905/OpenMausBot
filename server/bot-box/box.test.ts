@@ -36,10 +36,10 @@ describe("BoxRunner.wrap", () => {
   });
 
   it("runs the engine under bwrap with the plan, the allow-listed environment and the proxy pointed at the gate", () => {
-    const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set(["COMPOSIO_API_KEY"]) });
+    const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set(["EXAMPLE_VENDOR_API_KEY"]) });
     const wrapped = runner.wrap({
       command: "/usr/local/bin/claude", args: ["-p", "--output-format", "stream-json"], cwd: "/data/.openmausbot/task-workspaces/b1/t1",
-      env: { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "k", COMPOSIO_API_KEY: "c", OMB_CLOUD_BOOTSTRAP_SECRET: "s", RANDOM_SECRET: "r" },
+      env: { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "k", EXAMPLE_VENDOR_API_KEY: "c", OMB_CLOUD_BOOTSTRAP_SECRET: "s", RANDOM_SECRET: "r" },
     });
     expect(wrapped.command).toBe("/usr/bin/bwrap");
     expect(wrapped.args.slice(0, 3)).toEqual(["--ro-bind", "/usr", "/usr"]);

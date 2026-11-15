@@ -3,7 +3,6 @@
 import type { PlaceRow } from "./place-view.ts";
 import type { OutcomeCategory, OutcomeCounts } from "./today-outcomes.ts";
 import type { ServerTextParams } from "./server-text.ts";
-import type { TrialCreditRefusal } from "./trial-credit.ts";
 
 /** Who opened a piece of work: another bot, a call through the API, a message
  * relayed from another app, or the person. */
@@ -32,7 +31,6 @@ export type NeedsYouItem =
   | { kind: "usage-limit"; id: string; at: number; instanceId?: string; botIds: string[]; threadId: string; text: string;
       /** `text` as the failed turn's `chat.notice.*` key and params, when its cause had one. */
       textCode?: string; textParams?: ServerTextParams }
-  | { kind: "out-of-credit"; id: string; at: number; credit: TrialCreditRefusal; botIds: string[]; threadId: string }
   | { kind: "connection"; id: string; at: number; app: string; botIds: string[]; threadId: string; text: string }
   | { kind: "place"; id: string; at: number; place: PlaceRow; botIds: string[]; threadId: string }
   | { kind: "question"; id: string; at: number; botId: string; threadId: string; text: string }
